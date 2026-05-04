@@ -333,6 +333,12 @@ app.on("activate", () => {
   }
 });
 
+app.on("window-all-closed", () => {
+  if (!isMac) {
+    app.quit();
+  }
+});
+
 app.on("before-quit", (event) => {
   if (quitting || !setupServer) {
     return;
