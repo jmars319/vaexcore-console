@@ -52,11 +52,20 @@ export const registerStudioCommands = ({
         source_app: "vaexcore-console",
         source_event_id: markerSourceEventId(message),
         metadata: {
+          contract: "vaexcore.studio.marker.v1",
+          schemaVersion: 1,
+          eventType: "console.chat.marker",
           command: "vcmark",
-          source: message.source,
+          source: {
+            appId: "vaexcore-console",
+            appName: "vaexcore console",
+            workflow: "manual-chat-marker"
+          },
+          chatSource: message.source,
           userLogin: message.userLogin,
           userDisplayName: message.userDisplayName,
-          receivedAt: message.receivedAt.toISOString()
+          receivedAt: message.receivedAt.toISOString(),
+          createdAt: new Date().toISOString()
         }
       });
       reply(`Studio marker created: ${label}`);

@@ -65,6 +65,15 @@ import {
 } from "../modules/timers/timers.module";
 import { registerStudioCommands } from "../studio/studio.commands";
 import {
+  loadStudioIntegrationConfig,
+  StudioClient,
+  type StudioMarkerInput
+} from "../studio/client";
+import type {
+  Giveaway,
+  GiveawayWinner
+} from "../modules/giveaways/giveaways.types";
+import {
   defaultRedirectUri,
   getLocalSecretsPath,
   readLocalSecrets,
@@ -122,6 +131,8 @@ const giveawayTemplates = createGiveawayTemplateStore(db);
 const operatorMessages = createOperatorMessageTemplateStore(db);
 const setupRuntimeStatus = createRuntimeStatus("local");
 const outboundHistory = createOutboundHistory(db);
+const studioIntegration = loadStudioIntegrationConfig();
+const studioClient = new StudioClient(studioIntegration);
 const chatQueue = new MessageQueue({
   logger,
   send: async (message) => sendConfiguredChatMessage(message),
@@ -638,7 +649,15 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
       echoToChat: Boolean(body.echoToChat),
       echoCommand: `!gstart codes=${winnerCount} keyword=${keyword} title="${title.replace(/"/g, "'")}"`,
       announcements: ({ giveaway }) =>
-        giveawayAnnouncement(giveawayTemplates.start(giveaway), "start", giveaway.id, "critical")
+        giveawayAnnouncement(giveawayTemplates.start(giveaway), "start", giveaway.id, "critical"),
+      studioMarker: ({ giveaway }) =>
+        giveawayStudioMarker("start", giveaway, {
+          statusTimestamp: giveaway.opened_at ?? giveaway.created_at,
+          metadata: {
+            requestedWinnerCount: winnerCount,
+            requestedKeyword: keyword
+          }
+        })
     }));
     return;
   }
@@ -656,7 +675,14 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
           "close",
           giveaway.id,
           "critical"
-        )
+        ),
+      studioMarker: ({ giveaway }) =>
+        giveawayStudioMarker("close", giveaway, {
+          statusTimestamp: giveaway.closed_at ?? new Date().toISOString(),
+          metadata: {
+            entryCount: giveawaysService.countEntriesForGiveaway(giveaway.id)
+          }
+        })
     }));
     return;
   }
@@ -680,7 +706,14 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
           "last-call",
           giveaway.id,
           "critical"
-        )
+        ),
+      studioMarker: ({ giveaway, entryCount }) =>
+        giveawayStudioMarker("last-call", giveaway, {
+          statusTimestamp: new Date().toISOString(),
+          metadata: {
+            entryCount
+          }
+        })
     }));
     return;
   }
@@ -699,7 +732,17 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
       echoToChat: Boolean(body.echoToChat),
       echoCommand: `!gdraw ${count}`,
       announcements: ({ result }) =>
-        giveawayAnnouncement(giveawayTemplates.draw(result), "draw", result.giveaway.id, "critical")
+        giveawayAnnouncement(giveawayTemplates.draw(result), "draw", result.giveaway.id, "critical"),
+      studioMarker: ({ result }) =>
+        giveawayStudioMarker("draw", result.giveaway, {
+          statusTimestamp: firstWinnerTimestamp(result.winners),
+          sourceEventSuffix: drawSourceEventSuffix(result.winners),
+          metadata: {
+            requestedCount: result.requestedCount,
+            eligibleCount: result.eligibleCount,
+            winners: result.winners.map(giveawayWinnerMetadata)
+          }
+        })
     }));
     return;
   }
@@ -712,7 +755,18 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
       echoToChat: Boolean(body.echoToChat),
       echoCommand: body.username ? `!greroll ${requireUsername(body.username)}` : undefined,
       announcements: ({ result }) =>
-        giveawayAnnouncement(giveawayTemplates.reroll(result), "reroll", result.giveaway.id, "important")
+        giveawayAnnouncement(giveawayTemplates.reroll(result), "reroll", result.giveaway.id, "important"),
+      studioMarker: ({ result }) =>
+        giveawayStudioMarker("reroll", result.giveaway, {
+          statusTimestamp: result.rerolled.rerolled_at ?? new Date().toISOString(),
+          sourceEventSuffix: `winner-${result.rerolled.id}-replacement-${result.replacement?.id ?? "none"}`,
+          metadata: {
+            rerolled: giveawayWinnerMetadata(result.rerolled),
+            replacement: result.replacement
+              ? giveawayWinnerMetadata(result.replacement)
+              : null
+          }
+        })
     }));
     return;
   }
@@ -759,7 +813,16 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
           "end",
           giveaway.id,
           "critical"
-        )
+        ),
+      studioMarker: ({ giveaway }) =>
+        giveawayStudioMarker("end", giveaway, {
+          statusTimestamp: giveaway.ended_at ?? new Date().toISOString(),
+          metadata: {
+            winners: giveawaysService
+              .getWinnersForGiveaway(giveaway.id)
+              .map(giveawayWinnerMetadata)
+          }
+        })
     }));
     return;
   }
@@ -5420,6 +5483,7 @@ const runGiveawayAction = <TResult extends Record<string, unknown>>(
     echoToChat?: boolean;
     echoCommand?: string;
     announcements?: (result: TResult) => GiveawayAnnouncement | GiveawayAnnouncement[] | string | string[] | undefined;
+    studioMarker?: (result: TResult) => StudioMarkerInput | undefined;
   } = {}
 ) => {
   try {
@@ -5428,6 +5492,7 @@ const runGiveawayAction = <TResult extends Record<string, unknown>>(
     const announcementsQueued = maybeQueueGiveawayAnnouncements(
       options.announcements?.(result)
     );
+    maybeCreateStudioEventMarker(options.studioMarker?.(result));
 
     return {
       ok: true,
@@ -5464,6 +5529,125 @@ const giveawayAnnouncement = (
     giveawayId
   }
 });
+
+type GiveawayStudioAction =
+  | "start"
+  | "close"
+  | "last-call"
+  | "draw"
+  | "reroll"
+  | "end";
+
+type GiveawayStudioMarkerOptions = {
+  statusTimestamp?: string | null;
+  sourceEventSuffix?: string;
+  metadata?: Record<string, unknown>;
+};
+
+const giveawayStudioActionLabels: Record<GiveawayStudioAction, string> = {
+  start: "started",
+  close: "closed",
+  "last-call": "last call",
+  draw: "draw",
+  reroll: "reroll",
+  end: "ended"
+};
+
+const giveawayStudioMarker = (
+  action: GiveawayStudioAction,
+  giveaway: Giveaway,
+  options: GiveawayStudioMarkerOptions = {}
+): StudioMarkerInput => {
+  const timestamp = options.statusTimestamp ?? new Date().toISOString();
+  const sourceEventSuffix = options.sourceEventSuffix ?? safeStudioSourceEventPart(timestamp);
+
+  return {
+    label: sanitizeText(
+      `Console giveaway ${giveawayStudioActionLabels[action]}: ${giveaway.title}`,
+      {
+        field: "Studio marker label",
+        maxLength: 140,
+        required: true
+      }
+    ),
+    source_app: "vaexcore-console",
+    source_event_id: `vaexcore-console:giveaway:${giveaway.id}:${action}:${sourceEventSuffix}`,
+    metadata: studioConsoleMarkerMetadata(`console.giveaway.${action}`, {
+      giveaway: giveawayMetadata(giveaway),
+      ...options.metadata
+    })
+  };
+};
+
+const maybeCreateStudioEventMarker = (marker: StudioMarkerInput | undefined) => {
+  if (!marker || !studioIntegration.enabled) {
+    return;
+  }
+
+  void studioClient.createMarker(marker).catch((error) => {
+    logger.warn(
+      {
+        error,
+        label: marker.label,
+        sourceEventId: marker.source_event_id
+      },
+      "Studio event marker creation failed"
+    );
+  });
+};
+
+const studioConsoleMarkerMetadata = (
+  eventType: string,
+  metadata: Record<string, unknown> = {}
+) => ({
+  ...metadata,
+  contract: "vaexcore.studio.marker.v1",
+  schemaVersion: 1,
+  eventType,
+  source: {
+    appId: "vaexcore-console",
+    appName: "vaexcore console",
+    workflow: "console-event-marker"
+  },
+  createdAt: new Date().toISOString()
+});
+
+const giveawayMetadata = (giveaway: Giveaway) => ({
+  id: giveaway.id,
+  title: giveaway.title,
+  keyword: giveaway.keyword,
+  status: giveaway.status,
+  winnerCount: giveaway.winner_count,
+  createdAt: giveaway.created_at,
+  openedAt: giveaway.opened_at,
+  closedAt: giveaway.closed_at,
+  endedAt: giveaway.ended_at
+});
+
+const giveawayWinnerMetadata = (winner: GiveawayWinner) => ({
+  id: winner.id,
+  giveawayId: winner.giveaway_id,
+  login: winner.login,
+  displayName: winner.display_name,
+  drawnAt: winner.drawn_at,
+  claimedAt: winner.claimed_at,
+  deliveredAt: winner.delivered_at,
+  rerolledAt: winner.rerolled_at
+});
+
+const firstWinnerTimestamp = (winners: GiveawayWinner[]) =>
+  winners[0]?.drawn_at ?? new Date().toISOString();
+
+const drawSourceEventSuffix = (winners: GiveawayWinner[]) =>
+  winners.length > 0
+    ? `winners-${winners.map((winner) => winner.id).join("-")}`
+    : `winners-none-${Date.now()}`;
+
+const safeStudioSourceEventPart = (value: string) =>
+  value
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 
 const maybeQueueGiveawayAnnouncements = (
   messages: GiveawayAnnouncement | GiveawayAnnouncement[] | string | string[] | undefined
@@ -5990,6 +6174,7 @@ const writeSuiteDiscoveryDocument = (port: number, startedAt: string) => {
         "console.setup",
         "twitch.operations",
         "studio.chat-markers",
+        "studio.giveaway-event-markers",
         "suite.launcher"
       ],
       launchName: "vaexcore console"
