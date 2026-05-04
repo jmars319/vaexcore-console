@@ -1871,7 +1871,7 @@ function renderChatTools() {
       ])
     ]),
     card("Command Echo", [
-      h("p", { text: "Direct UI actions do not need chat echo. Echo is optional visibility only and is queued through the normal outbound rate limit." }),
+      h("p", { text: "Chat echo mirrors selected UI actions into Twitch chat. Echo messages use the normal outbound queue and rate limit." }),
       h("label", { className: "inline-check" }, [h("input", { id: "echoToChat", type: "checkbox" }), "Echo equivalent operator commands to chat"])
     ]),
     renderOutboundHistoryCard(),
