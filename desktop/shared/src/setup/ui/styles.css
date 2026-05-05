@@ -1,26 +1,28 @@
+@import "./vaexcore-theme.css";
+
 :root {
   color-scheme: dark;
-  --bg: #090b12;
-  --chrome: #0d101a;
-  --surface: #121625;
-  --surface-2: #181d2d;
-  --surface-3: #0e121e;
-  --text: #f2f6fb;
-  --muted: #a7b2c4;
-  --line: #2a3146;
-  --line-strong: #39435f;
-  --accent: #5ad7e8;
-  --accent-strong: #28c6e3;
-  --accent-soft: rgba(90, 215, 232, .14);
-  --violet: #df62da;
-  --violet-soft: rgba(223, 98, 218, .15);
-  --blue: #8db7ff;
-  --danger: #ff8f9f;
-  --danger-soft: rgba(255, 143, 159, .12);
-  --warn: #f3c66f;
-  --warn-soft: rgba(243, 198, 111, .14);
-  --focus: #7ee3f1;
-  --shadow: 0 18px 42px rgba(0, 0, 0, .28);
+  --bg: var(--vxc-ink-950);
+  --chrome: var(--vxc-ink-900);
+  --surface: var(--vxc-panel-bg);
+  --surface-2: var(--vxc-panel-bg-soft);
+  --surface-3: var(--vxc-field-bg);
+  --text: var(--vxc-text);
+  --muted: var(--vxc-text-muted);
+  --line: var(--vxc-border);
+  --line-strong: var(--vxc-border-strong);
+  --accent: var(--vxc-cyan);
+  --accent-strong: var(--vxc-cyan-strong);
+  --accent-soft: rgba(57, 217, 255, .14);
+  --violet: var(--vxc-magenta);
+  --violet-soft: rgba(255, 59, 244, .15);
+  --blue: var(--vxc-violet);
+  --danger: var(--vxc-danger);
+  --danger-soft: rgba(255, 111, 156, .12);
+  --warn: var(--vxc-amber);
+  --warn-soft: rgba(255, 210, 122, .14);
+  --focus: var(--vxc-cyan);
+  --shadow: var(--vxc-shadow);
 }
 
 * { box-sizing: border-box; }
@@ -34,7 +36,8 @@ body {
   margin: 0;
   min-width: 980px;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: var(--bg);
+  background: var(--vxc-bg), var(--vxc-grid), var(--bg);
+  background-size: auto, 72px 72px, auto;
   color: var(--text);
 }
 
@@ -50,8 +53,8 @@ button, .button {
   justify-content: center;
   min-height: 36px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #155c6e;
+  border-radius: var(--vxc-radius-small);
+  background: linear-gradient(135deg, var(--accent), var(--blue));
   color: #f7fdff;
   padding: 8px 12px;
   text-decoration: none;
@@ -115,14 +118,23 @@ code { background: var(--surface-3); border: 1px solid var(--line); border-radiu
 
 .app-shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
 .topbar {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 20px;
   align-items: center;
   padding: 18px 22px;
   border-bottom: 1px solid var(--line);
-  background: linear-gradient(90deg, rgba(223, 98, 218, .08), rgba(90, 215, 232, .07)), var(--chrome);
+  background: linear-gradient(90deg, rgba(255, 59, 244, .08), rgba(57, 217, 255, .07)), var(--chrome);
   box-shadow: 0 12px 34px rgba(0, 0, 0, .22);
+}
+
+.topbar::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  content: "";
+  background: linear-gradient(90deg, var(--accent), var(--violet));
 }
 .brand-lockup {
   display: flex;
@@ -197,7 +209,7 @@ button.nav-button.active:hover:not(:disabled) {
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--vxc-radius);
   box-shadow: var(--shadow);
   padding: 16px;
   margin-bottom: 14px;

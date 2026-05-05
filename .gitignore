@@ -49,6 +49,7 @@ Thumbs.db
 .npm/
 .pnpm-store/
 .yarn/
+.local/
 !.yarn/releases/
 !.yarn/plugins/
 !.yarn/sdks/

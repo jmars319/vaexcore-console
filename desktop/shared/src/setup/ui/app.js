@@ -1,25 +1,30 @@
 const windowParams = new URLSearchParams(window.location.search);
 const isSettingsWindow = windowParams.get("window") === "settings";
+const requestedTab = windowParams.get("tab");
 
 document.body.classList.toggle("settings-window", isSettingsWindow);
 
 const mainTabs = [
-  ["dashboard", "Dashboard"],
-  ["live-mode", "Live Mode"],
+  ["dashboard", "Live Ops"],
+  ["live-mode", "Stream Control"],
   ["commands", "Commands"],
   ["timers", "Timers"],
   ["moderation", "Moderation"],
   ["giveaways", "Giveaways"],
-  ["chat-tools", "Chat Tools"],
+  ["chat-tools", "Operator Tools"],
   ["testing", "Testing"],
   ["diagnostics", "Diagnostics"],
-  ["audit-log", "Audit Log"]
+  ["audit-log", "Post-Stream Log"]
 ];
 
 const tabs = isSettingsWindow ? [["settings", "Settings"]] : mainTabs;
 
 const state = {
-  activeTab: isSettingsWindow ? "settings" : "dashboard",
+  activeTab: isSettingsWindow
+    ? "settings"
+    : mainTabs.some(([id]) => id === requestedTab)
+      ? requestedTab
+      : "dashboard",
   config: null,
   status: null,
   giveaway: null,
@@ -372,7 +377,7 @@ function render(options = {}) {
     app.replaceChildren(
       h("div", { className: "app-shell settings-shell" }, [
         renderHeader({
-          title: "Configuration Settings",
+          title: "Console Settings",
           subtitle: "Twitch OAuth and local setup",
           showStatus: false
         }),
@@ -407,7 +412,7 @@ function render(options = {}) {
 
 function renderHeader(options = {}) {
   const title = options.title || "vaexcore console";
-  const subtitle = options.subtitle || "Local Twitch operations console";
+  const subtitle = options.subtitle || "Live Ops console for Twitch and suite coordination";
   const showStatus = options.showStatus !== false;
   const showSettingsAction = options.showSettingsAction ?? !isSettingsWindow;
   const runtime = state.status?.runtime;
@@ -552,7 +557,7 @@ function renderDashboard() {
   const readiness = getReadiness();
 
   return [
-    sectionHeader("Dashboard", "Startup path and live stream snapshot.",
+    sectionHeader("Live Ops", "Startup path and live stream snapshot.",
       actionButton("Refresh", { id: "refresh", onClick: refreshAll, busyKey: "refresh" })
     ),
     renderDashboardStartCard(runtime, readiness),
@@ -733,7 +738,7 @@ function renderLiveMode() {
   const readiness = getReadiness();
 
   return [
-    sectionHeader("Live Mode", "Compact stream-state controls for live operation.",
+    sectionHeader("Stream Control", "Compact stream-state controls for live operation.",
       actionButton("Refresh", { id: "liveRefresh", onClick: refreshAll, busyKey: "refresh" })
     ),
     renderLiveStateCard({ prefix: "live" }),
@@ -1965,7 +1970,7 @@ function renderSettings() {
   const required = missingConfigFields(config);
   const validationChecks = visibleValidationChecks();
   return [
-    sectionHeader("Settings", "Configure local mode, Twitch OAuth, and automatic launch validation.",
+    sectionHeader("Console Settings", "Configure local mode, Twitch OAuth, and automatic launch validation.",
       connectButton(config)
     ),
     renderSettingsLaunchNotice(),
@@ -2325,7 +2330,7 @@ function renderDiagnostics() {
 
 function renderAuditLog() {
   return [
-    sectionHeader("Audit Log", "Post-stream review and latest 100 local audit entries.",
+    sectionHeader("Post-Stream Log", "Post-stream review and latest 100 local audit entries.",
       actionButton("Refresh audit log", { id: "refreshAudit", onClick: refreshAuditLogs })
     ),
     renderPostStreamReviewCard(),

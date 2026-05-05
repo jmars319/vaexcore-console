@@ -1,0 +1,49 @@
+:root {
+  --vxc-ink-980: #03040a;
+  --vxc-ink-950: #050711;
+  --vxc-ink-900: #090b16;
+  --vxc-ink-850: #0d1020;
+  --vxc-ink-800: #12162a;
+  --vxc-ink-740: #181d33;
+  --vxc-cyan: #39d9ff;
+  --vxc-cyan-strong: #15c7f4;
+  --vxc-magenta: #ff3bf4;
+  --vxc-magenta-strong: #e62ddd;
+  --vxc-violet: #8f5cff;
+  --vxc-lime: #75f0cf;
+  --vxc-amber: #ffd27a;
+  --vxc-danger: #ff6f9c;
+  --vxc-text: #f4f8ff;
+  --vxc-text-strong: #ffffff;
+  --vxc-text-muted: #aeb8d4;
+  --vxc-text-soft: #7f8ba8;
+  --vxc-border: rgba(138, 174, 255, 0.16);
+  --vxc-border-strong: rgba(57, 217, 255, 0.42);
+  --vxc-border-hot: rgba(255, 59, 244, 0.34);
+  --vxc-panel-bg: rgba(13, 16, 32, 0.92);
+  --vxc-panel-bg-soft: rgba(18, 22, 42, 0.88);
+  --vxc-panel-bg-strong: rgba(8, 10, 22, 0.96);
+  --vxc-field-bg: rgba(5, 7, 17, 0.74);
+  --vxc-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+  --vxc-radius: 8px;
+  --vxc-radius-small: 6px;
+  --vxc-space-1: 4px;
+  --vxc-space-2: 8px;
+  --vxc-space-3: 12px;
+  --vxc-space-4: 16px;
+  --vxc-space-5: 20px;
+  --vxc-space-6: 24px;
+  --vxc-glow-cyan: 0 0 22px rgba(57, 217, 255, 0.2);
+  --vxc-glow-magenta: 0 0 22px rgba(255, 59, 244, 0.16);
+  --vxc-bg:
+    linear-gradient(135deg, rgba(57, 217, 255, 0.08), transparent 22%),
+    linear-gradient(225deg, rgba(255, 59, 244, 0.07), transparent 24%),
+    linear-gradient(180deg, rgba(143, 92, 255, 0.08), transparent 34%),
+    var(--vxc-ink-950);
+  --vxc-grid:
+    linear-gradient(90deg, transparent 0 96%, rgba(57, 217, 255, 0.06) 96% 100%),
+    linear-gradient(180deg, transparent 0 96%, rgba(255, 59, 244, 0.052) 96% 100%);
+  --vxc-rail:
+    linear-gradient(135deg, transparent 0 44%, rgba(57, 217, 255, 0.16) 44% 45%, transparent 45%),
+    linear-gradient(225deg, transparent 0 48%, rgba(255, 59, 244, 0.13) 48% 49%, transparent 49%);
+}
