@@ -1227,6 +1227,27 @@ type SuiteDiscoveryDocument = {
   suiteSessionId?: string | null;
   activity?: string | null;
   activityDetail?: string | null;
+  localRuntime?: SuiteLocalRuntime | null;
+};
+
+type SuiteLocalRuntime = {
+  contractVersion: 1;
+  mode: "local-first";
+  state: "ready" | "degraded" | "blocked";
+  appStorageDir: string;
+  suiteDir: string;
+  secureStorage: string;
+  secretStorageState: string;
+  durableStorage: string[];
+  networkPolicy: "localhost-only";
+  dependencies: SuiteLocalRuntimeDependency[];
+};
+
+type SuiteLocalRuntimeDependency = {
+  name: string;
+  kind: string;
+  state: string;
+  detail: string;
 };
 
 type SuiteAppStatus = {
@@ -1247,6 +1268,7 @@ type SuiteAppStatus = {
   suiteSessionId: string | null;
   activity: string | null;
   activityDetail: string | null;
+  localRuntime: SuiteLocalRuntime | null;
   detail: string;
 };
 
@@ -1837,6 +1859,7 @@ const getOperatorStatus = async () => {
     featureGates: featureGateStates,
     timers: summarizeTimers(timers),
     moderation: moderation.summary,
+    localRuntime: buildConsoleLocalRuntime(),
     giveaway: summarizeGiveawayState(giveaway)
   };
 };
@@ -6658,9 +6681,55 @@ const writeSuiteDiscoveryDocument = (port: number, startedAt: string) => {
       activity: "live-ops",
       activityDetail: session
         ? `Monitoring chat operations for ${session.title}`
-        : "Ready for chat and stream operations"
+        : "Ready for chat and stream operations",
+      localRuntime: buildConsoleLocalRuntime(apiUrl)
     }, null, 2)}\n`
   );
+};
+
+const buildConsoleLocalRuntime = (apiUrl?: string): SuiteLocalRuntime => {
+  const config = getSafeConfig();
+  const databasePath = resolveDatabasePath(databaseUrl);
+  const appStorageDir = dirname(getLocalSecretsPath());
+
+  return {
+    contractVersion: 1,
+    mode: "local-first",
+    state: "ready",
+    appStorageDir,
+    suiteDir: suiteDiscoveryDir(),
+    secureStorage: "local.secrets.json",
+    secretStorageState: "app-owned-file-needs-keychain-migration",
+    durableStorage: [
+      "SQLite command configuration, audit logs, giveaways, timers, and moderation settings",
+      "local.secrets.json",
+      "setup UI diagnostics and support bundle data"
+    ],
+    networkPolicy: "localhost-only",
+    dependencies: [
+      {
+        name: "setup-server",
+        kind: "local-http-service",
+        state: apiUrl ? "reachable" : "running",
+        detail: apiUrl ? `Operator API is bound to ${apiUrl}.` : "Operator API is running locally."
+      },
+      {
+        name: "sqlite",
+        kind: "local-database",
+        state: existsSync(databasePath) ? "ready" : "initializing",
+        detail: databasePath
+      },
+      {
+        name: "twitch",
+        kind: "network-platform",
+        state: config.mode === "local" ? "offline-rehearsal" : "operator-controlled",
+        detail:
+          config.mode === "local"
+            ? "Console is in local mode; Twitch is not required for rehearsal."
+            : "Twitch is required only for live chat operations, not local setup or rehearsal."
+      }
+    ]
+  };
 };
 
 const suiteDiscoveryDir = () =>
@@ -6707,6 +6776,7 @@ const suiteAppStatus = (
     suiteSessionId: discovery?.suiteSessionId ?? null,
     activity: discovery?.activity ?? null,
     activityDetail: discovery?.activityDetail ?? null,
+    localRuntime: discovery?.localRuntime ?? null,
     detail: suiteStatusDetail(installed, Boolean(discovery), running, stale, reachable)
   };
 };
