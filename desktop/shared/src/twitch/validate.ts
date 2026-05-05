@@ -2,7 +2,11 @@ import type { Logger } from "../core/logger";
 import { createTwitchHeaders, type TwitchAuthOptions } from "./auth";
 import type { TwitchUser } from "./users";
 
-export const requiredTwitchScopes = ["user:read:chat", "user:write:chat"] as const;
+export const requiredTwitchScopes = [
+  "user:read:chat",
+  "user:write:chat",
+  "channel:read:stream_key"
+] as const;
 export const optionalModerationScopes = [
   "moderator:manage:chat_messages",
   "moderator:manage:banned_users"
@@ -71,7 +75,7 @@ export const validateLiveTwitch = async ({
     throw new Error(
       `Twitch token is missing required scope(s): ${missingScopes.join(
         ", "
-      )}. Re-auth the bot token with user:read:chat and user:write:chat.`
+      )}. Re-auth the bot token with chat and stream-key scopes.`
     );
   }
 
