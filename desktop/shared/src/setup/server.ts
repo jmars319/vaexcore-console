@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  statSync,
   unlinkSync,
   writeFileSync
 } from "node:fs";
@@ -119,6 +120,26 @@ const vaexcoreSuiteApps = [
   "vaexcore studio",
   "vaexcore pulse",
   "vaexcore console"
+] as const;
+const vaexcoreSuiteAppDefinitions = [
+  {
+    appId: "vaexcore-studio",
+    appName: "vaexcore studio",
+    launchName: "vaexcore studio",
+    bundleIdentifier: "com.vaexcore.studio"
+  },
+  {
+    appId: "vaexcore-pulse",
+    appName: "vaexcore pulse",
+    launchName: "vaexcore pulse",
+    bundleIdentifier: "com.vaexil.vaexcore.pulse"
+  },
+  {
+    appId: "vaexcore-console",
+    appName: "vaexcore console",
+    launchName: "vaexcore console",
+    bundleIdentifier: "com.vaexil.vaexcore.console"
+  }
 ] as const;
 const logger = createLogger("info");
 const oauthStates = new Map<string, number>();
@@ -287,6 +308,16 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
   if (request.method === "GET" && url.pathname === "/api/twitch/stream-key") {
     const result = await getTwitchStreamKey();
     sendJson(response, result.ok ? 200 : result.statusCode, result);
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/twitch/broadcast-readiness") {
+    sendJson(response, 200, getTwitchBroadcastReadiness());
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/suite/status") {
+    sendJson(response, 200, getSuiteStatus());
     return;
   }
 
@@ -1179,6 +1210,46 @@ type SuiteTimelineEvent = {
   metadata: Record<string, unknown>;
 };
 
+type SuiteDiscoveryDocument = {
+  schemaVersion?: number;
+  appId?: string;
+  appName?: string;
+  bundleIdentifier?: string;
+  version?: string;
+  pid?: number;
+  startedAt?: string;
+  updatedAt?: string;
+  apiUrl?: string | null;
+  wsUrl?: string | null;
+  healthUrl?: string | null;
+  capabilities?: string[];
+  launchName?: string;
+  suiteSessionId?: string | null;
+  activity?: string | null;
+  activityDetail?: string | null;
+};
+
+type SuiteAppStatus = {
+  appId: string;
+  appName: string;
+  launchName: string;
+  bundleIdentifier: string;
+  installed: boolean;
+  running: boolean;
+  reachable: boolean;
+  stale: boolean;
+  discoveryFile: string;
+  pid: number | null;
+  apiUrl: string | null;
+  healthUrl: string | null;
+  updatedAt: string | null;
+  capabilities: string[];
+  suiteSessionId: string | null;
+  activity: string | null;
+  activityDetail: string | null;
+  detail: string;
+};
+
 const appendSuiteTimelineEvent = (
   event: Omit<SuiteTimelineEvent, "schemaVersion" | "eventId" | "createdAt">
 ) => {
@@ -1192,6 +1263,20 @@ const appendSuiteTimelineEvent = (
   };
   appendFileSync(join(directory, "timeline.jsonl"), `${JSON.stringify(document)}\n`);
 };
+
+const getSuiteStatus = () => ({
+  ok: true,
+  generatedAt: new Date().toISOString(),
+  protocol: {
+    schemaVersion: suiteDiscoverySchemaVersion,
+    directory: suiteDiscoveryDir(),
+    sessionFile: join(suiteDiscoveryDir(), "session.json"),
+    timelineFile: join(suiteDiscoveryDir(), "timeline.jsonl")
+  },
+  session: readSuiteSessionDocument(),
+  apps: vaexcoreSuiteAppDefinitions.map(suiteAppStatus),
+  timeline: readSuiteTimelineEvents(50)
+});
 
 const readSuiteTimelineEvents = (limit: number): SuiteTimelineEvent[] => {
   const path = join(suiteDiscoveryDir(), "timeline.jsonl");
@@ -1287,6 +1372,55 @@ const getCachedTokenReadiness = (config = getSafeConfig()) => {
     expiresSoon,
     validationStale,
     identitiesResolved,
+    checks
+  };
+};
+
+const getTwitchBroadcastReadiness = () => {
+  const config = getSafeConfig();
+  const tokenReadiness = getCachedTokenReadiness(config);
+  const streamKeyScopeReady = (config.scopes || []).includes("channel:read:stream_key");
+  const broadcasterReady = Boolean(config.broadcasterLogin && config.hasBroadcasterUserId);
+  const channelUrl = config.broadcasterLogin
+    ? `https://www.twitch.tv/${config.broadcasterLogin}`
+    : null;
+  const checks = [
+    ...tokenReadiness.checks,
+    {
+      name: "Broadcaster channel",
+      ok: broadcasterReady,
+      detail: broadcasterReady
+        ? `${config.broadcasterLogin} is resolved as the broadcaster.`
+        : "Set Broadcaster Login and validate Twitch setup."
+    },
+    {
+      name: "Stream-key scope",
+      ok: streamKeyScopeReady,
+      detail: streamKeyScopeReady
+        ? "Saved OAuth scopes include channel:read:stream_key."
+        : "Reconnect Twitch with the channel:read:stream_key scope before Studio can import a stream key."
+    }
+  ];
+  const ok = checks.every((check) => check.ok);
+  const nextAction = ok
+    ? "Studio can import the Twitch stream key and prepare an RTMP destination."
+    : streamKeyScopeReady
+      ? "Run launch checks and validate Twitch setup."
+      : "Reconnect Twitch in Console with stream-key access, then import the key from Studio.";
+
+  return {
+    ok,
+    status: ok ? "ready" : config.hasAccessToken ? "attention" : "blocked",
+    summary: ok
+      ? `Twitch broadcast path is ready for ${config.broadcasterLogin}.`
+      : nextAction,
+    nextAction,
+    generatedAt: new Date().toISOString(),
+    twitch: {
+      broadcasterLogin: config.broadcasterLogin || null,
+      channelUrl,
+      streamKeyScopeReady
+    },
     checks
   };
 };
@@ -6428,6 +6562,17 @@ const launchVaexcoreSuite = async () => {
         detail: "Launch Suite is only implemented for macOS Applications."
       }));
 
+  appendSuiteTimelineEvent({
+    sourceApp: "vaexcore-console",
+    sourceAppName: "vaexcore console",
+    kind: "suite.launch",
+    title: "Console launched suite",
+    detail: results.every((result) => result.ok)
+      ? "Launch requested for Studio, Pulse, and Console."
+      : "One or more suite apps could not be launched.",
+    metadata: { results }
+  });
+
   return {
     ok: results.every((result) => result.ok),
     results
@@ -6531,6 +6676,89 @@ const readSuiteSessionDocument = (): { sessionId: string; title: string } | null
     return null;
   }
   return null;
+};
+
+const suiteAppStatus = (
+  definition: (typeof vaexcoreSuiteAppDefinitions)[number]
+): SuiteAppStatus => {
+  const discoveryFile = join(suiteDiscoveryDir(), `${definition.appId}.json`);
+  const discovery = readSuiteDiscoveryDocument(discoveryFile);
+  const installed = existsSync(join("/Applications", `${definition.launchName}.app`));
+  const pid = typeof discovery?.pid === "number" ? discovery.pid : null;
+  const running = typeof pid === "number" ? processIsRunning(pid) : false;
+  const stale = suiteDiscoveryIsStale(discoveryFile);
+  const reachable = running && !stale && Boolean(discovery?.healthUrl);
+
+  return {
+    appId: definition.appId,
+    appName: discovery?.appName || definition.appName,
+    launchName: definition.launchName,
+    bundleIdentifier: definition.bundleIdentifier,
+    installed,
+    running,
+    reachable,
+    stale,
+    discoveryFile,
+    pid,
+    apiUrl: discovery?.apiUrl ?? null,
+    healthUrl: discovery?.healthUrl ?? null,
+    updatedAt: discovery?.updatedAt ?? null,
+    capabilities: Array.isArray(discovery?.capabilities) ? discovery.capabilities : [],
+    suiteSessionId: discovery?.suiteSessionId ?? null,
+    activity: discovery?.activity ?? null,
+    activityDetail: discovery?.activityDetail ?? null,
+    detail: suiteStatusDetail(installed, Boolean(discovery), running, stale, reachable)
+  };
+};
+
+const readSuiteDiscoveryDocument = (path: string): SuiteDiscoveryDocument | null => {
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as SuiteDiscoveryDocument;
+  } catch {
+    return null;
+  }
+};
+
+const suiteDiscoveryIsStale = (path: string) => {
+  try {
+    return Date.now() - statSync(path).mtimeMs > 45_000;
+  } catch {
+    return true;
+  }
+};
+
+const processIsRunning = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const suiteStatusDetail = (
+  installed: boolean,
+  discovered: boolean,
+  running: boolean,
+  stale: boolean,
+  reachable: boolean
+) => {
+  if (!installed) {
+    return "Install this app in /Applications.";
+  }
+  if (!discovered) {
+    return "No suite heartbeat has been published yet.";
+  }
+  if (!running) {
+    return "Heartbeat exists, but the app process is not running.";
+  }
+  if (stale) {
+    return "The suite heartbeat is stale.";
+  }
+  if (!reachable) {
+    return "The app is running, but its local health endpoint is not reachable yet.";
+  }
+  return "Ready.";
 };
 
 const startSuiteCommandPoller = () => {

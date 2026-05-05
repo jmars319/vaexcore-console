@@ -314,6 +314,31 @@ button.nav-button.active:hover:not(:disabled) {
 .template-row textarea { min-height: 70px; }
 .operator-template-row { grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) auto; }
 .operator-template-row .inline-actions { margin-top: 0; }
+.suite-list {
+  display: grid;
+  gap: 10px;
+}
+.suite-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface-3);
+  padding: 10px 12px;
+}
+.suite-row.timeline { border-left-color: var(--accent-2); }
+.suite-row strong,
+.suite-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.suite-row small {
+  color: var(--muted);
+  line-height: 1.35;
+  margin-top: 3px;
+}
 .state-banner {
   display: grid;
   gap: 5px;
@@ -394,4 +419,5 @@ th { color: var(--text); font-weight: 600; }
   .status-grid, .grid.three, .setup-progress, .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .operator-template-row { grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); }
   .operator-template-row .inline-actions { grid-column: 2; }
+  .suite-row { grid-template-columns: 1fr; align-items: start; }
 }

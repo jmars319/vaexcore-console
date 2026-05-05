@@ -10,6 +10,7 @@ const outputDir = join(root, ".local", "visual-smoke");
 const targets = [
   ["live-ops", "/?tab=dashboard"],
   ["stream-control", "/?tab=live-mode"],
+  ["suite", "/?tab=suite"],
   ["diagnostics", "/?tab=diagnostics"],
   ["settings", "/?window=settings"]
 ];

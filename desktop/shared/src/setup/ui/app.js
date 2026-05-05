@@ -12,6 +12,7 @@ const mainTabs = [
   ["moderation", "Moderation"],
   ["giveaways", "Giveaways"],
   ["chat-tools", "Operator Tools"],
+  ["suite", "Suite"],
   ["testing", "Testing"],
   ["diagnostics", "Diagnostics"],
   ["audit-log", "Post-Stream Log"]
@@ -50,6 +51,7 @@ const state = {
   moderationEnforcement: null,
   moderationFeatureGate: null,
   streamPresets: [],
+  suiteStatus: null,
   featureGates: [],
   templates: [],
   operatorMessages: [],
@@ -216,6 +218,7 @@ const api = {
   launchPreparation: () => api.get("/api/launch-preparation"),
   runLaunchPreparation: () => api.post("/api/launch-preparation"),
   launchSuite: () => api.post("/api/launch-suite"),
+  suiteStatus: () => api.get("/api/suite/status"),
   diagnostics: () => api.get("/api/diagnostics"),
   supportBundle: () => api.get("/api/support-bundle"),
   featureGates: () => api.get("/api/feature-gates"),
@@ -481,6 +484,7 @@ function renderTab(id) {
     moderation: renderModeration,
     giveaways: renderGiveaways,
     "chat-tools": renderChatTools,
+    suite: renderSuite,
     testing: renderTesting,
     settings: renderSettings,
     diagnostics: renderDiagnostics,
@@ -1933,6 +1937,62 @@ function renderBotConfigBundleCard() {
   ]);
 }
 
+function renderSuite() {
+  const suite = state.suiteStatus || {};
+  const apps = suite.apps || [];
+  const timeline = suite.timeline || [];
+  const expectedApps = apps.length || 3;
+  const readyApps = apps.filter((app) => app.installed && app.running && app.reachable && !app.stale).length;
+
+  return [
+    sectionHeader("Suite", "Shared app presence, local session, launcher, and timeline.",
+      h("div", { className: "actions" }, [
+        actionButton("Refresh", { id: "suiteRefresh", variant: "secondary", onClick: refreshAll, busyKey: "refresh" }),
+        actionButton("Launch Suite", { id: "suiteLaunch", variant: "secondary", busyKey: "launchSuite", onClick: launchSuite })
+      ])
+    ),
+    card("Suite Session", [
+      statusGrid([
+        ["Session", suite.session?.title || "none", Boolean(suite.session)],
+        ["Session ID", suite.session?.sessionId || "none", Boolean(suite.session)],
+        ["Ready Apps", `${readyApps}/${expectedApps}`, readyApps === expectedApps],
+        ["Protocol", `schema ${suite.protocol?.schemaVersion || 1}`, true]
+      ]),
+      suite.protocol?.directory ? callout(suite.protocol.directory, "muted") : null
+    ]),
+    card("Suite Presence", [
+      apps.length
+        ? h("div", { className: "suite-list" }, apps.map((app) =>
+            h("div", { className: "suite-row" }, [
+              h("span", {}, [
+                h("strong", { text: app.appName }),
+                h("small", { text: app.activityDetail || app.detail }),
+                h("small", { text: app.healthUrl || app.discoveryFile })
+              ]),
+              h("span", { className: `chip ${suiteStatusTone(app)}`, text: suiteStatusLabel(app) }),
+              h("span", { className: "chip muted", text: app.suiteSessionId ? "in session" : "no session" })
+            ])
+          ))
+        : callout("No suite status is available yet.", "warn")
+    ]),
+    card("Suite Timeline", [
+      timeline.length
+        ? h("div", { className: "suite-list" }, timeline.map((item) =>
+            h("div", { className: "suite-row timeline" }, [
+              h("span", {}, [
+                h("strong", { text: item.title }),
+                h("small", { text: item.detail })
+              ]),
+              h("span", { className: "chip muted", text: item.sourceAppName }),
+              h("span", { className: "chip muted", text: formatTimelineTimestamp(item.createdAt) })
+            ])
+          ))
+        : callout("No shared suite activity yet.", "muted")
+    ]),
+    message()
+  ];
+}
+
 function renderTesting() {
   return [
     sectionHeader("Testing", "Testing tools are for local verification before using a live stream."),
@@ -3217,7 +3277,24 @@ function desktopUpdateNote(platform) {
 }
 
 async function loadFreshState() {
-  const [config, status, launchPreparation, giveaway, commands, timers, moderation, templates, operatorMessages, reminder, audit, outbound, diagnostics, featureGateResult, streamPresetResult] = await Promise.all([
+  const [
+    config,
+    status,
+    launchPreparation,
+    giveaway,
+    commands,
+    timers,
+    moderation,
+    templates,
+    operatorMessages,
+    reminder,
+    audit,
+    outbound,
+    diagnostics,
+    featureGateResult,
+    streamPresetResult,
+    suiteStatus
+  ] = await Promise.all([
     api.config(),
     api.status(),
     api.launchPreparation(),
@@ -3232,7 +3309,8 @@ async function loadFreshState() {
     api.outboundMessages(),
     api.diagnostics(),
     api.featureGates(),
-    api.streamPresets()
+    api.streamPresets(),
+    api.suiteStatus()
   ]);
   state.config = config;
   state.status = status;
@@ -3250,6 +3328,7 @@ async function loadFreshState() {
   state.diagnostics = diagnostics;
   state.featureGates = featureGateResult.featureGates || [];
   state.streamPresets = streamPresetResult.presets || [];
+  state.suiteStatus = suiteStatus;
   syncLaunchPreparation(status);
   syncLaunchPreparation(diagnostics);
   state.validSetup = isValidationPassed();
@@ -3279,7 +3358,37 @@ async function refreshAll(options = {}) {
 }
 
 async function refreshAfterAction() {
-  const [status, launchPreparation, giveaway, commands, timers, moderation, templates, operatorMessages, reminder, audit, outbound, featureGateResult, streamPresetResult] = await Promise.all([api.status(), api.launchPreparation(), api.giveaway(), api.commands(), api.timers(), api.moderation(), api.templates(), api.operatorMessages(), api.reminder(), api.auditLogs(), api.outboundMessages(), api.featureGates(), api.streamPresets()]);
+  const [
+    status,
+    launchPreparation,
+    giveaway,
+    commands,
+    timers,
+    moderation,
+    templates,
+    operatorMessages,
+    reminder,
+    audit,
+    outbound,
+    featureGateResult,
+    streamPresetResult,
+    suiteStatus
+  ] = await Promise.all([
+    api.status(),
+    api.launchPreparation(),
+    api.giveaway(),
+    api.commands(),
+    api.timers(),
+    api.moderation(),
+    api.templates(),
+    api.operatorMessages(),
+    api.reminder(),
+    api.auditLogs(),
+    api.outboundMessages(),
+    api.featureGates(),
+    api.streamPresets(),
+    api.suiteStatus()
+  ]);
   state.status = status;
   syncLaunchPreparation(launchPreparation);
   state.giveaway = giveaway;
@@ -3294,6 +3403,7 @@ async function refreshAfterAction() {
   state.outboundSummary = outbound.summary || {};
   state.featureGates = featureGateResult.featureGates || [];
   state.streamPresets = streamPresetResult.presets || [];
+  state.suiteStatus = suiteStatus;
   syncLaunchPreparation(status);
   state.validSetup = isValidationPassed();
 }
@@ -4270,6 +4380,7 @@ async function launchSuite() {
     }
     return { ok: true };
   }, { skipRefresh: true, success: "Launch requested for Studio, Pulse, and Console." });
+  await refreshAll();
 }
 
 function formatSuiteLaunchFailure(results) {
@@ -4280,6 +4391,30 @@ function formatSuiteLaunchFailure(results) {
   return appNames
     ? `Could not launch ${appNames}. Install the app bundles in Applications, then try again.`
     : "Unable to launch the vaexcore suite.";
+}
+
+function suiteStatusTone(app) {
+  if (!app.installed) return "bad";
+  if (!app.running) return "muted";
+  if (app.stale || !app.reachable) return "warn";
+  return "ok";
+}
+
+function suiteStatusLabel(app) {
+  if (!app.installed) return "missing";
+  if (!app.running) return "offline";
+  if (app.stale) return "stale";
+  if (!app.reachable) return "starting";
+  return "ready";
+}
+
+function formatTimelineTimestamp(value) {
+  if (/^\d+$/.test(String(value))) {
+    return new Date(Number(value) * 1000).toLocaleTimeString();
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleTimeString();
 }
 
 function openSettingsWindow(fragment = "") {
