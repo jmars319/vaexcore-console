@@ -2,7 +2,7 @@ import "dotenv/config";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { URL } from "node:url";
@@ -182,6 +182,7 @@ export const startSetupServer = async (options: { port?: number } = {}) => {
   );
 
   const suiteDiscoveryTimer = startSuiteDiscoveryHeartbeat(port);
+  const suiteCommandTimer = startSuiteCommandPoller();
   scheduleGiveawayReminder();
   setTimeout(() => {
     void queueLaunchPreparation("launch");
@@ -191,6 +192,7 @@ export const startSetupServer = async (options: { port?: number } = {}) => {
     url: `http://localhost:${port}`,
     stop: async () => {
       clearInterval(suiteDiscoveryTimer);
+      clearInterval(suiteCommandTimer);
       clearGiveawayReminderTimer();
       await stopBotProcess({ force: true });
       await chatQueue.drain(3000);
@@ -6155,6 +6157,7 @@ const startSuiteDiscoveryHeartbeat = (port: number) => {
 const writeSuiteDiscoveryDocument = (port: number, startedAt: string) => {
   const apiUrl = `http://127.0.0.1:${port}`;
   const directory = suiteDiscoveryDir();
+  const session = readSuiteSessionDocument();
   mkdirSync(directory, { recursive: true });
   writeFileSync(
     join(directory, "vaexcore-console.json"),
@@ -6175,15 +6178,73 @@ const writeSuiteDiscoveryDocument = (port: number, startedAt: string) => {
         "twitch.operations",
         "studio.chat-markers",
         "studio.giveaway-event-markers",
+        "suite.commands",
         "suite.launcher"
       ],
-      launchName: "vaexcore console"
+      launchName: "vaexcore console",
+      suiteSessionId: session?.sessionId ?? null,
+      activity: "live-ops",
+      activityDetail: session
+        ? `Monitoring chat operations for ${session.title}`
+        : "Ready for chat and stream operations"
     }, null, 2)}\n`
   );
 };
 
 const suiteDiscoveryDir = () =>
   join(homedir(), "Library", "Application Support", "vaexcore", "suite");
+
+const readSuiteSessionDocument = (): { sessionId: string; title: string } | null => {
+  try {
+    const parsed = JSON.parse(readFileSync(join(suiteDiscoveryDir(), "session.json"), "utf8"));
+    if (typeof parsed?.sessionId === "string" && typeof parsed?.title === "string") {
+      return { sessionId: parsed.sessionId, title: parsed.title };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
+const startSuiteCommandPoller = () => {
+  const read = () => {
+    try {
+      consumeSuiteCommands();
+    } catch (error) {
+      logger.warn({ error: redactSecrets(error) }, "Unable to consume vaexcore console suite commands");
+    }
+  };
+
+  read();
+  return setInterval(read, 2500);
+};
+
+const consumeSuiteCommands = () => {
+  const directory = join(suiteDiscoveryDir(), "commands", "vaexcore-console");
+  if (!existsSync(directory)) {
+    return;
+  }
+
+  for (const fileName of readdirSync(directory).filter((file) => file.endsWith(".json"))) {
+    const path = join(directory, fileName);
+    const command = JSON.parse(readFileSync(path, "utf8")) as {
+      command?: string;
+      commandId?: string;
+      sourceAppName?: string;
+    };
+    unlinkSync(path);
+
+    if (command.command === "focus-ops") {
+      logger.info(
+        {
+          commandId: command.commandId,
+          sourceAppName: command.sourceAppName
+        },
+        "Received suite focus request for vaexcore console"
+      );
+    }
+  }
+};
 
 const getSharedAssetDir = () => {
   const currentDir = dirname(fileURLToPath(import.meta.url));
