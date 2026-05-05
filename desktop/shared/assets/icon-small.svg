@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="vaexcore console icon">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="43%" r="66%">
+      <stop offset="0" stop-color="#15102c"/>
+      <stop offset="0.58" stop-color="#070914"/>
+      <stop offset="1" stop-color="#03040a"/>
+    </radialGradient>
+    <linearGradient id="v-main" x1="168" y1="210" x2="856" y2="836" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#29dfff"/>
+      <stop offset="0.5" stop-color="#ff31f6"/>
+      <stop offset="1" stop-color="#23d7ff"/>
+    </linearGradient>
+    <linearGradient id="v-inner" x1="310" y1="290" x2="714" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff36f7"/>
+      <stop offset="1" stop-color="#8b5cff"/>
+    </linearGradient>
+    <linearGradient id="face" x1="320" y1="330" x2="706" y2="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff44f6"/>
+      <stop offset="1" stop-color="#27ddff"/>
+    </linearGradient>
+    <filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="11" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <path d="M178 232 L512 816 L846 232" fill="none" stroke="url(#v-main)" stroke-width="58" stroke-linecap="round" stroke-linejoin="round" filter="url(#soft-glow)"/>
+  <path d="M316 296 L512 714 L708 296" fill="none" stroke="url(#v-inner)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <path d="M512 344 V274" stroke="#ff4af4" stroke-width="28" stroke-linecap="round" filter="url(#soft-glow)"/>
+  <circle cx="512" cy="248" r="30" fill="#070914" stroke="#ff4af4" stroke-width="22" filter="url(#soft-glow)"/>
+  <rect x="318" y="372" width="388" height="236" rx="96" fill="#070914" stroke="url(#face)" stroke-width="38" filter="url(#soft-glow)"/>
+  <rect x="420" y="466" width="44" height="92" rx="22" fill="#28dfff" filter="url(#soft-glow)"/>
+  <rect x="560" y="466" width="44" height="92" rx="22" fill="#28dfff" filter="url(#soft-glow)"/>
+  <path d="M378 678 H646" stroke="#ff3cf2" stroke-width="32" stroke-linecap="round"/>
+  <path d="M412 730 H612" stroke="#26ddff" stroke-width="22" stroke-linecap="round" opacity="0.9"/>
+</svg>
