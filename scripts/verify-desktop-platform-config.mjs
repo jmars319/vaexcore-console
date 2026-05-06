@@ -9,6 +9,7 @@ assert(packageJson.scripts["app:dev"] === "npm run build && node scripts/run-ele
 assert(packageJson.scripts["app:build:mac"]?.includes("--mac dir"), "macOS build script targets app directory");
 assert(packageJson.scripts["app:build:windows"]?.includes("--win dir"), "Windows build script targets unpacked app directory");
 assert(packageJson.scripts["app:build:windows"]?.includes("desktop/windows/scripts/install-electron-better-sqlite3.mjs"), "Windows build repairs native sqlite module");
+assert(packageJson.scripts["app:dist:windows"]?.includes("--win nsis portable"), "Windows dist script targets installer and portable artifacts");
 assert(packageJson.scripts["smoke:desktop-platforms"] === "node scripts/verify-desktop-platform-config.mjs", "desktop platform smoke script is registered");
 
 const files = packageJson.build?.files ?? [];
@@ -16,12 +17,14 @@ assert(files.includes("desktop/macOS/assets/icon.icns"), "macOS icon is packaged
 assert(files.includes("desktop/windows/assets/icon.ico"), "Windows icon is packaged");
 assert(packageJson.build?.mac?.icon === "desktop/macOS/assets/icon.icns", "macOS builder icon is configured");
 assert(packageJson.build?.win?.icon === "desktop/windows/assets/icon.ico", "Windows builder icon is configured");
+assert(packageJson.build?.afterPack === "desktop/windows/scripts/electron-builder-after-pack.cjs", "Windows packaging hook repairs native modules before installer creation");
 assert(hasTarget(packageJson.build?.win?.target, "nsis"), "Windows NSIS target is configured");
 assert(hasTarget(packageJson.build?.win?.target, "portable"), "Windows portable target is configured");
 assert(packageJson.build?.nsis?.oneClick === false, "Windows installer uses guided install mode");
 
 assert(existsSync(resolve("desktop/windows/assets/icon.ico")), "Windows icon asset exists");
 assert(existsSync(resolve("desktop/windows/scripts/install-electron-better-sqlite3.mjs")), "Windows sqlite packaging script exists");
+assert(existsSync(resolve("desktop/windows/scripts/electron-builder-after-pack.cjs")), "Windows electron-builder afterPack script exists");
 assert(existsSync(resolve("scripts/run-electron-app.mjs")), "cross-platform Electron app wrapper exists");
 assert(existsSync(resolve("scripts/run-electron-builder.mjs")), "cross-platform electron-builder wrapper exists");
 assert(electronMain.includes("resolveWindowIconPath"), "Electron main process resolves platform icon dynamically");

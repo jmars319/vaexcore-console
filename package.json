@@ -14,6 +14,7 @@
     "app:build": "npm run app:build:mac",
     "app:build:mac": "npm run build && node scripts/run-electron-builder.mjs --mac dir && node desktop/macOS/scripts/install-electron-better-sqlite3.mjs",
     "app:build:windows": "npm run build && node scripts/run-electron-builder.mjs --win dir && node desktop/windows/scripts/install-electron-better-sqlite3.mjs",
+    "app:dist:windows": "npm run build && node scripts/run-electron-builder.mjs --win nsis portable && node desktop/windows/scripts/install-electron-better-sqlite3.mjs",
     "app:dist": "npm run app:dist:mac",
     "app:dist:mac": "npm run build && node scripts/run-electron-builder.mjs --mac dir && node desktop/macOS/scripts/install-electron-better-sqlite3.mjs && node desktop/macOS/scripts/build-mac-dmg-from-app.mjs",
     "app:zip": "npm run app:build && node desktop/macOS/scripts/package-unsigned-mac.mjs",
@@ -74,6 +75,7 @@
     },
     "asar": false,
     "npmRebuild": false,
+    "afterPack": "desktop/windows/scripts/electron-builder-after-pack.cjs",
     "files": [
       "dist/**/*",
       "dist-bundle/**/*",

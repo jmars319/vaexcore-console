@@ -13,7 +13,13 @@ npm run app:build:windows
 
 Run that command on Windows. It builds the shared desktop bundle, packages an unpacked Windows Electron app, installs the Electron ABI prebuild for `better-sqlite3`, and launches the packaged executable in `ELECTRON_RUN_AS_NODE` mode to confirm SQLite opens.
 
-The root package also defines Windows installer metadata for NSIS and portable targets.
+Installer artifact entrypoint:
+
+```sh
+npm run app:dist:windows
+```
+
+That command builds NSIS and portable Windows artifacts. The Electron Builder `afterPack` hook repairs the packaged `better-sqlite3` native module before installer artifacts are created, then the post-build smoke script probes the unpacked app.
 
 Local Windows paths:
 
