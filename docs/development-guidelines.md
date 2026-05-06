@@ -44,7 +44,7 @@ New major modules should be isolated behind feature gates until they are tested.
 
 Actions that affect giveaways, commands, messages, settings, release/update state, diagnostics, or feature gates should write bounded, redacted audit entries.
 
-Maintain CLI fallback. The macOS app is primary for convenience, but CLI and setup scripts should remain functional for recovery and debugging.
+Maintain CLI fallback. The desktop app is primary for convenience, but CLI and setup scripts should remain functional for recovery and debugging.
 
 Preserve release discipline. Every milestone should run typecheck, build, relevant smoke tests, and packaged app smoke tests when packaging is affected.
 

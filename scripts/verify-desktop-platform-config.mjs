@@ -26,6 +26,8 @@ assert(existsSync(resolve("scripts/run-electron-app.mjs")), "cross-platform Elec
 assert(existsSync(resolve("scripts/run-electron-builder.mjs")), "cross-platform electron-builder wrapper exists");
 assert(electronMain.includes("resolveWindowIconPath"), "Electron main process resolves platform icon dynamically");
 assert(electronMain.includes("desktop/windows/assets/icon.ico"), "Electron main process can load Windows icon");
+assert(electronMain.includes("resolveWindowsAppPath"), "Electron main process resolves Windows suite app executables");
+assert(electronMain.includes("LOCALAPPDATA"), "Electron main process checks Windows local app installs");
 assert(electronMain.includes("netstat -ano | findstr"), "Electron startup recovery uses Windows port hint");
 
 console.log("desktop platform config passed");

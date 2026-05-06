@@ -2,7 +2,7 @@ const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const { existsSync } = require("node:fs");
 const { get } = require("node:http");
-const { join } = require("node:path");
+const { basename, join } = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 let mainWindow;
@@ -16,6 +16,7 @@ const setupProbeUrl = `http://127.0.0.1:${setupPort}/api/config`;
 const productName = "vaexcore console";
 const legacyProductName = "VaexCore";
 const isMac = process.platform === "darwin";
+const isWindows = process.platform === "win32";
 const vaexcoreSuiteApps = [
   "vaexcore studio",
   "vaexcore pulse",
@@ -99,19 +100,16 @@ const closeMainWindow = () => {
 };
 
 const launchVaexcoreSuite = () => {
-  if (!isMac) {
-    dialog.showMessageBox({
-      type: "info",
-      message: "Launch Suite is only implemented for macOS Applications."
-    });
-    return;
-  }
-
   for (const appName of vaexcoreSuiteApps) {
-    const child = spawn("open", ["-a", appName], {
-      detached: true,
-      stdio: "ignore"
-    });
+    const child = launchDesktopApp(appName);
+    if (!child) {
+      dialog.showErrorBox(
+        "Unable to Launch vaexcore Suite",
+        "Suite launching is supported on macOS and Windows desktop builds."
+      );
+      continue;
+    }
+
     child.on("error", (error) => {
       dialog.showErrorBox(
         "Unable to Launch vaexcore Suite",
@@ -120,6 +118,45 @@ const launchVaexcoreSuite = () => {
     });
     child.unref();
   }
+};
+
+const launchDesktopApp = (appName) =>
+  isMac
+    ? spawn("open", ["-a", appName], { detached: true, stdio: "ignore" })
+    : isWindows
+      ? launchWindowsApp(appName)
+      : undefined;
+
+const launchWindowsApp = (appName) => {
+  const executable = resolveWindowsAppPath(appName);
+  if (executable) {
+    return spawn(executable, [], { detached: true, stdio: "ignore" });
+  }
+
+  return spawn("cmd", ["/C", "start", "", appName], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true
+  });
+};
+
+const resolveWindowsAppPath = (appName) => {
+  if (!isWindows) {
+    return undefined;
+  }
+
+  const exeName = `${appName}.exe`;
+  const candidates = [
+    appName === productName && basename(process.execPath).toLowerCase() === exeName.toLowerCase()
+      ? process.execPath
+      : undefined,
+    join(app.getPath("localAppData"), "Programs", appName, exeName),
+    process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "Programs", appName, exeName) : undefined,
+    process.env.ProgramFiles ? join(process.env.ProgramFiles, appName, exeName) : undefined,
+    process.env["ProgramFiles(x86)"] ? join(process.env["ProgramFiles(x86)"], appName, exeName) : undefined
+  ].filter(Boolean);
+
+  return candidates.find((candidate) => existsSync(candidate));
 };
 
 const createSettingsWindow = async (fragment = "") => {

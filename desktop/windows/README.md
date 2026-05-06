@@ -13,4 +13,12 @@ npm run app:build:windows
 
 Run that command on Windows. It builds the shared desktop bundle, packages an unpacked Windows Electron app, installs the Electron ABI prebuild for `better-sqlite3`, and launches the packaged executable in `ELECTRON_RUN_AS_NODE` mode to confirm SQLite opens.
 
-The root package also defines Windows installer metadata for NSIS and portable targets. The first conversion milestone is the unpacked app smoke path; installer artifact automation should come after the unpacked app passes on a real Windows machine.
+The root package also defines Windows installer metadata for NSIS and portable targets.
+
+Local Windows paths:
+
+- Suite discovery: `%APPDATA%\vaexcore\suite`
+- Console app data and SQLite: Electron `userData`, normally `%APPDATA%\vaexcore console`
+- Twitch secrets: app-owned `local.secrets.json` until the Windows Credential Manager migration lands
+
+The app can launch the suite from standard Windows install locations such as `%LOCALAPPDATA%\Programs\<app name>\<app name>.exe`.

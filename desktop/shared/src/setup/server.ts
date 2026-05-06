@@ -6577,13 +6577,7 @@ type SuiteLaunchResult = {
 };
 
 const launchVaexcoreSuite = async () => {
-  const results = process.platform === "darwin"
-    ? await Promise.all(vaexcoreSuiteApps.map((appName) => launchMacApp(appName)))
-    : vaexcoreSuiteApps.map((appName) => ({
-        appName,
-        ok: false,
-        detail: "Launch Suite is only implemented for macOS Applications."
-      }));
+  const results = await Promise.all(vaexcoreSuiteApps.map((appName) => launchDesktopApp(appName)));
 
   appendSuiteTimelineEvent({
     sourceApp: "vaexcore-console",
@@ -6600,6 +6594,22 @@ const launchVaexcoreSuite = async () => {
     ok: results.every((result) => result.ok),
     results
   };
+};
+
+const launchDesktopApp = (appName: string): Promise<SuiteLaunchResult> => {
+  if (process.platform === "darwin") {
+    return launchMacApp(appName);
+  }
+
+  if (process.platform === "win32") {
+    return launchWindowsApp(appName);
+  }
+
+  return Promise.resolve({
+    appName,
+    ok: false,
+    detail: "Suite launching is supported on macOS and Windows desktop builds."
+  });
 };
 
 const launchMacApp = (appName: string): Promise<SuiteLaunchResult> =>
@@ -6628,6 +6638,42 @@ const launchMacApp = (appName: string): Promise<SuiteLaunchResult> =>
         detail: code === 0
           ? "Launch requested."
           : stderr.trim() || `open exited with code ${code}.`
+      });
+    });
+  });
+
+const launchWindowsApp = (appName: string): Promise<SuiteLaunchResult> =>
+  new Promise((resolveLaunch) => {
+    const executable = windowsAppExecutablePath(appName);
+    const child = executable
+      ? spawn(executable, [], { stdio: ["ignore", "ignore", "pipe"] })
+      : spawn("cmd", ["/C", "start", "", appName], {
+          stdio: ["ignore", "ignore", "pipe"],
+          windowsHide: true
+        });
+    let stderr = "";
+
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", (error) => {
+      resolveLaunch({
+        appName,
+        ok: false,
+        detail: safeErrorMessage(error, "Launch failed.")
+      });
+    });
+
+    child.on("close", (code) => {
+      resolveLaunch({
+        appName,
+        ok: code === 0,
+        detail: code === 0
+          ? executable
+            ? `Launch requested from ${executable}.`
+            : "Launch requested through Windows shell."
+          : stderr.trim() || `start exited with code ${code}.`
       });
     });
   });
@@ -6699,7 +6745,7 @@ const buildConsoleLocalRuntime = (apiUrl?: string): SuiteLocalRuntime => {
     appStorageDir,
     suiteDir: suiteDiscoveryDir(),
     secureStorage: "local.secrets.json",
-    secretStorageState: "app-owned-file-needs-keychain-migration",
+    secretStorageState: consoleSecretStorageState(),
     durableStorage: [
       "SQLite command configuration, audit logs, giveaways, timers, and moderation settings",
       "local.secrets.json",
@@ -6733,7 +6779,31 @@ const buildConsoleLocalRuntime = (apiUrl?: string): SuiteLocalRuntime => {
 };
 
 const suiteDiscoveryDir = () =>
-  join(homedir(), "Library", "Application Support", "vaexcore", "suite");
+  join(vaexcoreSharedDataDir(), "suite");
+
+const vaexcoreSharedDataDir = () => {
+  if (process.platform === "win32") {
+    return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "vaexcore");
+  }
+
+  if (process.platform === "darwin") {
+    return join(homedir(), "Library", "Application Support", "vaexcore");
+  }
+
+  return join(process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"), "vaexcore");
+};
+
+const consoleSecretStorageState = () => {
+  if (process.platform === "win32") {
+    return "app-owned-file-needs-credential-manager-migration";
+  }
+
+  if (process.platform === "darwin") {
+    return "app-owned-file-needs-keychain-migration";
+  }
+
+  return "app-owned-file-needs-secure-store-migration";
+};
 
 const readSuiteSessionDocument = (): { sessionId: string; title: string } | null => {
   try {
@@ -6752,7 +6822,7 @@ const suiteAppStatus = (
 ): SuiteAppStatus => {
   const discoveryFile = join(suiteDiscoveryDir(), `${definition.appId}.json`);
   const discovery = readSuiteDiscoveryDocument(discoveryFile);
-  const installed = existsSync(join("/Applications", `${definition.launchName}.app`));
+  const installed = desktopAppIsInstalled(definition.launchName);
   const pid = typeof discovery?.pid === "number" ? discovery.pid : null;
   const running = typeof pid === "number" ? processIsRunning(pid) : false;
   const stale = suiteDiscoveryIsStale(discoveryFile);
@@ -6814,7 +6884,7 @@ const suiteStatusDetail = (
   reachable: boolean
 ) => {
   if (!installed) {
-    return "Install this app in /Applications.";
+    return platformInstallHint();
   }
   if (!discovered) {
     return "No suite heartbeat has been published yet.";
@@ -6829,6 +6899,47 @@ const suiteStatusDetail = (
     return "The app is running, but its local health endpoint is not reachable yet.";
   }
   return "Ready.";
+};
+
+const desktopAppIsInstalled = (appName: string) => {
+  if (process.platform === "darwin") {
+    return existsSync(join("/Applications", `${appName}.app`));
+  }
+
+  if (process.platform === "win32") {
+    return Boolean(windowsAppExecutablePath(appName));
+  }
+
+  return false;
+};
+
+const platformInstallHint = () => {
+  if (process.platform === "win32") {
+    return "Install this app with the Windows installer or keep the portable executable in a standard vaexcore install folder.";
+  }
+
+  if (process.platform === "darwin") {
+    return "Install this app in /Applications.";
+  }
+
+  return "Install this app in the platform app folder.";
+};
+
+const windowsAppExecutablePath = (appName: string) => {
+  if (process.platform !== "win32") {
+    return undefined;
+  }
+
+  const exeName = `${appName}.exe`;
+  const candidates = [
+    process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "Programs", appName, exeName) : undefined,
+    join(homedir(), "AppData", "Local", "Programs", appName, exeName),
+    process.env.ProgramFiles ? join(process.env.ProgramFiles, appName, exeName) : undefined,
+    process.env["ProgramFiles(x86)"] ? join(process.env["ProgramFiles(x86)"], appName, exeName) : undefined,
+    process.argv[0]?.toLowerCase().endsWith(exeName.toLowerCase()) ? process.argv[0] : undefined
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  return candidates.find((candidate) => existsSync(candidate));
 };
 
 const startSuiteCommandPoller = () => {
