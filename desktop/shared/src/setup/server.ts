@@ -79,6 +79,10 @@ import {
   type StudioMarkerInput
 } from "../studio/client";
 import { studioConsoleMarkerMetadata } from "../studio/markerMetadata";
+import {
+  CONSOLE_APP,
+  SUITE_DISCOVERY_SCHEMA_VERSION
+} from "../suiteProtocol";
 import type {
   Giveaway,
   GiveawayWinner
@@ -6681,42 +6685,99 @@ const writeSuiteDiscoveryDocument = (port: number, startedAt: string) => {
   const apiUrl = `http://127.0.0.1:${port}`;
   const directory = suiteDiscoveryDir();
   const session = readSuiteSessionDocument();
+  const document: SuiteDiscoveryDocument = {
+    schemaVersion: SUITE_DISCOVERY_SCHEMA_VERSION,
+    appId: CONSOLE_APP.id,
+    appName: CONSOLE_APP.name,
+    bundleIdentifier: CONSOLE_APP.bundleId,
+    version: "0.1.2",
+    pid: process.pid,
+    startedAt,
+    updatedAt: new Date().toISOString(),
+    apiUrl,
+    wsUrl: null,
+    healthUrl: `${apiUrl}/api/status`,
+    capabilities: [
+      "console.setup",
+      "twitch.operations",
+      "studio.chat-markers",
+      "studio.giveaway-event-markers",
+      "suite.commands",
+      "suite.launcher",
+      "suite.timeline",
+      "twitch.stream_key",
+      "platform.local_page"
+    ],
+    launchName: CONSOLE_APP.launchName,
+    suiteSessionId: session?.sessionId ?? null,
+    activity: "live-ops",
+    activityDetail: session
+      ? `Monitoring chat operations for ${session.title}`
+      : "Ready for chat and stream operations",
+    localRuntime: buildConsoleLocalRuntime(apiUrl)
+  };
+
+  validateSuiteDiscoveryDocument(document);
   mkdirSync(directory, { recursive: true });
   writeFileSync(
-    join(directory, "vaexcore-console.json"),
-    `${JSON.stringify({
-      schemaVersion: suiteDiscoverySchemaVersion,
-      appId: "vaexcore-console",
-      appName: "vaexcore console",
-      bundleIdentifier: "com.vaexil.vaexcore.console",
-      version: "0.1.2",
-      pid: process.pid,
-      startedAt,
-      updatedAt: new Date().toISOString(),
-      apiUrl,
-      wsUrl: null,
-      healthUrl: `${apiUrl}/api/status`,
-      capabilities: [
-        "console.setup",
-        "twitch.operations",
-        "studio.chat-markers",
-        "studio.giveaway-event-markers",
-        "suite.commands",
-        "suite.launcher",
-        "suite.timeline",
-        "twitch.stream_key",
-        "platform.local_page"
-      ],
-      launchName: "vaexcore console",
-      suiteSessionId: session?.sessionId ?? null,
-      activity: "live-ops",
-      activityDetail: session
-        ? `Monitoring chat operations for ${session.title}`
-        : "Ready for chat and stream operations",
-      localRuntime: buildConsoleLocalRuntime(apiUrl)
-    }, null, 2)}\n`
+    join(directory, CONSOLE_APP.discoveryFile),
+    `${JSON.stringify(document, null, 2)}\n`
   );
 };
+
+const validateSuiteDiscoveryDocument = (document: SuiteDiscoveryDocument) => {
+  if (document.schemaVersion !== SUITE_DISCOVERY_SCHEMA_VERSION) {
+    throw new Error(`Suite discovery schemaVersion must be ${SUITE_DISCOVERY_SCHEMA_VERSION}.`);
+  }
+  if (document.appId !== CONSOLE_APP.id) {
+    throw new Error(`Suite discovery appId must be ${CONSOLE_APP.id}.`);
+  }
+  if (document.appName !== CONSOLE_APP.name) {
+    throw new Error(`Suite discovery appName must be ${CONSOLE_APP.name}.`);
+  }
+  if (document.bundleIdentifier !== CONSOLE_APP.bundleId) {
+    throw new Error(`Suite discovery bundleIdentifier must be ${CONSOLE_APP.bundleId}.`);
+  }
+  if (document.launchName !== CONSOLE_APP.launchName) {
+    throw new Error(`Suite discovery launchName must be ${CONSOLE_APP.launchName}.`);
+  }
+  if (!document.version || document.version.trim() === "") {
+    throw new Error("Suite discovery version is required.");
+  }
+  if (!document.pid || document.pid <= 0) {
+    throw new Error("Suite discovery pid must be greater than 0.");
+  }
+  if (!document.startedAt || Number.isNaN(Date.parse(document.startedAt))) {
+    throw new Error("Suite discovery startedAt must be a valid timestamp.");
+  }
+  if (!document.updatedAt || Number.isNaN(Date.parse(document.updatedAt))) {
+    throw new Error("Suite discovery updatedAt must be a valid timestamp.");
+  }
+  if (!Array.isArray(document.capabilities) || document.capabilities.length === 0) {
+    throw new Error("Suite discovery capabilities must not be empty.");
+  }
+  for (const [field, value] of Object.entries({
+    apiUrl: document.apiUrl,
+    wsUrl: document.wsUrl,
+    healthUrl: document.healthUrl
+  })) {
+    if (value && !isLocalRuntimeUrl(value)) {
+      throw new Error(`Suite discovery ${field} must be a localhost URL.`);
+    }
+  }
+  if (document.localRuntime?.contractVersion !== SUITE_DISCOVERY_SCHEMA_VERSION) {
+    throw new Error("Suite discovery localRuntime.contractVersion mismatch.");
+  }
+  if (!document.localRuntime?.dependencies?.length) {
+    throw new Error("Suite discovery localRuntime.dependencies must not be empty.");
+  }
+};
+
+const isLocalRuntimeUrl = (value: string) =>
+  value.startsWith("http://127.0.0.1:") ||
+  value.startsWith("http://localhost:") ||
+  value.startsWith("ws://127.0.0.1:") ||
+  value.startsWith("ws://localhost:");
 
 const buildConsoleLocalRuntime = (apiUrl?: string): SuiteLocalRuntime => {
   const config = getSafeConfig();
