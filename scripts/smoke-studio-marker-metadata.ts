@@ -50,4 +50,29 @@ assert.deepEqual(giveawayMarker.giveaway, {
   status: "drawing"
 });
 
+assert.throws(
+  () => assertStudioMarkerMetadataContract(
+    {
+      ...manualMarker,
+      contract: "wrong.contract"
+    },
+    "console.chat.marker"
+  ),
+  /wrong contract name/
+);
+assert.throws(
+  () => assertStudioMarkerMetadataContract(
+    {
+      ...manualMarker,
+      source: {
+        appId: "vaexcore-studio",
+        appName: "vaexcore studio",
+        workflow: "manual-chat-marker"
+      }
+    },
+    "console.chat.marker"
+  ),
+  /wrong source app/
+);
+
 console.log("console studio marker metadata smoke passed");
