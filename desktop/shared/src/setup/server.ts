@@ -78,6 +78,7 @@ import {
   StudioClient,
   type StudioMarkerInput
 } from "../studio/client";
+import { studioConsoleMarkerMetadata } from "../studio/markerMetadata";
 import type {
   Giveaway,
   GiveawayWinner
@@ -6067,22 +6068,6 @@ const maybeCreateStudioEventMarker = (marker: StudioMarkerInput | undefined) => 
     );
   });
 };
-
-const studioConsoleMarkerMetadata = (
-  eventType: string,
-  metadata: Record<string, unknown> = {}
-) => ({
-  ...metadata,
-  contract: "vaexcore.studio.marker.v1",
-  schemaVersion: 1,
-  eventType,
-  source: {
-    appId: "vaexcore-console",
-    appName: "vaexcore console",
-    workflow: "console-event-marker"
-  },
-  createdAt: new Date().toISOString()
-});
 
 const giveawayMetadata = (giveaway: Giveaway) => ({
   id: giveaway.id,

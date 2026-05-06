@@ -6,6 +6,7 @@ import {
   StudioClient
 } from "./client";
 import { sanitizeText } from "../core/security";
+import { studioConsoleMarkerMetadata } from "./markerMetadata";
 
 type RegisterStudioCommandsOptions = {
   router: CommandRouter;
@@ -51,22 +52,19 @@ export const registerStudioCommands = ({
         label,
         source_app: "vaexcore-console",
         source_event_id: markerSourceEventId(message),
-        metadata: {
-          contract: "vaexcore.studio.marker.v1",
-          schemaVersion: 1,
-          eventType: "console.chat.marker",
-          command: "vcmark",
-          source: {
-            appId: "vaexcore-console",
-            appName: "vaexcore console",
-            workflow: "manual-chat-marker"
+        metadata: studioConsoleMarkerMetadata(
+          "console.chat.marker",
+          {
+            command: "vcmark",
+            chatSource: message.source,
+            userLogin: message.userLogin,
+            userDisplayName: message.userDisplayName,
+            receivedAt: message.receivedAt.toISOString()
           },
-          chatSource: message.source,
-          userLogin: message.userLogin,
-          userDisplayName: message.userDisplayName,
-          receivedAt: message.receivedAt.toISOString(),
-          createdAt: new Date().toISOString()
-        }
+          {
+            workflow: "manual-chat-marker"
+          }
+        )
       });
       reply(`Studio marker created: ${label}`);
     } catch (error) {
