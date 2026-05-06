@@ -24,14 +24,16 @@ if (apps.length === 0) {
 for (const appPath of apps) {
   const moduleDir = join(
     appPath,
-    "Contents/Resources/app/node_modules/better-sqlite3"
+    "Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3"
   );
+  const legacyModuleDir = join(appPath, "Contents/Resources/app/node_modules/better-sqlite3");
+  const packagedModuleDir = existsSync(moduleDir) ? moduleDir : legacyModuleDir;
 
-  if (!existsSync(moduleDir)) {
+  if (!existsSync(packagedModuleDir)) {
     throw new Error(`Packaged better-sqlite3 module not found: ${moduleDir}`);
   }
 
-  rmSync(join(moduleDir, "build"), { recursive: true, force: true });
+  rmSync(join(packagedModuleDir, "build"), { recursive: true, force: true });
   execFileSync(
     process.execPath,
     [
@@ -45,7 +47,7 @@ for (const appPath of apps) {
       "--platform",
       process.platform
     ],
-    { cwd: moduleDir, stdio: "inherit" }
+    { cwd: packagedModuleDir, stdio: "inherit" }
   );
 
   resignPackagedApp(appPath);
@@ -79,7 +81,10 @@ function probePackagedBetterSqlite(appPath) {
   }
 
   const binaryPath = join(appPath, "Contents/MacOS", productName);
-  const appPackagePath = join(appPath, "Contents/Resources/app/package.json");
+  const unpackedPackagePath = join(appPath, "Contents/Resources/app/package.json");
+  const appPackagePath = existsSync(unpackedPackagePath)
+    ? unpackedPackagePath
+    : join(appPath, "Contents/Resources/app.asar/package.json");
   const expression = [
     "const { createRequire } = require('node:module');",
     `const appRequire = createRequire(${JSON.stringify(appPackagePath)});`,

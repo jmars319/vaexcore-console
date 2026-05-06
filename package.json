@@ -1,6 +1,7 @@
 {
   "name": "vaexcore-console",
   "version": "0.1.2",
+  "author": "Jason Marshall",
   "private": true,
   "description": "vaexcore console is a quiet Twitch operations bot for commands, moderation, giveaways, and stream control without the usual clutter.",
   "type": "module",
@@ -73,9 +74,10 @@
     "directories": {
       "output": "release"
     },
-    "asar": false,
+    "asar": true,
     "npmRebuild": false,
     "afterPack": "desktop/windows/scripts/electron-builder-after-pack.cjs",
+    "afterSign": "desktop/macOS/scripts/electron-builder-after-sign.cjs",
     "files": [
       "dist/**/*",
       "dist-bundle/**/*",
@@ -92,6 +94,8 @@
     "mac": {
       "category": "public.app-category.utilities",
       "icon": "desktop/macOS/assets/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
       "target": [
         "dir",
         "dmg"

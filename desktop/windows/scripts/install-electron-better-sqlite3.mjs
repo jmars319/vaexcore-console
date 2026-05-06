@@ -28,14 +28,16 @@ if (apps.length === 0) {
 for (const appPath of apps) {
   const moduleDir = join(
     appPath,
-    "resources/app/node_modules/better-sqlite3"
+    "resources/app.asar.unpacked/node_modules/better-sqlite3"
   );
+  const legacyModuleDir = join(appPath, "resources/app/node_modules/better-sqlite3");
+  const packagedModuleDir = existsSync(moduleDir) ? moduleDir : legacyModuleDir;
 
-  if (!existsSync(moduleDir)) {
+  if (!existsSync(packagedModuleDir)) {
     throw new Error(`Packaged better-sqlite3 module not found: ${moduleDir}`);
   }
 
-  rmSync(join(moduleDir, "build"), { recursive: true, force: true });
+  rmSync(join(packagedModuleDir, "build"), { recursive: true, force: true });
   execFileSync(
     process.execPath,
     [
@@ -49,7 +51,7 @@ for (const appPath of apps) {
       "--platform",
       process.platform
     ],
-    { cwd: moduleDir, stdio: "inherit" }
+    { cwd: packagedModuleDir, stdio: "inherit" }
   );
 
   probePackagedBetterSqlite(appPath);
@@ -78,7 +80,10 @@ function findPackagedApps(dir) {
 
 function probePackagedBetterSqlite(appPath) {
   const binaryPath = join(appPath, `${productName}.exe`);
-  const appPackagePath = join(appPath, "resources/app/package.json");
+  const unpackedPackagePath = join(appPath, "resources/app/package.json");
+  const appPackagePath = existsSync(unpackedPackagePath)
+    ? unpackedPackagePath
+    : join(appPath, "resources/app.asar/package.json");
 
   if (!existsSync(binaryPath)) {
     throw new Error(`Packaged Windows executable not found: ${binaryPath}`);

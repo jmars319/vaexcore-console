@@ -9,10 +9,12 @@ module.exports = async function afterPack(context) {
 
   const projectDir = context.packager.info.projectDir;
   const appOutDir = context.appOutDir;
-  const moduleDir = join(appOutDir, "resources/app/node_modules/better-sqlite3");
+  const moduleDir = join(appOutDir, "resources/app.asar.unpacked/node_modules/better-sqlite3");
+  const legacyModuleDir = join(appOutDir, "resources/app/node_modules/better-sqlite3");
+  const packagedModuleDir = existsSync(moduleDir) ? moduleDir : legacyModuleDir;
   const prebuildInstallBin = resolve(projectDir, "node_modules/prebuild-install/bin.js");
 
-  if (!existsSync(moduleDir)) {
+  if (!existsSync(packagedModuleDir)) {
     throw new Error(`Packaged better-sqlite3 module not found: ${moduleDir}`);
   }
 
@@ -20,7 +22,7 @@ module.exports = async function afterPack(context) {
     throw new Error("prebuild-install was not found in node_modules.");
   }
 
-  rmSync(join(moduleDir, "build"), { recursive: true, force: true });
+  rmSync(join(packagedModuleDir, "build"), { recursive: true, force: true });
   execFileSync(
     process.execPath,
     [
@@ -34,6 +36,6 @@ module.exports = async function afterPack(context) {
       "--platform",
       "win32"
     ],
-    { cwd: moduleDir, stdio: "inherit" }
+    { cwd: packagedModuleDir, stdio: "inherit" }
   );
 };

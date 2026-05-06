@@ -60,8 +60,17 @@ try {
     label: "chat marker",
     source_event_id: "chat:message-123",
     metadata: {
+      contract: "vaexcore.studio.marker.v1",
+      schemaVersion: 1,
+      eventType: "console.chat.marker",
       command: "vcmark",
-      userLogin: "caster"
+      source: {
+        appId: "vaexcore-console",
+        appName: "vaexcore console",
+        workflow: "manual-chat-marker"
+      },
+      userLogin: "caster",
+      createdAt: "2026-05-02T12:00:00Z"
     }
   });
 
@@ -70,9 +79,28 @@ try {
   assert.equal(marker.source_event_id, "chat:message-123");
   assert.equal(markerBody?.source_app, "vaexcore-console");
   assert.equal(markerBody?.source_event_id, "chat:message-123");
-  assert.deepEqual(markerBody?.metadata, {
+  const metadata = markerBody?.metadata as Record<string, unknown>;
+  assert.equal(metadata.contract, "vaexcore.studio.marker.v1");
+  assert.equal(metadata.schemaVersion, 1);
+  assert.equal(metadata.eventType, "console.chat.marker");
+  assert.deepEqual(metadata.source, {
+    appId: "vaexcore-console",
+    appName: "vaexcore console",
+    workflow: "manual-chat-marker"
+  });
+  assert.equal(metadata.createdAt, "2026-05-02T12:00:00Z");
+  assert.deepEqual(metadata, {
+    contract: "vaexcore.studio.marker.v1",
+    schemaVersion: 1,
+    eventType: "console.chat.marker",
     command: "vcmark",
-    userLogin: "caster"
+    source: {
+      appId: "vaexcore-console",
+      appName: "vaexcore console",
+      workflow: "manual-chat-marker"
+    },
+    userLogin: "caster",
+    createdAt: "2026-05-02T12:00:00Z"
   });
 } finally {
   globalThis.fetch = originalFetch;
