@@ -1,0 +1,70 @@
+#!/usr/bin/env node
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const requiredScopes = [
+  "user:read:chat",
+  "user:write:chat",
+  "channel:read:stream_key",
+];
+
+const files = [
+  "desktop/shared/src/twitch/validate.ts",
+  "desktop/shared/src/setup/ui/app.js",
+  "desktop/shared/src/cli/checkEnv.ts",
+  "scripts/smoke-diagnostics.mjs",
+  "scripts/smoke-setup-ui.mjs",
+  "scripts/smoke-token-refresh.mjs",
+  "desktop/macOS/scripts/smoke-tester-artifact.mjs",
+];
+const importerFiles = ["desktop/shared/src/setup/server.ts"];
+
+const errors = [];
+
+for (const file of files) {
+  const source = readFileSync(resolve(file), "utf8");
+  for (const scope of requiredScopes) {
+    if (!source.includes(scope)) {
+      errors.push(`${file} is missing required Twitch scope ${scope}`);
+    }
+  }
+}
+
+for (const file of importerFiles) {
+  const source = readFileSync(resolve(file), "utf8");
+  if (!source.includes("requiredTwitchScopes")) {
+    errors.push(`${file} does not consume requiredTwitchScopes`);
+  }
+  if (!source.includes("channel:read:stream_key")) {
+    errors.push(`${file} is missing stream-key scope handling`);
+  }
+}
+
+const validationSource = readFileSync(
+  resolve("desktop/shared/src/twitch/validate.ts"),
+  "utf8",
+);
+const scopeListMatch = validationSource.match(
+  /export const requiredTwitchScopes = \[([\s\S]*?)\] as const;/,
+);
+if (!scopeListMatch) {
+  errors.push("requiredTwitchScopes export could not be parsed");
+} else {
+  const exportedScopes = [...scopeListMatch[1].matchAll(/"([^"]+)"/g)].map(
+    (match) => match[1],
+  );
+  if (exportedScopes.join(" ") !== requiredScopes.join(" ")) {
+    errors.push(
+      `requiredTwitchScopes changed from expected order: ${exportedScopes.join(
+        " ",
+      )}`,
+    );
+  }
+}
+
+if (errors.length > 0) {
+  console.error(errors.join("\n"));
+  process.exit(1);
+}
+
+console.log("Required Twitch scopes are aligned.");
