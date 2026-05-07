@@ -1,5 +1,7 @@
 const windowParams = new URLSearchParams(window.location.search);
 const isSettingsWindow = windowParams.get("window") === "settings";
+const isWindowsSetupPrompt =
+  isSettingsWindow && windowParams.get("setupPrompt") === "windows";
 const requestedTab = windowParams.get("tab");
 
 document.body.classList.toggle("settings-window", isSettingsWindow);
@@ -3586,6 +3588,7 @@ function renderSettings() {
       "Configure local mode, Twitch OAuth, and automatic launch validation.",
       connectButton(config),
     ),
+    renderWindowsSetupPromptNotice(),
     renderSettingsLaunchNotice(),
     renderSetupGuide(),
     card("Setup Completion", [
@@ -3751,6 +3754,17 @@ function renderSettings() {
   ];
 }
 
+function renderWindowsSetupPromptNotice() {
+  if (!isWindowsSetupPrompt) {
+    return null;
+  }
+
+  return callout(
+    "Twitch setup is not complete yet. Complete the Setup Guide in this window before a real chat bot or stream-key test. This window is safe to close if you are not testing Twitch right now.",
+    "warn",
+  );
+}
+
 function renderSetupGuide() {
   const config = state.config || {};
   const progress = getSetupProgress();
@@ -3782,6 +3796,10 @@ function renderSetupGuide() {
           ),
         ),
       ),
+      callout(
+        "Account roles: create the Twitch Developer App from any Twitch account you control. It does not need to be Bot Login or Broadcaster Login. That app only provides the Client ID and Client Secret. Broadcaster Login is the channel you are testing. Bot Login is the account that sends chat messages and must be the account signed in when you click Connect Twitch. For the first full Suite test, use the same Twitch account for Broadcaster Login and Bot Login so chat OAuth and stream-key import both work from one connection.",
+        "info",
+      ),
       setupStep({
         id: "app",
         number: 1,
@@ -3792,6 +3810,10 @@ function renderSetupGuide() {
           h("p", {
             text: "You need to create a Twitch application so vaexcore console can connect to your account.",
           }),
+          callout(
+            "This step is app registration, not bot identity. Use any Twitch account you control. Bot Login, Broadcaster Login, or a third account are all acceptable here; the OAuth step later decides which account becomes the bot.",
+            "info",
+          ),
           h("a", {
             className: "button secondary",
             href: "https://dev.twitch.tv/console/apps",
@@ -3851,9 +3873,10 @@ function renderSetupGuide() {
           h("p", {
             text: "Enter the Twitch account that will run the bot and the channel it will operate in.",
           }),
-          h("p", {
-            text: "These can be the same account, or separate accounts if desired.",
-          }),
+          callout(
+            "Recommended for the first real test: make Broadcaster Login and Bot Login the same Twitch account. Separate bot accounts are supported for chat, but the current local Suite cannot import the broadcaster's stream key from a separate bot account token.",
+            "warn",
+          ),
           h("p", {
             text: "Bot Login must be the account that grants OAuth in the next step; Broadcaster Login is the channel.",
           }),
@@ -3884,6 +3907,14 @@ function renderSetupGuide() {
           h("p", {
             text: "Click Connect Twitch while logged into the Bot Login account to authorize vaexcore console for chat and optional scoped moderation actions.",
           }),
+          callout(
+            "OAuth rule: Connect Twitch as Bot Login for chat. If you also need Studio to import the Twitch stream key from Console, Bot Login must be the broadcaster account in this local build.",
+            "warn",
+          ),
+          callout(
+            "Future hosted-product model: vaexcore can own the Developer App and keep the service bot connected remotely. Then users would authorize their broadcaster channel instead of typing app credentials locally. This local tester build is deliberately self-contained, so it asks for your own Client ID and Client Secret.",
+            "info",
+          ),
           oauthAccountCallout(config),
           h("div", { className: "actions" }, [
             connectButton(config, "secondary", !canConnect),

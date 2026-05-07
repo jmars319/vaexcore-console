@@ -272,13 +272,13 @@ Delete and timeout actions only run in live EventSub chat after the feature gate
 Open `Settings`, then use `Setup Guide`.
 
 1. Create a Twitch application.
-   Open `https://dev.twitch.tv/console/apps`, click `Register Your Application`, use any name such as `vaexcore console`, set OAuth Redirect URL to `http://localhost:3434/auth/twitch/callback`, and choose `Application Integration`. Use one redirect URL only; do not leave a second blank redirect row. The redirect URL must match exactly.
+   Open `https://dev.twitch.tv/console/apps`, click `Register Your Application`, use any name such as `vaexcore console`, set OAuth Redirect URL to `http://localhost:3434/auth/twitch/callback`, and choose `Application Integration`. Use one redirect URL only; do not leave a second blank redirect row. The redirect URL must match exactly. This Twitch Developer App can be created from any Twitch account you control; it does not need to be the Bot Login or the Broadcaster Login.
 2. Enter app credentials.
    Copy the Twitch app `Client ID` and `Client Secret` into vaexcore console. Keep the Redirect URI as `http://localhost:3434/auth/twitch/callback` unless you know why it must change.
 3. Enter Twitch usernames.
-   `Broadcaster Login` is the channel vaexcore console operates in. `Bot Login` is the account that sends messages. They can be the same account or separate accounts. If they are separate, the Bot Login must be the account that grants OAuth in the next step.
+   `Broadcaster Login` is the channel vaexcore console operates in. `Bot Login` is the account that sends messages. For the first full Suite test, use the same Twitch account for both fields so chat OAuth and Studio stream-key import work from one connection. Separate bot accounts are supported for chat, but the current local Suite cannot import the broadcaster stream key from a separate bot account token.
 4. Connect Twitch.
-   Click `Connect Twitch` while logged into the Bot Login account and approve the chat scopes. Approve the optional moderation scopes too if you want delete or timeout enforcement. The Client ID and Client Secret belong to the Twitch Developer App, not to one authorized Twitch user.
+   Click `Connect Twitch` while logged into the Bot Login account and approve the chat scopes. If Studio must import the Twitch stream key from Console in this local tester build, Bot Login must be the broadcaster account. Approve the optional moderation scopes too if you want delete or timeout enforcement. The Client ID and Client Secret belong to the Twitch Developer App, not to one authorized Twitch user.
    If Twitch authorizes the wrong account, click `Disconnect Twitch`, switch Twitch accounts in the browser, then connect again.
 5. Validate setup.
    Click `Validate Setup` and confirm token, scopes, bot identity, and broadcaster identity pass. vaexcore console stores Twitch OAuth tokens locally and refreshes expired access tokens automatically when Twitch returns `401 Unauthorized`; if refresh fails, disconnect and reconnect Twitch.

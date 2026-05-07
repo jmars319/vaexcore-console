@@ -13,6 +13,7 @@ let quitting = false;
 const setupPort = 3434;
 const setupUrl = `http://localhost:${setupPort}`;
 const setupProbeUrl = `http://127.0.0.1:${setupPort}/api/config`;
+const setupStatusUrl = `http://127.0.0.1:${setupPort}/api/status`;
 const productName = "vaexcore console";
 const legacyProductName = "VaexCore";
 const isMac = process.platform === "darwin";
@@ -129,7 +130,11 @@ const launchDesktopApp = (appName) =>
 const launchWindowsApp = (appName) => {
   const executable = resolveWindowsAppPath(appName);
   if (executable) {
-    return spawn(executable, [], { detached: true, stdio: "ignore" });
+    return spawn(executable, [], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
   }
 
   return spawn("cmd", ["/C", "start", "", appName], {
@@ -170,10 +175,14 @@ const createSettingsWindow = async (fragment = "") => {
     return;
   }
 
+  const settingsTitle = fragment.includes("setupPrompt=windows")
+    ? `${productName} Setup Required`
+    : `${productName} Configuration Settings`;
   const settingsUrl = `${activeSetupUrl}/?window=settings${fragment}`;
   const icon = resolveWindowIconPath();
 
   if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.setTitle(settingsTitle);
     settingsWindow.focus();
     if (fragment) {
       await settingsWindow.loadURL(settingsUrl);
@@ -186,7 +195,7 @@ const createSettingsWindow = async (fragment = "") => {
     height: 760,
     minWidth: 760,
     minHeight: 620,
-    title: `${productName} Configuration Settings`,
+    title: settingsTitle,
     backgroundColor: "#090b12",
     ...(icon ? { icon } : {}),
     webPreferences: {
@@ -198,6 +207,10 @@ const createSettingsWindow = async (fragment = "") => {
 
   settingsWindow.on("closed", () => {
     settingsWindow = undefined;
+  });
+  settingsWindow.on("page-title-updated", (event) => {
+    event.preventDefault();
+    settingsWindow?.setTitle(settingsTitle);
   });
 
   configureWindowOpenHandler(settingsWindow);
@@ -285,6 +298,11 @@ const startApp = async () => {
 
   if (!isPackagedBootSmoke()) {
     await createWindow(activeSetupUrl);
+    if (isWindows) {
+      setTimeout(() => {
+        void maybeOpenWindowsSetupPrompt();
+      }, 500);
+    }
   }
 };
 
@@ -325,6 +343,51 @@ const isConsoleServerRunning = async () => {
   } catch {
     return false;
   }
+};
+
+const maybeOpenWindowsSetupPrompt = async (attempt = 0) => {
+  if (!activeSetupUrl || process.env.VAEXCORE_SUPPRESS_SETUP_PROMPT === "1") {
+    return;
+  }
+
+  try {
+    const status = await getJson(setupStatusUrl);
+    if (!isSetupComplete(status)) {
+      await createSettingsWindow("&setupPrompt=windows#setupGuide");
+    }
+  } catch {
+    if (attempt < 8) {
+      setTimeout(() => {
+        void maybeOpenWindowsSetupPrompt(attempt + 1);
+      }, 750);
+    }
+  }
+};
+
+const isSetupComplete = (status) => {
+  if (!status || typeof status !== "object") {
+    return false;
+  }
+
+  const launch = status.launchPreparation || {};
+  if (launch.setupReady === true && launch.status !== "setup_required") {
+    return true;
+  }
+
+  const config = status.config || {};
+  const scopes = Array.isArray(config.scopes) ? config.scopes : [];
+  const requiredScopes = Array.isArray(config.requiredScopes)
+    ? config.requiredScopes
+    : ["user:read:chat", "user:write:chat", "channel:read:stream_key"];
+  return Boolean(
+    config.hasClientId &&
+      config.hasClientSecret &&
+      config.hasAccessToken &&
+      config.hasRefreshToken &&
+      config.broadcasterLogin &&
+      config.botLogin &&
+      requiredScopes.every((scope) => scopes.includes(scope)),
+  );
 };
 
 const getJson = (url) =>

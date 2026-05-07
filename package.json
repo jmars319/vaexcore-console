@@ -77,6 +77,9 @@
   "build": {
     "appId": "com.vaexil.vaexcore.console",
     "productName": "vaexcore console",
+    "toolsets": {
+      "winCodeSign": "1.1.0"
+    },
     "directories": {
       "output": "release"
     },
@@ -109,6 +112,7 @@
     },
     "win": {
       "icon": "desktop/windows/assets/icon.ico",
+      "signAndEditExecutable": true,
       "target": [
         {
           "target": "nsis",
@@ -122,16 +126,19 @@
             "x64"
           ]
         }
-      ],
-      "artifactName": "vaexcore-console-${version}-${arch}.${ext}"
+      ]
     },
     "nsis": {
+      "artifactName": "vaexcore-console-${version}-${arch}-setup.${ext}",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "vaexcore console"
+    },
+    "portable": {
+      "artifactName": "vaexcore-console-${version}-${arch}-portable.${ext}"
     },
     "dmg": {
       "artifactName": "vaexcore-console-${version}-${arch}.${ext}"

@@ -103,7 +103,29 @@ function probePackagedBetterSqlite(appPath) {
     "console.log('packaged better-sqlite3 ok', process.versions.modules);",
   ].join(" ");
 
-  execFileSync(binaryPath, ["-e", expression], {
+  try {
+    execFileSync(binaryPath, ["-e", expression], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      stdio: "inherit",
+    });
+  } catch (error) {
+    if (error?.code !== "UNKNOWN") {
+      throw error;
+    }
+    console.warn(
+      "Packaged EXE probe was blocked; retrying with the project Electron runtime.",
+    );
+    probeWithProjectElectron(expression);
+  }
+}
+
+function probeWithProjectElectron(expression) {
+  const electronExe = resolve("node_modules/electron/dist/electron.exe");
+  if (!existsSync(electronExe)) {
+    throw new Error(`Project Electron executable not found: ${electronExe}`);
+  }
+
+  execFileSync(electronExe, ["-e", expression], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
     stdio: "inherit",
   });

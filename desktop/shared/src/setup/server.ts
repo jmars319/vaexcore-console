@@ -7397,7 +7397,10 @@ const launchWindowsApp = (appName: string): Promise<SuiteLaunchResult> =>
   new Promise((resolveLaunch) => {
     const executable = windowsAppExecutablePath(appName);
     const child = executable
-      ? spawn(executable, [], { stdio: ["ignore", "ignore", "pipe"] })
+      ? spawn(executable, [], {
+          stdio: ["ignore", "ignore", "pipe"],
+          windowsHide: true,
+        })
       : spawn("cmd", ["/C", "start", "", appName], {
           stdio: ["ignore", "ignore", "pipe"],
           windowsHide: true,
