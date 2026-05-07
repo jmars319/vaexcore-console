@@ -22,6 +22,8 @@ const vaexcoreSuiteApps = [
   "vaexcore pulse",
   "vaexcore console",
 ];
+const isPackagedBootSmoke = () =>
+  process.env.VAEXCORE_PACKAGED_BOOT_SMOKE === "1";
 
 app.setName(productName);
 
@@ -281,7 +283,9 @@ const startApp = async () => {
     }
   }
 
-  await createWindow(activeSetupUrl);
+  if (!isPackagedBootSmoke()) {
+    await createWindow(activeSetupUrl);
+  }
 };
 
 const isAddressInUse = (error) => error?.code === "EADDRINUSE";
@@ -376,7 +380,11 @@ app.whenReady().then(() => {
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0 && activeSetupUrl) {
+  if (
+    !isPackagedBootSmoke() &&
+    BrowserWindow.getAllWindows().length === 0 &&
+    activeSetupUrl
+  ) {
     void createWindow(activeSetupUrl);
   }
 });

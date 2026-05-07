@@ -100,6 +100,10 @@ assert(
   "cross-platform electron-builder wrapper exists",
 );
 assert(
+  existsSync(resolve("desktop/shared/electron/packaged-boot-smoke.cjs")),
+  "packaged boot smoke entrypoint exists",
+);
+assert(
   electronMain.includes("resolveWindowIconPath"),
   "Electron main process resolves platform icon dynamically",
 );
@@ -118,6 +122,14 @@ assert(
 assert(
   electronMain.includes("netstat -ano | findstr"),
   "Electron startup recovery uses Windows port hint",
+);
+assert(
+  electronMain.includes("VAEXCORE_PACKAGED_BOOT_SMOKE"),
+  "Electron main process supports packaged boot smoke mode",
+);
+assert(
+  electronMain.includes("!isPackagedBootSmoke()"),
+  "packaged boot smoke mode skips BrowserWindow creation",
 );
 
 console.log("desktop platform config passed");
