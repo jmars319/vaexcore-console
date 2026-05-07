@@ -381,12 +381,12 @@ const isSetupComplete = (status) => {
     : ["user:read:chat", "user:write:chat", "channel:read:stream_key"];
   return Boolean(
     config.hasClientId &&
-      config.hasClientSecret &&
-      config.hasAccessToken &&
-      config.hasRefreshToken &&
-      config.broadcasterLogin &&
-      config.botLogin &&
-      requiredScopes.every((scope) => scopes.includes(scope)),
+    config.hasClientSecret &&
+    config.hasAccessToken &&
+    config.hasRefreshToken &&
+    config.broadcasterLogin &&
+    config.botLogin &&
+    requiredScopes.every((scope) => scopes.includes(scope)),
   );
 };
 
