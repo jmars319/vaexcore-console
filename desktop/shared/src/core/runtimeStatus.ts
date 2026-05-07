@@ -9,12 +9,14 @@ export type RuntimeStatus = {
   sessionId?: string;
 };
 
-export const createRuntimeStatus = (mode: RuntimeStatus["mode"]): RuntimeStatus => ({
+export const createRuntimeStatus = (
+  mode: RuntimeStatus["mode"],
+): RuntimeStatus => ({
   mode,
   eventSubConnected: mode === "local",
   chatSubscriptionActive: mode === "local",
   messageQueueReady: false,
   outboundHealthy: true,
   liveChatConfirmed: mode === "local",
-  firstChatReceived: mode === "local"
+  firstChatReceived: mode === "local",
 });

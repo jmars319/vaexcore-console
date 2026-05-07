@@ -16,7 +16,9 @@ process.env.TWITCH_REFRESH_TOKEN = "cli-refresh-token";
 process.env.TWITCH_BROADCASTER_USER_ID = "cli-broadcaster-id";
 process.env.TWITCH_BOT_USER_ID = "cli-bot-id";
 
-const { loadEnv } = await import(pathToFileURL(resolve("desktop/shared/src/config/env.ts")).href);
+const { loadEnv } = await import(
+  pathToFileURL(resolve("desktop/shared/src/config/env.ts")).href
+);
 
 try {
   await runSmoke();
@@ -28,20 +30,41 @@ try {
 async function runSmoke() {
   const refreshCapable = loadEnv();
   assert(refreshCapable.mode === "live", "refresh-capable env loads live mode");
-  assert(refreshCapable.twitchAutoRefreshAvailable === true, "auto-refresh is reported available");
-  assert(refreshCapable.twitchSecretsBootstrapped === true, "refresh-capable env bootstraps local secrets");
+  assert(
+    refreshCapable.twitchAutoRefreshAvailable === true,
+    "auto-refresh is reported available",
+  );
+  assert(
+    refreshCapable.twitchSecretsBootstrapped === true,
+    "refresh-capable env bootstraps local secrets",
+  );
 
   const stored = readLocalSecretsFixture();
   assert(stored.mode === "live", "stored mode is live");
   assert(stored.twitch.clientId === "cli-client-id", "client ID is stored");
-  assert(stored.twitch.clientSecret === "cli-client-secret", "client secret is stored");
-  assert(stored.twitch.accessToken === "cli-access-token", "access token is stored");
-  assert(stored.twitch.refreshToken === "cli-refresh-token", "refresh token is stored");
-  assert(stored.twitch.broadcasterUserId === "cli-broadcaster-id", "broadcaster ID is stored");
+  assert(
+    stored.twitch.clientSecret === "cli-client-secret",
+    "client secret is stored",
+  );
+  assert(
+    stored.twitch.accessToken === "cli-access-token",
+    "access token is stored",
+  );
+  assert(
+    stored.twitch.refreshToken === "cli-refresh-token",
+    "refresh token is stored",
+  );
+  assert(
+    stored.twitch.broadcasterUserId === "cli-broadcaster-id",
+    "broadcaster ID is stored",
+  );
   assert(stored.twitch.botUserId === "cli-bot-id", "bot ID is stored");
 
   const secondLoad = loadEnv();
-  assert(secondLoad.twitchSecretsBootstrapped === false, "unchanged bootstrap is idempotent");
+  assert(
+    secondLoad.twitchSecretsBootstrapped === false,
+    "unchanged bootstrap is idempotent",
+  );
 
   rmSync(secretsPath, { force: true });
   delete process.env.TWITCH_CLIENT_SECRET;
@@ -52,9 +75,18 @@ async function runSmoke() {
   process.env.TWITCH_BOT_USER_ID = "access-only-bot-id";
 
   const accessOnly = loadEnv();
-  assert(accessOnly.twitchAutoRefreshAvailable === false, "access-token-only env stays supported");
-  assert(accessOnly.twitchSecretsBootstrapped === false, "access-token-only env does not write local secrets");
-  assert(!existsSync(secretsPath), "access-token-only env leaves local OAuth store untouched");
+  assert(
+    accessOnly.twitchAutoRefreshAvailable === false,
+    "access-token-only env stays supported",
+  );
+  assert(
+    accessOnly.twitchSecretsBootstrapped === false,
+    "access-token-only env does not write local secrets",
+  );
+  assert(
+    !existsSync(secretsPath),
+    "access-token-only env leaves local OAuth store untouched",
+  );
 }
 
 function readLocalSecretsFixture() {

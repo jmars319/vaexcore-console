@@ -12,16 +12,16 @@ type RegisterStatusCommandsOptions = {
 export const registerStatusCommands = ({
   router,
   runtimeStatus,
-  giveawaysService
+  giveawaysService,
 }: RegisterStatusCommandsOptions) => {
   router.register("vcstatus", PermissionLevel.Moderator, ({ reply }) => {
     const giveaway = giveawaysService.status()?.giveaway.status ?? "none";
     reply(
       `vaexcore console ${runtimeStatus.mode}: eventsub=${yesNo(
-        runtimeStatus.eventSubConnected
+        runtimeStatus.eventSubConnected,
       )}, sub=${yesNo(runtimeStatus.chatSubscriptionActive)}, queue=${yesNo(
-        runtimeStatus.messageQueueReady
-      )}, giveaway=${giveaway}`
+        runtimeStatus.messageQueueReady,
+      )}, giveaway=${giveaway}`,
     );
   });
 };

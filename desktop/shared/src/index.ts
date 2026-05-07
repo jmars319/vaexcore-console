@@ -17,7 +17,7 @@ const logger = createLogger(env.logLevel);
 if (env.mode !== "live") {
   logger.error(
     { mode: env.mode },
-    "npm run dev starts the live Twitch bot. Use npm run dev:local for local mode."
+    "npm run dev starts the live Twitch bot. Use npm run dev:local for local mode.",
   );
   process.exit(1);
 }

@@ -2,13 +2,17 @@ import type { DbClient } from "../db/client";
 import type {
   MessageQueueEventStatus,
   MessageQueueMetadata,
-  MessageSendFailureCategory
+  MessageSendFailureCategory,
 } from "./messageQueue";
 
 export type OutboundMessageSource = "setup" | "bot";
 export type OutboundMessageStatus = MessageQueueEventStatus | "resent";
-export type OutboundMessageImportance = NonNullable<MessageQueueMetadata["importance"]>;
-export type OutboundMessageCategory = NonNullable<MessageQueueMetadata["category"]>;
+export type OutboundMessageImportance = NonNullable<
+  MessageQueueMetadata["importance"]
+>;
+export type OutboundMessageCategory = NonNullable<
+  MessageQueueMetadata["category"]
+>;
 
 export type OutboundMessageRecord = {
   id: string;
@@ -77,7 +81,7 @@ export const createOutboundHistory = (db: DbClient) => {
           FROM outbound_messages
           ORDER BY updated_at DESC
           LIMIT 100
-        `
+        `,
       )
       .all() as OutboundMessageRow[];
 
@@ -87,7 +91,9 @@ export const createOutboundHistory = (db: DbClient) => {
   };
   const list = () => {
     loadRecent();
-    return [...records.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return [...records.values()].sort((a, b) =>
+      b.updatedAt.localeCompare(a.updatedAt),
+    );
   };
 
   loadRecent();
@@ -96,12 +102,15 @@ export const createOutboundHistory = (db: DbClient) => {
     record(event: OutboundHistoryEvent) {
       const now = new Date().toISOString();
       const existing = records.get(event.id);
-      const classified = classifyOutboundMessage(event.message ?? existing?.message ?? "");
+      const classified = classifyOutboundMessage(
+        event.message ?? existing?.message ?? "",
+      );
       const metadata = {
         ...classified,
-        ...compactOutboundMetadata(event.metadata)
+        ...compactOutboundMetadata(event.metadata),
       };
-      const keepsFailureDetail = event.status === "failed" || event.status === "retrying";
+      const keepsFailureDetail =
+        event.status === "failed" || event.status === "retrying";
       const next: OutboundMessageRecord = {
         id: event.id,
         source: event.source,
@@ -110,16 +119,26 @@ export const createOutboundHistory = (db: DbClient) => {
         attempts: event.attempts ?? existing?.attempts ?? 0,
         queuedAt: event.queuedAt ?? existing?.queuedAt ?? now,
         updatedAt: event.updatedAt ?? now,
-        reason: keepsFailureDetail ? event.reason ?? existing?.reason ?? "" : event.reason ?? "",
-        failureCategory: keepsFailureDetail ? event.failureCategory ?? existing?.failureCategory ?? "unknown" : "none",
-        retryAfterMs: event.status === "retrying" ? event.retryAfterMs ?? existing?.retryAfterMs : undefined,
-        nextAttemptAt: event.status === "retrying" ? event.nextAttemptAt ?? existing?.nextAttemptAt : undefined,
+        reason: keepsFailureDetail
+          ? (event.reason ?? existing?.reason ?? "")
+          : (event.reason ?? ""),
+        failureCategory: keepsFailureDetail
+          ? (event.failureCategory ?? existing?.failureCategory ?? "unknown")
+          : "none",
+        retryAfterMs:
+          event.status === "retrying"
+            ? (event.retryAfterMs ?? existing?.retryAfterMs)
+            : undefined,
+        nextAttemptAt:
+          event.status === "retrying"
+            ? (event.nextAttemptAt ?? existing?.nextAttemptAt)
+            : undefined,
         queueDepth: event.queueDepth ?? existing?.queueDepth,
         category: metadata.category ?? existing?.category ?? "operator",
         action: metadata.action ?? existing?.action ?? "",
         importance: metadata.importance ?? existing?.importance ?? "normal",
         giveawayId: metadata.giveawayId ?? existing?.giveawayId,
-        resentFrom: metadata.resentFrom ?? existing?.resentFrom
+        resentFrom: metadata.resentFrom ?? existing?.resentFrom,
       };
       records.set(event.id, next);
       persistOutboundRecord(db, next);
@@ -151,17 +170,21 @@ export const createOutboundHistory = (db: DbClient) => {
         reason: `Resent as ${resentMessageId}`,
         failureCategory: "none" as const,
         retryAfterMs: undefined,
-        nextAttemptAt: undefined
+        nextAttemptAt: undefined,
       };
       records.set(id, resent);
       persistOutboundRecord(db, resent);
     },
     summary() {
       const current = list();
-      const pending = current.filter((record) => isPendingOutboundStatus(record.status));
+      const pending = current.filter((record) =>
+        isPendingOutboundStatus(record.status),
+      );
       const resent = current.filter((record) => record.status === "resent");
       const failed = current.filter((record) => record.status === "failed");
-      const criticalFailed = failed.filter((record) => record.importance === "critical");
+      const criticalFailed = failed.filter(
+        (record) => record.importance === "critical",
+      );
       const oldestPending = pending
         .slice()
         .sort((a, b) => a.queuedAt.localeCompare(b.queuedAt))[0];
@@ -174,33 +197,54 @@ export const createOutboundHistory = (db: DbClient) => {
         criticalFailed: criticalFailed.length,
         sent: current.filter((record) => record.status === "sent").length,
         resent: resent.length,
-        delivered: current.filter((record) => record.status === "sent" || record.status === "resent").length,
+        delivered: current.filter(
+          (record) => record.status === "sent" || record.status === "resent",
+        ).length,
         oldestPendingAt: oldestPending?.queuedAt ?? "",
-        oldestPendingAgeMs: oldestPending ? Date.now() - Date.parse(oldestPending.queuedAt) : 0,
+        oldestPendingAgeMs: oldestPending
+          ? Date.now() - Date.parse(oldestPending.queuedAt)
+          : 0,
         latestFailedAt: latestFailed?.updatedAt ?? "",
         latestFailedAction: latestFailed?.action ?? "",
         latestFailedReason: latestFailed?.reason ?? "",
         latestFailedCategory: latestFailed?.failureCategory ?? "none",
-        rateLimited: current.filter((record) => record.failureCategory === "rate_limit" && isPendingOutboundStatus(record.status)).length
+        rateLimited: current.filter(
+          (record) =>
+            record.failureCategory === "rate_limit" &&
+            isPendingOutboundStatus(record.status),
+        ).length,
       };
-    }
+    },
   };
 };
 
-export const classifyOutboundMessage = (message: string): MessageQueueMetadata => {
+export const classifyOutboundMessage = (
+  message: string,
+): MessageQueueMetadata => {
   if (message.startsWith("Giveaway started:")) {
     return { category: "giveaway", action: "start", importance: "critical" };
   }
   if (message.startsWith("Last call for ")) {
-    return { category: "giveaway", action: "last-call", importance: "critical" };
+    return {
+      category: "giveaway",
+      action: "last-call",
+      importance: "critical",
+    };
   }
   if (message.startsWith("Reminder:")) {
-    return { category: "giveaway", action: "reminder", importance: "important" };
+    return {
+      category: "giveaway",
+      action: "reminder",
+      importance: "important",
+    };
   }
   if (message.startsWith("Entries closed for ")) {
     return { category: "giveaway", action: "close", importance: "critical" };
   }
-  if (message.startsWith("Winner") || message === "No eligible winners available.") {
+  if (
+    message.startsWith("Winner") ||
+    message === "No eligible winners available."
+  ) {
     return { category: "giveaway", action: "draw", importance: "critical" };
   }
   if (message.startsWith("Giveaway ended:")) {
@@ -222,31 +266,51 @@ export const classifyOutboundMessage = (message: string): MessageQueueMetadata =
   return { category: "operator", importance: "normal" };
 };
 
-export const compactOutboundMetadata = (metadata: MessageQueueMetadata | undefined) => {
+export const compactOutboundMetadata = (
+  metadata: MessageQueueMetadata | undefined,
+) => {
   const compact: MessageQueueMetadata = {};
 
   if (metadata?.category) compact.category = metadata.category;
   if (metadata?.action) compact.action = metadata.action;
   if (metadata?.importance) compact.importance = metadata.importance;
-  if (metadata?.giveawayId !== undefined) compact.giveawayId = metadata.giveawayId;
+  if (metadata?.giveawayId !== undefined)
+    compact.giveawayId = metadata.giveawayId;
   if (metadata?.resentFrom) compact.resentFrom = metadata.resentFrom;
 
   return compact;
 };
 
-export const isOutboundCategory = (value: string): value is OutboundMessageCategory =>
+export const isOutboundCategory = (
+  value: string,
+): value is OutboundMessageCategory =>
   ["operator", "giveaway", "system"].includes(value);
 
-export const isOutboundImportance = (value: string): value is OutboundMessageImportance =>
+export const isOutboundImportance = (
+  value: string,
+): value is OutboundMessageImportance =>
   ["normal", "important", "critical"].includes(value);
 
-export const isOutboundFailureCategory = (value: string): value is MessageSendFailureCategory =>
-  ["none", "config", "auth", "rate_limit", "twitch_rejected", "network", "timeout", "unknown"].includes(value);
+export const isOutboundFailureCategory = (
+  value: string,
+): value is MessageSendFailureCategory =>
+  [
+    "none",
+    "config",
+    "auth",
+    "rate_limit",
+    "twitch_rejected",
+    "network",
+    "timeout",
+    "unknown",
+  ].includes(value);
 
 export const isPendingOutboundStatus = (status: OutboundMessageStatus) =>
   status === "queued" || status === "retrying" || status === "sending";
 
-const outboundRecordFromRow = (row: OutboundMessageRow): OutboundMessageRecord => ({
+const outboundRecordFromRow = (
+  row: OutboundMessageRow,
+): OutboundMessageRecord => ({
   id: row.id,
   source: row.source,
   status: row.status,
@@ -263,7 +327,7 @@ const outboundRecordFromRow = (row: OutboundMessageRow): OutboundMessageRecord =
   action: row.action,
   importance: row.importance,
   giveawayId: row.giveaway_id ?? undefined,
-  resentFrom: row.resent_from ?? undefined
+  resentFrom: row.resent_from ?? undefined,
 });
 
 const persistOutboundRecord = (db: DbClient, record: OutboundMessageRecord) => {
@@ -323,14 +387,14 @@ const persistOutboundRecord = (db: DbClient, record: OutboundMessageRecord) => {
         importance = excluded.importance,
         giveaway_id = excluded.giveaway_id,
         resent_from = excluded.resent_from
-    `
+    `,
   ).run({
     ...record,
     retryAfterMs: record.retryAfterMs ?? null,
     nextAttemptAt: record.nextAttemptAt ?? null,
     queueDepth: record.queueDepth ?? null,
     giveawayId: record.giveawayId ?? null,
-    resentFrom: record.resentFrom ?? null
+    resentFrom: record.resentFrom ?? null,
   });
 };
 
@@ -341,7 +405,9 @@ const trimOutboundHistory = (records: Map<string, OutboundMessageRecord>) => {
     return;
   }
 
-  const byUpdatedAt = [...records.values()].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+  const byUpdatedAt = [...records.values()].sort((a, b) =>
+    a.updatedAt.localeCompare(b.updatedAt),
+  );
   for (const record of byUpdatedAt.slice(0, records.size - max)) {
     records.delete(record.id);
   }

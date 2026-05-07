@@ -8,7 +8,7 @@ if (process.platform !== "win32") {
 
 const releaseDir = resolve("release");
 const electronPackage = JSON.parse(
-  readFileSync(resolve("node_modules/electron/package.json"), "utf8")
+  readFileSync(resolve("node_modules/electron/package.json"), "utf8"),
 );
 const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
 const electronVersion = electronPackage.version;
@@ -22,15 +22,20 @@ if (!existsSync(prebuildInstallBin)) {
 const apps = findPackagedApps(releaseDir);
 
 if (apps.length === 0) {
-  throw new Error("No packaged Windows app directory was found under release/.");
+  throw new Error(
+    "No packaged Windows app directory was found under release/.",
+  );
 }
 
 for (const appPath of apps) {
   const moduleDir = join(
     appPath,
-    "resources/app.asar.unpacked/node_modules/better-sqlite3"
+    "resources/app.asar.unpacked/node_modules/better-sqlite3",
   );
-  const legacyModuleDir = join(appPath, "resources/app/node_modules/better-sqlite3");
+  const legacyModuleDir = join(
+    appPath,
+    "resources/app/node_modules/better-sqlite3",
+  );
   const packagedModuleDir = existsSync(moduleDir) ? moduleDir : legacyModuleDir;
 
   if (!existsSync(packagedModuleDir)) {
@@ -49,9 +54,9 @@ for (const appPath of apps) {
       "--arch",
       process.arch,
       "--platform",
-      process.platform
+      process.platform,
     ],
-    { cwd: packagedModuleDir, stdio: "inherit" }
+    { cwd: packagedModuleDir, stdio: "inherit" },
   );
 
   probePackagedBetterSqlite(appPath);
@@ -95,11 +100,11 @@ function probePackagedBetterSqlite(appPath) {
     "const Database = appRequire('better-sqlite3');",
     "const db = new Database(':memory:');",
     "db.close();",
-    "console.log('packaged better-sqlite3 ok', process.versions.modules);"
+    "console.log('packaged better-sqlite3 ok', process.versions.modules);",
   ].join(" ");
 
   execFileSync(binaryPath, ["-e", expression], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
-    stdio: "inherit"
+    stdio: "inherit",
   });
 }

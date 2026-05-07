@@ -101,7 +101,10 @@ export class MessageQueue {
   async drain(timeoutMs = 5000) {
     const deadline = Date.now() + timeoutMs;
 
-    while ((this.queue.length > 0 || this.processing) && Date.now() < deadline) {
+    while (
+      (this.queue.length > 0 || this.processing) &&
+      Date.now() < deadline
+    ) {
       await this.flushOne();
 
       if (this.queue.length > 0 || this.processing) {
@@ -114,7 +117,7 @@ export class MessageQueue {
     if (!drained) {
       this.options.logger.warn(
         { queued: this.queue.length, processing: this.processing },
-        "Outbound chat queue did not drain before shutdown"
+        "Outbound chat queue did not drain before shutdown",
       );
     }
 
@@ -142,13 +145,18 @@ export class MessageQueue {
       oldestAction: oldest?.metadata.action ?? "",
       oldestImportance: oldest?.metadata.importance ?? "normal",
       newestQueuedAt: newest?.queuedAt ?? "",
-      nextAttemptAt: pendingRetry ? new Date(pendingRetry.notBefore).toISOString() : "",
-      retryDelayMs: pendingRetry ? Math.max(0, pendingRetry.notBefore - now) : 0,
-      rateLimitedUntil: rateLimitDelayMs > 0 && this.queue.length > 0
-        ? new Date(this.nextSendAt).toISOString()
+      nextAttemptAt: pendingRetry
+        ? new Date(pendingRetry.notBefore).toISOString()
         : "",
+      retryDelayMs: pendingRetry
+        ? Math.max(0, pendingRetry.notBefore - now)
+        : 0,
+      rateLimitedUntil:
+        rateLimitDelayMs > 0 && this.queue.length > 0
+          ? new Date(this.nextSendAt).toISOString()
+          : "",
       rateLimitDelayMs: this.queue.length > 0 ? rateLimitDelayMs : 0,
-      maxAttempts: this.options.maxAttempts ?? 4
+      maxAttempts: this.options.maxAttempts ?? 4,
     };
   }
 
@@ -160,7 +168,7 @@ export class MessageQueue {
       enqueuedAt: Date.now(),
       queuedAt: new Date().toISOString(),
       notBefore: 0,
-      metadata
+      metadata,
     };
     this.queue.push(item);
     this.emit(item, "queued", { queueDepth: this.queue.length });
@@ -170,9 +178,9 @@ export class MessageQueue {
         outboundStatus: "queued",
         ...logMetadata(item.metadata),
         queued: this.queue.length,
-        message
+        message,
       },
-      "Outbound chat message queued"
+      "Outbound chat message queued",
     );
     return item.id;
   }
@@ -223,13 +231,13 @@ export class MessageQueue {
             attempts: item.attempts,
             maxAttempts,
             remainingAttempts: 0,
-            ageMs: Date.now() - item.enqueuedAt
+            ageMs: Date.now() - item.enqueuedAt,
           },
-          "Outbound chat send failed; message dropped"
+          "Outbound chat send failed; message dropped",
         );
         this.emit(item, "failed", {
           reason: result.reason || "sender reported non-retryable failure",
-          failureCategory: result.failureCategory ?? "unknown"
+          failureCategory: result.failureCategory ?? "unknown",
         });
         return;
       }
@@ -240,9 +248,9 @@ export class MessageQueue {
           outboundMessageId: item.id,
           outboundStatus: "sent",
           ...logMetadata(item.metadata),
-          message: item.message
+          message: item.message,
         },
-        "Outbound chat message sent"
+        "Outbound chat message sent",
       );
       this.options.onSent?.(item.message);
     } catch (error) {
@@ -259,7 +267,8 @@ export class MessageQueue {
     const failureCategory = result.failureCategory;
 
     if (item.attempts < maxAttempts) {
-      const retryAfterMs = result.retryAfterMs ?? this.retryDelayMs(item.attempts);
+      const retryAfterMs =
+        result.retryAfterMs ?? this.retryDelayMs(item.attempts);
       item.notBefore = Date.now() + retryAfterMs;
       this.queue.unshift(item);
       const remainingAttempts = maxAttempts - item.attempts;
@@ -268,7 +277,7 @@ export class MessageQueue {
         failureCategory,
         queueDepth: this.queue.length,
         retryAfterMs,
-        nextAttemptAt: new Date(item.notBefore).toISOString()
+        nextAttemptAt: new Date(item.notBefore).toISOString(),
       });
       this.options.logger.warn(
         {
@@ -283,9 +292,9 @@ export class MessageQueue {
           remainingAttempts,
           retryDelayMs: retryAfterMs,
           nextAttemptAt: new Date(item.notBefore).toISOString(),
-          queued: this.queue.length
+          queued: this.queue.length,
         },
-        "Outbound chat send failed; message will be retried"
+        "Outbound chat send failed; message will be retried",
       );
       return;
     }
@@ -302,14 +311,17 @@ export class MessageQueue {
         attempts: item.attempts,
         maxAttempts,
         remainingAttempts: 0,
-        ageMs: Date.now() - item.enqueuedAt
+        ageMs: Date.now() - item.enqueuedAt,
       },
-      "Outbound chat send failed; retry limit reached"
+      "Outbound chat send failed; retry limit reached",
     );
   }
 
   private intervalMs() {
-    return this.options.minIntervalMs ?? Math.ceil(1000 / defaultConfig.outboundMessagesPerChannelPerSecond);
+    return (
+      this.options.minIntervalMs ??
+      Math.ceil(1000 / defaultConfig.outboundMessagesPerChannelPerSecond)
+    );
   }
 
   private retryDelayMs(attempts: number) {
@@ -326,7 +338,7 @@ export class MessageQueue {
       queueDepth?: number;
       retryAfterMs?: number;
       nextAttemptAt?: string;
-    } = {}
+    } = {},
   ) {
     this.options.onEvent?.({
       id: item.id,
@@ -340,14 +352,16 @@ export class MessageQueue {
       queueDepth: details.queueDepth,
       retryAfterMs: details.retryAfterMs,
       nextAttemptAt: details.nextAttemptAt,
-      metadata: item.metadata
+      metadata: item.metadata,
     });
   }
 }
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const normalizeSendResult = (result: MessageSendResult): StructuredMessageSendResult => {
+const normalizeSendResult = (
+  result: MessageSendResult,
+): StructuredMessageSendResult => {
   if (typeof result === "string") {
     return { status: result };
   }
@@ -355,20 +369,22 @@ const normalizeSendResult = (result: MessageSendResult): StructuredMessageSendRe
   return result;
 };
 
-const normalizeRetryReason = (reason: unknown): Required<Pick<StructuredMessageSendResult, "reason" | "failureCategory">> &
+const normalizeRetryReason = (
+  reason: unknown,
+): Required<Pick<StructuredMessageSendResult, "reason" | "failureCategory">> &
   Pick<StructuredMessageSendResult, "retryAfterMs"> => {
   if (typeof reason === "object" && reason !== null && "status" in reason) {
     const result = normalizeSendResult(reason as MessageSendResult);
     return {
       reason: result.reason || "sender requested retry",
       failureCategory: result.failureCategory ?? "unknown",
-      retryAfterMs: result.retryAfterMs
+      retryAfterMs: result.retryAfterMs,
     };
   }
 
   return {
     reason: formatReason(reason),
-    failureCategory: "unknown"
+    failureCategory: "unknown",
   };
 };
 
@@ -393,5 +409,5 @@ const logMetadata = (metadata: MessageQueueMetadata) => ({
   outboundAction: metadata.action,
   outboundImportance: metadata.importance,
   giveawayId: metadata.giveawayId,
-  resentFrom: metadata.resentFrom
+  resentFrom: metadata.resentFrom,
 });

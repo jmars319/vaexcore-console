@@ -17,11 +17,16 @@ export const registerGiveawaysModule = ({
   router,
   db,
   logger,
-  runtimeStatus
+  runtimeStatus,
 }: GiveawaysModuleOptions) => {
   const service = new GiveawaysService({ db, logger });
   const templates = createGiveawayTemplateStore(db);
-  registerGiveawayCommands({ router, service, runtimeStatus, messages: templates });
+  registerGiveawayCommands({
+    router,
+    service,
+    runtimeStatus,
+    messages: templates,
+  });
 
   return service;
 };

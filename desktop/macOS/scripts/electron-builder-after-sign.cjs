@@ -19,11 +19,12 @@ module.exports = async function afterSign(context) {
   const appleIdPassword =
     process.env.VAEXCORE_APPLE_APP_SPECIFIC_PASSWORD ||
     process.env.APPLE_APP_SPECIFIC_PASSWORD;
-  const teamId = process.env.VAEXCORE_APPLE_TEAM_ID || process.env.APPLE_TEAM_ID;
+  const teamId =
+    process.env.VAEXCORE_APPLE_TEAM_ID || process.env.APPLE_TEAM_ID;
 
   if (!appleId || !appleIdPassword || !teamId) {
     throw new Error(
-      "VAEXCORE_MAC_NOTARIZE=1 requires VAEXCORE_APPLE_ID, VAEXCORE_APPLE_APP_SPECIFIC_PASSWORD, and VAEXCORE_APPLE_TEAM_ID."
+      "VAEXCORE_MAC_NOTARIZE=1 requires VAEXCORE_APPLE_ID, VAEXCORE_APPLE_APP_SPECIFIC_PASSWORD, and VAEXCORE_APPLE_TEAM_ID.",
     );
   }
 

@@ -1,5 +1,8 @@
 import type { Logger } from "../core/logger";
-import type { MessageSendResult, MessageSendFailureCategory } from "../core/messageQueue";
+import type {
+  MessageSendResult,
+  MessageSendFailureCategory,
+} from "../core/messageQueue";
 import { createTwitchHeaders } from "./auth";
 import { explainTwitchHttpError } from "./errors";
 
@@ -18,11 +21,17 @@ export class TwitchChatSender {
   constructor(private readonly options: SendMessageOptions) {}
 
   async send(message: string): Promise<MessageSendResult> {
-    this.options.logger.info({ length: message.length }, "Twitch chat send attempt");
+    this.options.logger.info(
+      { length: message.length },
+      "Twitch chat send attempt",
+    );
 
     let response: Response;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 10_000);
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.options.timeoutMs ?? 10_000,
+    );
 
     try {
       const accessToken = await this.getAccessToken();
@@ -31,13 +40,13 @@ export class TwitchChatSender {
         signal: controller.signal,
         headers: createTwitchHeaders({
           clientId: this.options.clientId,
-          accessToken
+          accessToken,
         }),
         body: JSON.stringify({
           broadcaster_id: this.options.broadcasterId,
           sender_id: this.options.senderId,
-          message
-        })
+          message,
+        }),
       });
     } catch (error) {
       this.options.onHealthyChange?.(false);
@@ -45,13 +54,13 @@ export class TwitchChatSender {
       const retryAfterMs = category === "timeout" ? 5000 : 3000;
       this.options.logger.warn(
         { error, failureCategory: category, retryAfterMs },
-        "Twitch chat send request failed; message will be retried"
+        "Twitch chat send request failed; message will be retried",
       );
       return {
         status: "retry",
         failureCategory: category,
         reason: reasonFromError(error, category),
-        retryAfterMs
+        retryAfterMs,
       };
     } finally {
       clearTimeout(timeout);
@@ -65,26 +74,35 @@ export class TwitchChatSender {
       if (response.status === 429 || response.status >= 500) {
         const retryAfterMs = getRetryAfterMs(response) ?? 5000;
         this.options.logger.warn(
-          { status: response.status, body, failureCategory: category, retryAfterMs },
-          "Twitch chat send failed with retryable status; message will be retried"
+          {
+            status: response.status,
+            body,
+            failureCategory: category,
+            retryAfterMs,
+          },
+          "Twitch chat send failed with retryable status; message will be retried",
         );
         return {
           status: "retry",
           failureCategory: category,
           reason: `Twitch response: ${response.status} ${body}`,
-          retryAfterMs
+          retryAfterMs,
         };
       }
 
-      const error = await explainTwitchHttpError(response, "send_chat_message", body);
+      const error = await explainTwitchHttpError(
+        response,
+        "send_chat_message",
+        body,
+      );
       this.options.logger.error(
         { error, failureCategory: category },
-        "Twitch chat send failed with non-retryable status"
+        "Twitch chat send failed with non-retryable status",
       );
       return {
         status: "failed",
         failureCategory: category,
-        reason: error.message
+        reason: error.message,
       };
     }
 
@@ -96,19 +114,19 @@ export class TwitchChatSender {
       this.options.onHealthyChange?.(false);
       this.options.logger.error(
         { messageId, dropReason, response: body },
-        "Twitch accepted chat request but did not send message"
+        "Twitch accepted chat request but did not send message",
       );
       return {
         status: "failed",
         failureCategory: "twitch_rejected",
-        reason: `Twitch accepted the request but did not send the message: ${formatDropReason(dropReason)}`
+        reason: `Twitch accepted the request but did not send the message: ${formatDropReason(dropReason)}`,
       };
     }
 
     this.options.onHealthyChange?.(true);
     this.options.logger.info(
       { messageId, response: body },
-      "Twitch chat send succeeded"
+      "Twitch chat send succeeded",
     );
 
     return { status: "sent" };
@@ -141,7 +159,10 @@ const classifyHttpStatus = (status: number): MessageSendFailureCategory => {
   return "twitch_rejected";
 };
 
-const reasonFromError = (error: unknown, category: MessageSendFailureCategory) => {
+const reasonFromError = (
+  error: unknown,
+  category: MessageSendFailureCategory,
+) => {
   if (error instanceof Error) {
     return `${category}: ${error.message}`;
   }

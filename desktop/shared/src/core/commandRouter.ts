@@ -48,11 +48,7 @@ export class CommandRouter {
     });
   }
 
-  register(
-    name: string,
-    permission: PermissionLevel,
-    handler: CommandHandler
-  ) {
+  register(name: string, permission: PermissionLevel, handler: CommandHandler) {
     this.commands.set(name.toLowerCase(), { permission, handler });
   }
 
@@ -68,7 +64,7 @@ export class CommandRouter {
     } catch {
       this.options.logger.warn(
         { userLogin: message.userLogin, source: message.source },
-        "Malformed command input ignored"
+        "Malformed command input ignored",
       );
       return "ignored";
     }
@@ -89,7 +85,10 @@ export class CommandRouter {
       return "denied";
     }
 
-    const rawArgs = commandText.slice(name.length).trim().slice(0, limits.commandLength);
+    const rawArgs = commandText
+      .slice(name.length)
+      .trim()
+      .slice(0, limits.commandLength);
     const command = this.commands.get(name);
 
     if (!command) {
@@ -107,9 +106,9 @@ export class CommandRouter {
       {
         command: name,
         userLogin: message.userLogin,
-        source: message.source
+        source: message.source,
       },
-      "Command received"
+      "Command received",
     );
 
     if (!hasPermission(message, command.permission)) {
@@ -118,9 +117,9 @@ export class CommandRouter {
           command: name,
           userLogin: message.userLogin,
           requiredPermission: command.permission,
-          source: message.source
+          source: message.source,
         },
-        "Command denied"
+        "Command denied",
       );
       return "denied";
     }
@@ -129,9 +128,9 @@ export class CommandRouter {
       {
         command: name,
         userLogin: message.userLogin,
-        source: message.source
+        source: message.source,
       },
-      "Command allowed"
+      "Command allowed",
     );
 
     try {
@@ -140,13 +139,15 @@ export class CommandRouter {
         name,
         args,
         rawArgs,
-        reply: (replyMessage, metadata) => this.options.enqueueMessage(replyMessage, metadata)
+        reply: (replyMessage, metadata) =>
+          this.options.enqueueMessage(replyMessage, metadata),
       });
     } catch (error) {
-      const replyMessage = error instanceof Error ? error.message : "Command failed";
+      const replyMessage =
+        error instanceof Error ? error.message : "Command failed";
       this.options.logger.error(
         { error, command: name, userLogin: message.userLogin },
-        "Command failed"
+        "Command failed",
       );
       this.options.enqueueMessage(replyMessage);
     }
@@ -158,7 +159,7 @@ export class CommandRouter {
     message: ChatMessage,
     name: string,
     args: string[],
-    rawArgs: string
+    rawArgs: string,
   ) {
     for (const handler of this.fallbackHandlers) {
       try {
@@ -167,7 +168,8 @@ export class CommandRouter {
           name,
           args,
           rawArgs,
-          reply: (replyMessage, metadata) => this.options.enqueueMessage(replyMessage, metadata)
+          reply: (replyMessage, metadata) =>
+            this.options.enqueueMessage(replyMessage, metadata),
         });
 
         if (handled) {
@@ -175,17 +177,18 @@ export class CommandRouter {
             {
               command: name,
               userLogin: message.userLogin,
-              source: message.source
+              source: message.source,
             },
-            "Fallback command handled"
+            "Fallback command handled",
           );
           return true;
         }
       } catch (error) {
-        const replyMessage = error instanceof Error ? error.message : "Command failed";
+        const replyMessage =
+          error instanceof Error ? error.message : "Command failed";
         this.options.logger.error(
           { error, command: name, userLogin: message.userLogin },
-          "Fallback command failed"
+          "Fallback command failed",
         );
         this.options.enqueueMessage(replyMessage);
         return true;
@@ -213,16 +216,17 @@ export class CommandRouter {
       return true;
     }
 
-    const cooldownMs = command === "enter"
-      ? Math.max(this.options.perUserCooldownMs ?? 750, 1500)
-      : this.options.perUserCooldownMs ?? 750;
+    const cooldownMs =
+      command === "enter"
+        ? Math.max(this.options.perUserCooldownMs ?? 750, 1500)
+        : (this.options.perUserCooldownMs ?? 750);
     const userKey = message.userId || message.userLogin;
     const last = this.lastUserCommandAt.get(userKey) ?? 0;
 
     if (now - last < cooldownMs) {
       this.options.logger.debug(
         { command, userLogin: message.userLogin },
-        "Per-user command cooldown hit"
+        "Per-user command cooldown hit",
       );
       return true;
     }

@@ -5,7 +5,7 @@ const logger = {
   info() {},
   warn() {},
   error() {},
-  debug() {}
+  debug() {},
 };
 
 await smokeTransientRetry();
@@ -25,10 +25,15 @@ async function smokeTransientRetry() {
     send: async () => {
       attempts += 1;
       return attempts === 1
-        ? { status: "retry", failureCategory: "network", reason: "temporary network failure", retryAfterMs: 5 }
+        ? {
+            status: "retry",
+            failureCategory: "network",
+            reason: "temporary network failure",
+            retryAfterMs: 5,
+          }
         : { status: "sent" };
     },
-    onEvent: (event) => events.push(event)
+    onEvent: (event) => events.push(event),
   });
 
   queue.enqueue("transient retry");
@@ -36,8 +41,17 @@ async function smokeTransientRetry() {
 
   assert.equal(drained, true, "transient retry queue drains");
   assert.equal(attempts, 2, "transient retry sends again");
-  assert(events.some((event) => event.status === "retrying" && event.failureCategory === "network"), "network retry is classified");
-  assert(events.some((event) => event.status === "sent"), "retried message is sent");
+  assert(
+    events.some(
+      (event) =>
+        event.status === "retrying" && event.failureCategory === "network",
+    ),
+    "network retry is classified",
+  );
+  assert(
+    events.some((event) => event.status === "sent"),
+    "retried message is sent",
+  );
 }
 
 async function smokeNonRetryableConfigFailure() {
@@ -49,9 +63,13 @@ async function smokeNonRetryableConfigFailure() {
     minIntervalMs: 5,
     send: async () => {
       attempts += 1;
-      return { status: "failed", failureCategory: "config", reason: "missing Twitch IDs" };
+      return {
+        status: "failed",
+        failureCategory: "config",
+        reason: "missing Twitch IDs",
+      };
     },
-    onEvent: (event) => events.push(event)
+    onEvent: (event) => events.push(event),
   });
 
   queue.enqueue("non retryable");
@@ -59,8 +77,17 @@ async function smokeNonRetryableConfigFailure() {
 
   assert.equal(drained, true, "non-retryable failure queue drains");
   assert.equal(attempts, 1, "non-retryable config failure is not retried");
-  assert(!events.some((event) => event.status === "retrying"), "non-retryable config failure does not emit retrying");
-  assert(events.some((event) => event.status === "failed" && event.failureCategory === "config"), "config failure is classified");
+  assert(
+    !events.some((event) => event.status === "retrying"),
+    "non-retryable config failure does not emit retrying",
+  );
+  assert(
+    events.some(
+      (event) =>
+        event.status === "failed" && event.failureCategory === "config",
+    ),
+    "config failure is classified",
+  );
 }
 
 async function smokeRateLimitRetry() {
@@ -74,10 +101,15 @@ async function smokeRateLimitRetry() {
     send: async () => {
       attempts += 1;
       return attempts === 1
-        ? { status: "retry", failureCategory: "rate_limit", reason: "Twitch 429", retryAfterMs: 5 }
+        ? {
+            status: "retry",
+            failureCategory: "rate_limit",
+            reason: "Twitch 429",
+            retryAfterMs: 5,
+          }
         : { status: "sent" };
     },
-    onEvent: (event) => events.push(event)
+    onEvent: (event) => events.push(event),
   });
 
   queue.enqueue("rate limit retry");
@@ -86,7 +118,11 @@ async function smokeRateLimitRetry() {
 
   assert.equal(drained, true, "rate-limit retry queue drains");
   assert.equal(attempts, 2, "rate-limit retry sends again");
-  assert.equal(retry?.failureCategory, "rate_limit", "rate-limit retry is classified");
+  assert.equal(
+    retry?.failureCategory,
+    "rate_limit",
+    "rate-limit retry is classified",
+  );
   assert.equal(retry?.retryAfterMs, 5, "rate-limit retry keeps retry delay");
   assert(retry?.nextAttemptAt, "rate-limit retry reports next attempt time");
 }

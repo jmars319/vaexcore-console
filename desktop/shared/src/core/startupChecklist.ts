@@ -12,9 +12,9 @@ export class StartupChecklist {
       {
         check: item,
         ok: true,
-        ...metadata
+        ...metadata,
       },
-      `Startup checklist: ${item}`
+      `Startup checklist: ${item}`,
     );
   }
 }

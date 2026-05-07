@@ -1,6 +1,10 @@
 import "dotenv/config";
 import { spawn, type ChildProcess } from "node:child_process";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { randomBytes } from "node:crypto";
 import {
   appendFileSync,
@@ -10,7 +14,7 @@ import {
   readdirSync,
   statSync,
   unlinkSync,
-  writeFileSync
+  writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
@@ -23,7 +27,7 @@ import { CommandRouter } from "../core/commandRouter";
 import {
   MessageQueue,
   type MessageQueueEventStatus,
-  type MessageQueueMetadata
+  type MessageQueueMetadata,
 } from "../core/messageQueue";
 import { createOperatorMessageTemplateStore } from "../core/operatorMessages";
 import {
@@ -33,19 +37,19 @@ import {
   isOutboundFailureCategory,
   isOutboundImportance,
   isPendingOutboundStatus,
-  type OutboundMessageRecord
+  type OutboundMessageRecord,
 } from "../core/outboundHistory";
 import {
   createFeatureGateStore,
   type FeatureGateState,
   type FeatureGateMode,
-  type FeatureKey
+  type FeatureKey,
 } from "../core/featureGates";
 import { createRuntimeStatus } from "../core/runtimeStatus";
 import { registerCommandsModule } from "../modules/commands/commands.module";
 import {
   CustomCommandsService,
-  getReservedCustomCommandNames
+  getReservedCustomCommandNames,
 } from "../modules/commands/commands.service";
 import {
   limits,
@@ -60,7 +64,7 @@ import {
   sanitizeCommandText,
   sanitizeDisplayName,
   sanitizeGiveawayTitle,
-  sanitizeText
+  sanitizeText,
 } from "../core/security";
 import { createDbClient, resolveDatabasePath } from "../db/client";
 import { registerGiveawayCommands } from "../modules/giveaways/giveaways.commands";
@@ -68,53 +72,47 @@ import { formatWinnerNames } from "../modules/giveaways/giveaways.messages";
 import { GiveawaysService } from "../modules/giveaways/giveaways.service";
 import { createGiveawayTemplateStore } from "../modules/giveaways/giveaways.templates";
 import { ModerationService } from "../modules/moderation/moderation.module";
-import {
-  TimersService,
-  timerMetadata
-} from "../modules/timers/timers.module";
+import { TimersService, timerMetadata } from "../modules/timers/timers.module";
 import { registerStudioCommands } from "../studio/studio.commands";
 import {
   loadStudioIntegrationConfig,
   StudioClient,
-  type StudioMarkerInput
+  type StudioMarkerInput,
 } from "../studio/client";
 import { studioConsoleMarkerMetadata } from "../studio/markerMetadata";
 import {
   validateSuiteCommandDocument,
-  type SuiteCommandDocument
+  type SuiteCommandDocument,
 } from "../suite/commands";
 import {
   validateSuiteDiscoveryDocument,
   type SuiteDiscoveryDocument,
-  type SuiteLocalRuntime
+  type SuiteLocalRuntime,
 } from "../suite/discovery";
-import {
-  CONSOLE_APP,
-  SUITE_DISCOVERY_SCHEMA_VERSION
-} from "../suiteProtocol";
+import { CONSOLE_APP, SUITE_DISCOVERY_SCHEMA_VERSION } from "../suiteProtocol";
 import type {
   Giveaway,
-  GiveawayWinner
+  GiveawayWinner,
 } from "../modules/giveaways/giveaways.types";
 import {
   defaultRedirectUri,
   getLocalSecretsPath,
   readLocalSecrets,
   writeLocalSecrets,
-  type LocalSecrets
+  type LocalSecrets,
 } from "../config/localSecrets";
 import { TwitchChatSender } from "../twitch/sendMessage";
 import {
   getTwitchUserByLogin,
   optionalModerationScopes,
   requiredTwitchScopes,
-  validateToken
+  validateToken,
 } from "../twitch/validate";
 import {
   getTokenExpiresAt,
   refreshStoredTwitchToken,
   type TwitchOAuthTokenResponse,
-  validateStoredTwitchToken
+  validateStoredTwitchToken,
 } from "../twitch/tokenManager";
 
 export type SetupServerHandle = {
@@ -133,27 +131,27 @@ const suiteDiscoveryHeartbeatMs = 15_000;
 const vaexcoreSuiteApps = [
   "vaexcore studio",
   "vaexcore pulse",
-  "vaexcore console"
+  "vaexcore console",
 ] as const;
 const vaexcoreSuiteAppDefinitions = [
   {
     appId: "vaexcore-studio",
     appName: "vaexcore studio",
     launchName: "vaexcore studio",
-    bundleIdentifier: "com.vaexcore.studio"
+    bundleIdentifier: "com.vaexcore.studio",
   },
   {
     appId: "vaexcore-pulse",
     appName: "vaexcore pulse",
     launchName: "vaexcore pulse",
-    bundleIdentifier: "com.vaexil.vaexcore.pulse"
+    bundleIdentifier: "com.vaexil.vaexcore.pulse",
   },
   {
     appId: "vaexcore-console",
     appName: "vaexcore console",
     launchName: "vaexcore console",
-    bundleIdentifier: "com.vaexil.vaexcore.console"
-  }
+    bundleIdentifier: "com.vaexil.vaexcore.console",
+  },
 ] as const;
 const logger = createLogger("info");
 const oauthStates = new Map<string, number>();
@@ -168,7 +166,7 @@ const moderationService = new ModerationService(db, {
   exemptCommandNames: () => {
     const active = giveawaysService.status()?.giveaway.keyword;
     return active ? [active] : [];
-  }
+  },
 });
 const giveawayTemplates = createGiveawayTemplateStore(db);
 const operatorMessages = createOperatorMessageTemplateStore(db);
@@ -179,10 +177,11 @@ const studioClient = new StudioClient(studioIntegration);
 const chatQueue = new MessageQueue({
   logger,
   send: async (message) => sendConfiguredChatMessage(message),
-  onEvent: (event) => outboundHistory.record({
-    ...event,
-    source: "setup"
-  })
+  onEvent: (event) =>
+    outboundHistory.record({
+      ...event,
+      source: "setup",
+    }),
 });
 chatQueue.start();
 setupRuntimeStatus.messageQueueReady = chatQueue.isReady();
@@ -199,7 +198,7 @@ export const startSetupServer = async (options: { port?: number } = {}) => {
       logger.error({ error: redactSecrets(error) }, "Setup request failed");
       sendJson(response, 500, {
         ok: false,
-        error: safeErrorMessage(error, "Setup request failed")
+        error: safeErrorMessage(error, "Setup request failed"),
       });
     });
   });
@@ -221,7 +220,7 @@ export const startSetupServer = async (options: { port?: number } = {}) => {
 
   logger.info(
     { url: `http://localhost:${port}`, secretsPath: getLocalSecretsPath() },
-    "vaexcore console setup server started"
+    "vaexcore console setup server started",
   );
 
   const suiteDiscoveryTimer = startSuiteDiscoveryHeartbeat(port);
@@ -242,7 +241,7 @@ export const startSetupServer = async (options: { port?: number } = {}) => {
       chatQueue.stop();
       db.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
+    },
   } satisfies SetupServerHandle;
 };
 
@@ -253,11 +252,18 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
   }
 
   if (!isAllowedHost(request.headers.host)) {
-    sendText(response, 403, "vaexcore console setup only accepts localhost requests.");
+    sendText(
+      response,
+      403,
+      "vaexcore console setup only accepts localhost requests.",
+    );
     return;
   }
 
-  const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+  const url = new URL(
+    request.url ?? "/",
+    `http://${request.headers.host ?? "localhost"}`,
+  );
 
   if (request.method === "GET" && url.pathname === "/") {
     sendHtml(response, setupShellHtml);
@@ -292,9 +298,16 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/auth/twitch/disconnect") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/auth/twitch/disconnect"
+  ) {
     const config = disconnectTwitch();
-    resetLaunchPreparation("setup_required", "Twitch was disconnected.", "Connect Twitch in Configuration Settings.");
+    resetLaunchPreparation(
+      "setup_required",
+      "Twitch was disconnected.",
+      "Connect Twitch in Configuration Settings.",
+    );
     sendJson(response, 200, { ok: true, config });
     return;
   }
@@ -325,7 +338,10 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
-  if (request.method === "GET" && url.pathname === "/api/twitch/broadcast-readiness") {
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/twitch/broadcast-readiness"
+  ) {
     sendJson(response, 200, getTwitchBroadcastReadiness());
     return;
   }
@@ -376,14 +392,23 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/stream-presets/apply") {
-    const body = (await readJson(request)) as { id?: string; confirmed?: boolean };
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/stream-presets/apply"
+  ) {
+    const body = (await readJson(request)) as {
+      id?: string;
+      confirmed?: boolean;
+    };
     sendJson(response, 200, applyStreamPreset(body));
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/feature-gates") {
-    const body = (await readJson(request)) as { key?: FeatureKey; mode?: FeatureGateMode };
+    const body = (await readJson(request)) as {
+      key?: FeatureKey;
+      mode?: FeatureGateMode;
+    };
     sendJson(response, 200, setFeatureGate(body));
     return;
   }
@@ -417,7 +442,10 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
   }
 
   if (request.method === "POST" && url.pathname === "/api/timers/enable") {
-    const body = (await readJson(request)) as { id?: number; enabled?: boolean };
+    const body = (await readJson(request)) as {
+      id?: number;
+      enabled?: boolean;
+    };
     sendJson(response, 200, setTimerEnabled(body));
     return;
   }
@@ -439,7 +467,10 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/moderation/settings") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/moderation/settings"
+  ) {
     const body = await readJson(request);
     sendJson(response, 200, saveModerationSettings(body));
     return;
@@ -451,61 +482,100 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/moderation/terms/enable") {
-    const body = (await readJson(request)) as { id?: number; enabled?: boolean };
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/moderation/terms/enable"
+  ) {
+    const body = (await readJson(request)) as {
+      id?: number;
+      enabled?: boolean;
+    };
     sendJson(response, 200, setModerationTermEnabled(body));
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/moderation/terms/delete") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/moderation/terms/delete"
+  ) {
     const body = (await readJson(request)) as { id?: number };
     sendJson(response, 200, deleteModerationTerm(body.id));
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/moderation/allowed-links") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/moderation/allowed-links"
+  ) {
     const body = await readJson(request);
     sendJson(response, 200, saveModerationAllowedLink(body));
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/moderation/allowed-links/enable") {
-    const body = (await readJson(request)) as { id?: number; enabled?: boolean };
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/moderation/allowed-links/enable"
+  ) {
+    const body = (await readJson(request)) as {
+      id?: number;
+      enabled?: boolean;
+    };
     sendJson(response, 200, setModerationAllowedLinkEnabled(body));
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/moderation/allowed-links/delete") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/moderation/allowed-links/delete"
+  ) {
     const body = (await readJson(request)) as { id?: number };
     sendJson(response, 200, deleteModerationAllowedLink(body.id));
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/moderation/blocked-links") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/moderation/blocked-links"
+  ) {
     const body = await readJson(request);
     sendJson(response, 200, saveModerationBlockedLink(body));
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/moderation/blocked-links/enable") {
-    const body = (await readJson(request)) as { id?: number; enabled?: boolean };
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/moderation/blocked-links/enable"
+  ) {
+    const body = (await readJson(request)) as {
+      id?: number;
+      enabled?: boolean;
+    };
     sendJson(response, 200, setModerationBlockedLinkEnabled(body));
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/moderation/blocked-links/delete") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/moderation/blocked-links/delete"
+  ) {
     const body = (await readJson(request)) as { id?: number };
     sendJson(response, 200, deleteModerationBlockedLink(body.id));
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/moderation/link-permits") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/moderation/link-permits"
+  ) {
     const body = await readJson(request);
     sendJson(response, 200, grantModerationLinkPermit(body));
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/moderation/simulate") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/moderation/simulate"
+  ) {
     const body = (await readJson(request)) as {
       actor?: string;
       role?: LocalChatRole;
@@ -547,14 +617,23 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/operator-messages/reset") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/operator-messages/reset"
+  ) {
     const body = (await readJson(request)) as { ids?: string[] };
     sendJson(response, 200, resetOperatorMessages(body.ids));
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/operator-messages/send") {
-    const body = (await readJson(request)) as { id?: string; confirmed?: boolean };
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/operator-messages/send"
+  ) {
+    const body = (await readJson(request)) as {
+      id?: string;
+      confirmed?: boolean;
+    };
     sendJson(response, 200, await sendOperatorMessage(body));
     return;
   }
@@ -582,7 +661,10 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
   }
 
   if (request.method === "POST" && url.pathname === "/api/commands/enable") {
-    const body = (await readJson(request)) as { id?: number; enabled?: boolean };
+    const body = (await readJson(request)) as {
+      id?: number;
+      enabled?: boolean;
+    };
     sendJson(response, 200, setCustomCommandEnabled(body));
     return;
   }
@@ -616,7 +698,10 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/commands/preset-pack") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/commands/preset-pack"
+  ) {
     const body = (await readJson(request)) as { id?: string };
     sendJson(response, 200, createCustomCommandPresetPack(body.id));
     return;
@@ -633,7 +718,10 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/outbound-messages/resend") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/outbound-messages/resend"
+  ) {
     const body = (await readJson(request)) as { id?: string };
     sendJson(response, 200, await resendOutboundMessage(body.id));
     return;
@@ -644,18 +732,27 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/giveaway/announcement/resend") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/giveaway/announcement/resend"
+  ) {
     const body = (await readJson(request)) as { action?: string };
     sendJson(response, 200, await resendGiveawayAnnouncement(body.action));
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/giveaway/critical/resend") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/giveaway/critical/resend"
+  ) {
     sendJson(response, 200, await resendCriticalGiveawayMessage());
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/giveaway/status/send") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/giveaway/status/send"
+  ) {
     sendJson(response, 200, await sendCurrentGiveawayStatus());
     return;
   }
@@ -671,7 +768,10 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/giveaway/templates/reset") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/giveaway/templates/reset"
+  ) {
     const body = (await readJson(request)) as { actions?: string[] };
     sendJson(response, 200, resetGiveawayTemplates(body.actions));
     return;
@@ -688,7 +788,10 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/giveaway/reminder/send") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/giveaway/reminder/send"
+  ) {
     sendJson(response, 200, sendGiveawayReminderNow());
     return;
   }
@@ -706,230 +809,359 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
       field: "Winner count",
       fallback: 6,
       min: 1,
-      max: limits.winnerCountMax
+      max: limits.winnerCountMax,
     });
-    sendJson(response, 200, runGiveawayAction(() => {
-      const giveaway = giveawaysService.start({
-        actor: localUiActor,
-        title,
-        keyword,
-        winnerCount
-      });
-      return { giveaway };
-    }, {
-      echoToChat: Boolean(body.echoToChat),
-      echoCommand: `!gstart codes=${winnerCount} keyword=${keyword} title="${title.replace(/"/g, "'")}"`,
-      announcements: ({ giveaway }) =>
-        giveawayAnnouncement(giveawayTemplates.start(giveaway), "start", giveaway.id, "critical"),
-      studioMarker: ({ giveaway }) =>
-        giveawayStudioMarker("start", giveaway, {
-          statusTimestamp: giveaway.opened_at ?? giveaway.created_at,
-          metadata: {
-            requestedWinnerCount: winnerCount,
-            requestedKeyword: keyword
-          }
-        })
-    }));
+    sendJson(
+      response,
+      200,
+      runGiveawayAction(
+        () => {
+          const giveaway = giveawaysService.start({
+            actor: localUiActor,
+            title,
+            keyword,
+            winnerCount,
+          });
+          return { giveaway };
+        },
+        {
+          echoToChat: Boolean(body.echoToChat),
+          echoCommand: `!gstart codes=${winnerCount} keyword=${keyword} title="${title.replace(/"/g, "'")}"`,
+          announcements: ({ giveaway }) =>
+            giveawayAnnouncement(
+              giveawayTemplates.start(giveaway),
+              "start",
+              giveaway.id,
+              "critical",
+            ),
+          studioMarker: ({ giveaway }) =>
+            giveawayStudioMarker("start", giveaway, {
+              statusTimestamp: giveaway.opened_at ?? giveaway.created_at,
+              metadata: {
+                requestedWinnerCount: winnerCount,
+                requestedKeyword: keyword,
+              },
+            }),
+        },
+      ),
+    );
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/giveaway/close") {
     const body = (await readJson(request)) as { echoToChat?: boolean };
-    sendJson(response, 200, runGiveawayAction(() => ({
-      giveaway: giveawaysService.close(localUiActor)
-    }), {
-      echoToChat: Boolean(body.echoToChat),
-      echoCommand: "!gclose",
-      announcements: ({ giveaway }) =>
-        giveawayAnnouncement(
-          giveawayTemplates.close(giveaway, giveawaysService.countEntriesForGiveaway(giveaway.id)),
-          "close",
-          giveaway.id,
-          "critical"
-        ),
-      studioMarker: ({ giveaway }) =>
-        giveawayStudioMarker("close", giveaway, {
-          statusTimestamp: giveaway.closed_at ?? new Date().toISOString(),
-          metadata: {
-            entryCount: giveawaysService.countEntriesForGiveaway(giveaway.id)
-          }
-        })
-    }));
+    sendJson(
+      response,
+      200,
+      runGiveawayAction(
+        () => ({
+          giveaway: giveawaysService.close(localUiActor),
+        }),
+        {
+          echoToChat: Boolean(body.echoToChat),
+          echoCommand: "!gclose",
+          announcements: ({ giveaway }) =>
+            giveawayAnnouncement(
+              giveawayTemplates.close(
+                giveaway,
+                giveawaysService.countEntriesForGiveaway(giveaway.id),
+              ),
+              "close",
+              giveaway.id,
+              "critical",
+            ),
+          studioMarker: ({ giveaway }) =>
+            giveawayStudioMarker("close", giveaway, {
+              statusTimestamp: giveaway.closed_at ?? new Date().toISOString(),
+              metadata: {
+                entryCount: giveawaysService.countEntriesForGiveaway(
+                  giveaway.id,
+                ),
+              },
+            }),
+        },
+      ),
+    );
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/giveaway/last-call") {
-    sendJson(response, 200, runGiveawayAction(() => {
-      const status = giveawaysService.status();
+    sendJson(
+      response,
+      200,
+      runGiveawayAction(
+        () => {
+          const status = giveawaysService.status();
 
-      if (!status || status.giveaway.status !== "open") {
-        throw new Error("Last call is only available while entries are open.");
-      }
-
-      return {
-        giveaway: status.giveaway,
-        entryCount: status.entries
-      };
-    }, {
-      announcements: ({ giveaway, entryCount }) =>
-        giveawayAnnouncement(
-          giveawayTemplates.lastCall(giveaway, entryCount),
-          "last-call",
-          giveaway.id,
-          "critical"
-        ),
-      studioMarker: ({ giveaway, entryCount }) =>
-        giveawayStudioMarker("last-call", giveaway, {
-          statusTimestamp: new Date().toISOString(),
-          metadata: {
-            entryCount
+          if (!status || status.giveaway.status !== "open") {
+            throw new Error(
+              "Last call is only available while entries are open.",
+            );
           }
-        })
-    }));
+
+          return {
+            giveaway: status.giveaway,
+            entryCount: status.entries,
+          };
+        },
+        {
+          announcements: ({ giveaway, entryCount }) =>
+            giveawayAnnouncement(
+              giveawayTemplates.lastCall(giveaway, entryCount),
+              "last-call",
+              giveaway.id,
+              "critical",
+            ),
+          studioMarker: ({ giveaway, entryCount }) =>
+            giveawayStudioMarker("last-call", giveaway, {
+              statusTimestamp: new Date().toISOString(),
+              metadata: {
+                entryCount,
+              },
+            }),
+        },
+      ),
+    );
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/giveaway/draw") {
-    const body = (await readJson(request)) as { count?: number; echoToChat?: boolean };
+    const body = (await readJson(request)) as {
+      count?: number;
+      echoToChat?: boolean;
+    };
     const count = parseSafeInteger(body.count, {
       field: "Winner count",
       fallback: 6,
       min: 1,
-      max: limits.winnerCountMax
+      max: limits.winnerCountMax,
     });
-    sendJson(response, 200, runGiveawayAction(() => ({
-      result: giveawaysService.draw(localUiActor, count)
-    }), {
-      echoToChat: Boolean(body.echoToChat),
-      echoCommand: `!gdraw ${count}`,
-      announcements: ({ result }) =>
-        giveawayAnnouncement(giveawayTemplates.draw(result), "draw", result.giveaway.id, "critical"),
-      studioMarker: ({ result }) =>
-        giveawayStudioMarker("draw", result.giveaway, {
-          statusTimestamp: firstWinnerTimestamp(result.winners),
-          sourceEventSuffix: drawSourceEventSuffix(result.winners),
-          metadata: {
-            requestedCount: result.requestedCount,
-            eligibleCount: result.eligibleCount,
-            winners: result.winners.map(giveawayWinnerMetadata)
-          }
-        })
-    }));
+    sendJson(
+      response,
+      200,
+      runGiveawayAction(
+        () => ({
+          result: giveawaysService.draw(localUiActor, count),
+        }),
+        {
+          echoToChat: Boolean(body.echoToChat),
+          echoCommand: `!gdraw ${count}`,
+          announcements: ({ result }) =>
+            giveawayAnnouncement(
+              giveawayTemplates.draw(result),
+              "draw",
+              result.giveaway.id,
+              "critical",
+            ),
+          studioMarker: ({ result }) =>
+            giveawayStudioMarker("draw", result.giveaway, {
+              statusTimestamp: firstWinnerTimestamp(result.winners),
+              sourceEventSuffix: drawSourceEventSuffix(result.winners),
+              metadata: {
+                requestedCount: result.requestedCount,
+                eligibleCount: result.eligibleCount,
+                winners: result.winners.map(giveawayWinnerMetadata),
+              },
+            }),
+        },
+      ),
+    );
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/giveaway/reroll") {
-    const body = (await readJson(request)) as { username?: string; echoToChat?: boolean };
-    sendJson(response, 200, runGiveawayAction(() => ({
-      result: giveawaysService.reroll(localUiActor, requireUsername(body.username))
-    }), {
-      echoToChat: Boolean(body.echoToChat),
-      echoCommand: body.username ? `!greroll ${requireUsername(body.username)}` : undefined,
-      announcements: ({ result }) =>
-        giveawayAnnouncement(giveawayTemplates.reroll(result), "reroll", result.giveaway.id, "important"),
-      studioMarker: ({ result }) =>
-        giveawayStudioMarker("reroll", result.giveaway, {
-          statusTimestamp: result.rerolled.rerolled_at ?? new Date().toISOString(),
-          sourceEventSuffix: `winner-${result.rerolled.id}-replacement-${result.replacement?.id ?? "none"}`,
-          metadata: {
-            rerolled: giveawayWinnerMetadata(result.rerolled),
-            replacement: result.replacement
-              ? giveawayWinnerMetadata(result.replacement)
-              : null
-          }
-        })
-    }));
+    const body = (await readJson(request)) as {
+      username?: string;
+      echoToChat?: boolean;
+    };
+    sendJson(
+      response,
+      200,
+      runGiveawayAction(
+        () => ({
+          result: giveawaysService.reroll(
+            localUiActor,
+            requireUsername(body.username),
+          ),
+        }),
+        {
+          echoToChat: Boolean(body.echoToChat),
+          echoCommand: body.username
+            ? `!greroll ${requireUsername(body.username)}`
+            : undefined,
+          announcements: ({ result }) =>
+            giveawayAnnouncement(
+              giveawayTemplates.reroll(result),
+              "reroll",
+              result.giveaway.id,
+              "important",
+            ),
+          studioMarker: ({ result }) =>
+            giveawayStudioMarker("reroll", result.giveaway, {
+              statusTimestamp:
+                result.rerolled.rerolled_at ?? new Date().toISOString(),
+              sourceEventSuffix: `winner-${result.rerolled.id}-replacement-${result.replacement?.id ?? "none"}`,
+              metadata: {
+                rerolled: giveawayWinnerMetadata(result.rerolled),
+                replacement: result.replacement
+                  ? giveawayWinnerMetadata(result.replacement)
+                  : null,
+              },
+            }),
+        },
+      ),
+    );
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/giveaway/claim") {
-    const body = (await readJson(request)) as { username?: string; echoToChat?: boolean };
-    sendJson(response, 200, runGiveawayAction(() => ({
-      result: giveawaysService.claim(localUiActor, requireUsername(body.username))
-    }), {
-      echoToChat: Boolean(body.echoToChat),
-      echoCommand: body.username ? `!gclaim ${requireUsername(body.username)}` : undefined
-    }));
+    const body = (await readJson(request)) as {
+      username?: string;
+      echoToChat?: boolean;
+    };
+    sendJson(
+      response,
+      200,
+      runGiveawayAction(
+        () => ({
+          result: giveawaysService.claim(
+            localUiActor,
+            requireUsername(body.username),
+          ),
+        }),
+        {
+          echoToChat: Boolean(body.echoToChat),
+          echoCommand: body.username
+            ? `!gclaim ${requireUsername(body.username)}`
+            : undefined,
+        },
+      ),
+    );
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/giveaway/deliver") {
-    const body = (await readJson(request)) as { username?: string; echoToChat?: boolean };
-    sendJson(response, 200, runGiveawayAction(() => ({
-      result: giveawaysService.deliver(localUiActor, requireUsername(body.username))
-    }), {
-      echoToChat: Boolean(body.echoToChat),
-      echoCommand: body.username ? `!gdeliver ${requireUsername(body.username)}` : undefined
-    }));
+    const body = (await readJson(request)) as {
+      username?: string;
+      echoToChat?: boolean;
+    };
+    sendJson(
+      response,
+      200,
+      runGiveawayAction(
+        () => ({
+          result: giveawaysService.deliver(
+            localUiActor,
+            requireUsername(body.username),
+          ),
+        }),
+        {
+          echoToChat: Boolean(body.echoToChat),
+          echoCommand: body.username
+            ? `!gdeliver ${requireUsername(body.username)}`
+            : undefined,
+        },
+      ),
+    );
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/giveaway/deliver-all") {
-    sendJson(response, 200, runGiveawayAction(() => ({
-      result: giveawaysService.deliverAll(localUiActor)
-    })));
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/giveaway/deliver-all"
+  ) {
+    sendJson(
+      response,
+      200,
+      runGiveawayAction(() => ({
+        result: giveawaysService.deliverAll(localUiActor),
+      })),
+    );
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/giveaway/end") {
     const body = (await readJson(request)) as { echoToChat?: boolean };
-    sendJson(response, 200, runGiveawayAction(() => ({
-      giveaway: giveawaysService.end(localUiActor)
-    }), {
-      echoToChat: Boolean(body.echoToChat),
-      echoCommand: "!gend",
-      announcements: ({ giveaway }) =>
-        giveawayAnnouncement(
-          giveawayTemplates.end(giveaway, giveawaysService.getWinnersForGiveaway(giveaway.id)),
-          "end",
-          giveaway.id,
-          "critical"
-        ),
-      studioMarker: ({ giveaway }) =>
-        giveawayStudioMarker("end", giveaway, {
-          statusTimestamp: giveaway.ended_at ?? new Date().toISOString(),
-          metadata: {
-            winners: giveawaysService
-              .getWinnersForGiveaway(giveaway.id)
-              .map(giveawayWinnerMetadata)
-          }
-        })
-    }));
+    sendJson(
+      response,
+      200,
+      runGiveawayAction(
+        () => ({
+          giveaway: giveawaysService.end(localUiActor),
+        }),
+        {
+          echoToChat: Boolean(body.echoToChat),
+          echoCommand: "!gend",
+          announcements: ({ giveaway }) =>
+            giveawayAnnouncement(
+              giveawayTemplates.end(
+                giveaway,
+                giveawaysService.getWinnersForGiveaway(giveaway.id),
+              ),
+              "end",
+              giveaway.id,
+              "critical",
+            ),
+          studioMarker: ({ giveaway }) =>
+            giveawayStudioMarker("end", giveaway, {
+              statusTimestamp: giveaway.ended_at ?? new Date().toISOString(),
+              metadata: {
+                winners: giveawaysService
+                  .getWinnersForGiveaway(giveaway.id)
+                  .map(giveawayWinnerMetadata),
+              },
+            }),
+        },
+      ),
+    );
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/giveaway/add-entrant") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/giveaway/add-entrant"
+  ) {
     const body = (await readJson(request)) as {
       login?: string;
       displayName?: string;
       echoToChat?: boolean;
     };
-    sendJson(response, 200, runGiveawayAction(() => ({
-      result: giveawaysService.addSimulatedEntrant(
-        simulatedChatActor,
-        createLocalChatMessage({
-          login: requireUsername(body.login),
-          displayName: sanitizeDisplayName(body.displayName, requireUsername(body.login)),
-          role: "viewer",
-          text: "!enter"
-        })
-      )
-    }), {
-      echoToChat: Boolean(body.echoToChat),
-      echoCommand: "!enter",
-      announcements: ({ result }) =>
-        result.status === "entered"
-          ? giveawayAnnouncement(
-              giveawayTemplates.entry({
-                giveaway: result.giveaway,
-                displayName: result.displayName,
-                entryCount: result.entryCount
-              }),
-              "entry",
-              result.giveaway.id
-            )
-          : undefined
-    }));
+    sendJson(
+      response,
+      200,
+      runGiveawayAction(
+        () => ({
+          result: giveawaysService.addSimulatedEntrant(
+            simulatedChatActor,
+            createLocalChatMessage({
+              login: requireUsername(body.login),
+              displayName: sanitizeDisplayName(
+                body.displayName,
+                requireUsername(body.login),
+              ),
+              role: "viewer",
+              text: "!enter",
+            }),
+          ),
+        }),
+        {
+          echoToChat: Boolean(body.echoToChat),
+          echoCommand: "!enter",
+          announcements: ({ result }) =>
+            result.status === "entered"
+              ? giveawayAnnouncement(
+                  giveawayTemplates.entry({
+                    giveaway: result.giveaway,
+                    displayName: result.displayName,
+                    entryCount: result.entryCount,
+                  }),
+                  "entry",
+                  result.giveaway.id,
+                )
+              : undefined,
+        },
+      ),
+    );
     return;
   }
 
@@ -945,18 +1177,25 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
   }
 
   if (request.method === "POST" && url.pathname === "/api/giveaway/run-test") {
-    const body = (await readJson(request)) as { echoToChat?: boolean; confirmed?: boolean };
-    sendJson(response, 200, runLocalLifecycleTest({
-      echoToChat: Boolean(body.echoToChat),
-      confirmed: Boolean(body.confirmed)
-    }));
+    const body = (await readJson(request)) as {
+      echoToChat?: boolean;
+      confirmed?: boolean;
+    };
+    sendJson(
+      response,
+      200,
+      runLocalLifecycleTest({
+        echoToChat: Boolean(body.echoToChat),
+        confirmed: Boolean(body.confirmed),
+      }),
+    );
     return;
   }
 
   if (request.method === "GET" && url.pathname === "/api/audit-logs") {
     sendJson(response, 200, {
       ok: true,
-      logs: giveawaysService.getRecentAuditLogs(100)
+      logs: giveawaysService.getRecentAuditLogs(100),
     });
     return;
   }
@@ -984,7 +1223,7 @@ const getSafeConfig = () => {
     scopes: twitch.scopes,
     tokenExpiresAt: twitch.tokenExpiresAt ?? "",
     tokenValidatedAt: twitch.tokenValidatedAt ?? "",
-    token: twitch.accessToken ? maskToken(twitch.accessToken) : ""
+    token: twitch.accessToken ? maskToken(twitch.accessToken) : "",
   };
 };
 
@@ -1004,7 +1243,8 @@ const getTwitchStreamKey = async (): Promise<
     return {
       ok: false,
       statusCode: 409,
-      error: "Console needs a connected Twitch account and resolved broadcaster identity first."
+      error:
+        "Console needs a connected Twitch account and resolved broadcaster identity first.",
     };
   }
 
@@ -1015,7 +1255,10 @@ const getTwitchStreamKey = async (): Promise<
     return {
       ok: false,
       statusCode: 401,
-      error: safeErrorMessage(error, "Twitch token validation failed. Reconnect Twitch in Console.")
+      error: safeErrorMessage(
+        error,
+        "Twitch token validation failed. Reconnect Twitch in Console.",
+      ),
     };
   }
 
@@ -1023,14 +1266,17 @@ const getTwitchStreamKey = async (): Promise<
   const token = validation.token;
   const clientId = activeTwitch.clientId ?? twitch.clientId;
   const accessToken = activeTwitch.accessToken;
-  const broadcasterUserId = activeTwitch.broadcasterUserId ?? twitch.broadcasterUserId;
-  const broadcasterLogin = activeTwitch.broadcasterLogin ?? twitch.broadcasterLogin ?? token.login;
+  const broadcasterUserId =
+    activeTwitch.broadcasterUserId ?? twitch.broadcasterUserId;
+  const broadcasterLogin =
+    activeTwitch.broadcasterLogin ?? twitch.broadcasterLogin ?? token.login;
 
   if (!clientId || !accessToken || !broadcasterUserId) {
     return {
       ok: false,
       statusCode: 409,
-      error: "Console is missing the active Twitch client, token, or broadcaster ID."
+      error:
+        "Console is missing the active Twitch client, token, or broadcaster ID.",
     };
   }
 
@@ -1038,7 +1284,8 @@ const getTwitchStreamKey = async (): Promise<
     return {
       ok: false,
       statusCode: 403,
-      error: "Reconnect Twitch in Console so it can request the channel:read:stream_key scope."
+      error:
+        "Reconnect Twitch in Console so it can request the channel:read:stream_key scope.",
     };
   }
 
@@ -1047,24 +1294,27 @@ const getTwitchStreamKey = async (): Promise<
       ok: false,
       statusCode: 403,
       error:
-        "Twitch only allows stream-key access when the OAuth token belongs to the broadcaster account. Reconnect Console as the broadcaster or make the bot login match the broadcaster."
+        "Twitch only allows stream-key access when the OAuth token belongs to the broadcaster account. Reconnect Console as the broadcaster or make the bot login match the broadcaster.",
     };
   }
 
   const params = new URLSearchParams({ broadcaster_id: broadcasterUserId });
-  const streamKeyResponse = await fetch(`https://api.twitch.tv/helix/streams/key?${params}`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Client-Id": clientId
-    }
-  });
+  const streamKeyResponse = await fetch(
+    `https://api.twitch.tv/helix/streams/key?${params}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Client-Id": clientId,
+      },
+    },
+  );
 
   if (!streamKeyResponse.ok) {
     const body = await streamKeyResponse.text();
     return {
       ok: false,
       statusCode: streamKeyResponse.status,
-      error: `Twitch stream key request failed: ${streamKeyResponse.status} ${body}`
+      error: `Twitch stream key request failed: ${streamKeyResponse.status} ${body}`,
     };
   }
 
@@ -1076,7 +1326,7 @@ const getTwitchStreamKey = async (): Promise<
     return {
       ok: false,
       statusCode: 502,
-      error: "Twitch did not return a stream key."
+      error: "Twitch did not return a stream key.",
     };
   }
 
@@ -1092,15 +1342,15 @@ const getTwitchStreamKey = async (): Promise<
     detail: `Console made ${broadcasterLogin}'s stream key available to Studio.`,
     metadata: {
       broadcasterLogin,
-      broadcasterUserId
-    }
+      broadcasterUserId,
+    },
   });
 
   return {
     ok: true,
     streamKey,
     broadcasterLogin,
-    broadcasterUserId
+    broadcasterUserId,
   };
 };
 
@@ -1114,14 +1364,16 @@ const getPlatformStatus = () => {
     suiteSession: readSuiteSessionDocument(),
     twitch: {
       broadcasterLogin,
-      channelUrl: broadcasterLogin ? `https://www.twitch.tv/${broadcasterLogin}` : null,
-      embedReady: Boolean(broadcasterLogin)
+      channelUrl: broadcasterLogin
+        ? `https://www.twitch.tv/${broadcasterLogin}`
+        : null,
+      embedReady: Boolean(broadcasterLogin),
     },
     console: {
       bot: getBotProcessSnapshot(),
-      queue: chatQueue.snapshot()
+      queue: chatQueue.snapshot(),
     },
-    timeline: readSuiteTimelineEvents(50)
+    timeline: readSuiteTimelineEvents(50),
   };
 };
 
@@ -1139,7 +1391,7 @@ const buildPlatformPage = (status: ReturnType<typeof getPlatformStatus>) => {
         <strong>${escapeHtml(item.title)}</strong>
         <span>${escapeHtml(item.detail)}</span>
         <time>${escapeHtml(formatPlatformTimestamp(item.createdAt))}</time>
-      </li>`
+      </li>`,
     )
     .join("");
 
@@ -1247,7 +1499,7 @@ type SuiteAppStatus = {
 };
 
 const appendSuiteTimelineEvent = (
-  event: Omit<SuiteTimelineEvent, "schemaVersion" | "eventId" | "createdAt">
+  event: Omit<SuiteTimelineEvent, "schemaVersion" | "eventId" | "createdAt">,
 ) => {
   const directory = suiteDiscoveryDir();
   mkdirSync(directory, { recursive: true });
@@ -1255,9 +1507,12 @@ const appendSuiteTimelineEvent = (
     schemaVersion: suiteDiscoverySchemaVersion,
     eventId: `console-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     createdAt: new Date().toISOString(),
-    ...event
+    ...event,
   };
-  appendFileSync(join(directory, "timeline.jsonl"), `${JSON.stringify(document)}\n`);
+  appendFileSync(
+    join(directory, "timeline.jsonl"),
+    `${JSON.stringify(document)}\n`,
+  );
 };
 
 const getSuiteStatus = () => ({
@@ -1267,11 +1522,11 @@ const getSuiteStatus = () => ({
     schemaVersion: suiteDiscoverySchemaVersion,
     directory: suiteDiscoveryDir(),
     sessionFile: join(suiteDiscoveryDir(), "session.json"),
-    timelineFile: join(suiteDiscoveryDir(), "timeline.jsonl")
+    timelineFile: join(suiteDiscoveryDir(), "timeline.jsonl"),
   },
   session: readSuiteSessionDocument(),
   apps: vaexcoreSuiteAppDefinitions.map(suiteAppStatus),
-  timeline: readSuiteTimelineEvents(50)
+  timeline: readSuiteTimelineEvents(50),
 });
 
 const readSuiteTimelineEvents = (limit: number): SuiteTimelineEvent[] => {
@@ -1316,50 +1571,55 @@ const escapeAttr = escapeHtml;
 const getCachedTokenReadiness = (config = getSafeConfig()) => {
   const missing = missingSafeConfigFields(config);
   const requiredScopesPresent = requiredTwitchScopes.every((scope) =>
-    (config.scopes || []).includes(scope)
+    (config.scopes || []).includes(scope),
   );
   const expiresAtMs = Date.parse(config.tokenExpiresAt || "");
-  const expiresSoon = !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now() + tokenRefreshLeadMs;
+  const expiresSoon =
+    !Number.isFinite(expiresAtMs) ||
+    expiresAtMs <= Date.now() + tokenRefreshLeadMs;
   const validatedAtMs = Date.parse(config.tokenValidatedAt || "");
   const validationStale =
-    !Number.isFinite(validatedAtMs) || validatedAtMs <= Date.now() - tokenValidationMaxAgeMs;
+    !Number.isFinite(validatedAtMs) ||
+    validatedAtMs <= Date.now() - tokenValidationMaxAgeMs;
   const identitiesResolved = config.hasBotUserId && config.hasBroadcasterUserId;
   const ready = Boolean(
     config.hasAccessToken &&
     identitiesResolved &&
     requiredScopesPresent &&
     !expiresSoon &&
-    !validationStale
+    !validationStale,
   );
   const checks: SetupCheck[] = [
     {
       name: "Saved setup",
       ok: missing.length === 0,
-      detail: missing.length === 0
-        ? "Required saved Twitch setup fields are present."
-        : `Missing setup fields: ${missing.join(", ")}.`
+      detail:
+        missing.length === 0
+          ? "Required saved Twitch setup fields are present."
+          : `Missing setup fields: ${missing.join(", ")}.`,
     },
     {
       name: "Token valid",
       ok: Boolean(config.hasAccessToken && !expiresSoon && !validationStale),
-      detail: config.hasAccessToken && !expiresSoon && !validationStale
-        ? `Saved token is valid until ${config.tokenExpiresAt}.`
-        : "Saved token is missing, expired, close to expiry, or due for validation."
+      detail:
+        config.hasAccessToken && !expiresSoon && !validationStale
+          ? `Saved token is valid until ${config.tokenExpiresAt}.`
+          : "Saved token is missing, expired, close to expiry, or due for validation.",
     },
     {
       name: "Required scopes",
       ok: requiredScopesPresent,
       detail: requiredScopesPresent
         ? requiredTwitchScopes.join(", ")
-        : "Saved token scopes are missing required chat access."
+        : "Saved token scopes are missing required chat access.",
     },
     {
       name: "Twitch identities",
       ok: identitiesResolved,
       detail: identitiesResolved
         ? "Saved bot and broadcaster identities are resolved."
-        : "Bot or broadcaster identity must be resolved."
-    }
+        : "Bot or broadcaster identity must be resolved.",
+    },
   ];
 
   return {
@@ -1368,15 +1628,19 @@ const getCachedTokenReadiness = (config = getSafeConfig()) => {
     expiresSoon,
     validationStale,
     identitiesResolved,
-    checks
+    checks,
   };
 };
 
 const getTwitchBroadcastReadiness = () => {
   const config = getSafeConfig();
   const tokenReadiness = getCachedTokenReadiness(config);
-  const streamKeyScopeReady = (config.scopes || []).includes("channel:read:stream_key");
-  const broadcasterReady = Boolean(config.broadcasterLogin && config.hasBroadcasterUserId);
+  const streamKeyScopeReady = (config.scopes || []).includes(
+    "channel:read:stream_key",
+  );
+  const broadcasterReady = Boolean(
+    config.broadcasterLogin && config.hasBroadcasterUserId,
+  );
   const channelUrl = config.broadcasterLogin
     ? `https://www.twitch.tv/${config.broadcasterLogin}`
     : null;
@@ -1387,15 +1651,15 @@ const getTwitchBroadcastReadiness = () => {
       ok: broadcasterReady,
       detail: broadcasterReady
         ? `${config.broadcasterLogin} is resolved as the broadcaster.`
-        : "Set Broadcaster Login and validate Twitch setup."
+        : "Set Broadcaster Login and validate Twitch setup.",
     },
     {
       name: "Stream-key scope",
       ok: streamKeyScopeReady,
       detail: streamKeyScopeReady
         ? "Saved OAuth scopes include channel:read:stream_key."
-        : "Reconnect Twitch with the channel:read:stream_key scope before Studio can import a stream key."
-    }
+        : "Reconnect Twitch with the channel:read:stream_key scope before Studio can import a stream key.",
+    },
   ];
   const ok = checks.every((check) => check.ok);
   const nextAction = ok
@@ -1415,9 +1679,9 @@ const getTwitchBroadcastReadiness = () => {
     twitch: {
       broadcasterLogin: config.broadcasterLogin || null,
       channelUrl,
-      streamKeyScopeReady
+      streamKeyScopeReady,
     },
-    checks
+    checks,
   };
 };
 
@@ -1427,23 +1691,28 @@ const saveConfig = (body: unknown) => {
   const redirectUri = sanitizeRedirectUri(input.redirectUri);
   const clientId = valueOrExisting(
     sanitizeOptionalText(input.clientId, "Client ID", 120),
-    existing.twitch.clientId
+    existing.twitch.clientId,
   );
   const clientSecret = valueOrExisting(
     sanitizeOptionalText(input.clientSecret, "Client secret", 200),
-    existing.twitch.clientSecret
+    existing.twitch.clientSecret,
   );
   const broadcasterLogin = valueOrExistingLogin(
     input,
     "broadcasterLogin",
-    existing.twitch.broadcasterLogin
+    existing.twitch.broadcasterLogin,
   );
-  const botLogin = valueOrExistingLogin(input, "botLogin", existing.twitch.botLogin);
+  const botLogin = valueOrExistingLogin(
+    input,
+    "botLogin",
+    existing.twitch.botLogin,
+  );
   const appConfigChanged =
     clientId !== existing.twitch.clientId ||
     clientSecret !== existing.twitch.clientSecret ||
     redirectUri !== (existing.twitch.redirectUri ?? defaultRedirectUri);
-  const broadcasterChanged = broadcasterLogin !== existing.twitch.broadcasterLogin;
+  const broadcasterChanged =
+    broadcasterLogin !== existing.twitch.broadcasterLogin;
   const botChanged = botLogin !== existing.twitch.botLogin;
   const twitch: LocalSecrets["twitch"] = {
     ...existing.twitch,
@@ -1451,7 +1720,7 @@ const saveConfig = (body: unknown) => {
     clientSecret,
     redirectUri,
     broadcasterLogin,
-    botLogin
+    botLogin,
   };
 
   if (appConfigChanged || botChanged) {
@@ -1465,7 +1734,7 @@ const saveConfig = (body: unknown) => {
 
   const next: LocalSecrets = {
     mode: input.mode === "local" ? "local" : "live",
-    twitch
+    twitch,
   };
 
   writeLocalSecrets(next);
@@ -1476,7 +1745,9 @@ const disconnectTwitch = () => {
   const secrets = readLocalSecrets();
   writeLocalSecrets({
     ...secrets,
-    twitch: clearTwitchAuthorization(secrets.twitch, { clearBroadcasterIdentity: true })
+    twitch: clearTwitchAuthorization(secrets.twitch, {
+      clearBroadcasterIdentity: true,
+    }),
   });
   return getSafeConfig();
 };
@@ -1484,7 +1755,7 @@ const disconnectTwitch = () => {
 const redirectToOAuthNotice = (response: ServerResponse, error: string) => {
   const params = new URLSearchParams({
     window: "settings",
-    error
+    error,
   });
   redirect(response, `/?${params.toString()}`);
 };
@@ -1503,9 +1774,15 @@ const redirectToTwitch = (response: ServerResponse) => {
 
   const authorizeUrl = new URL("https://id.twitch.tv/oauth2/authorize");
   authorizeUrl.searchParams.set("client_id", twitch.clientId);
-  authorizeUrl.searchParams.set("redirect_uri", twitch.redirectUri ?? defaultRedirectUri);
+  authorizeUrl.searchParams.set(
+    "redirect_uri",
+    twitch.redirectUri ?? defaultRedirectUri,
+  );
   authorizeUrl.searchParams.set("response_type", "code");
-  authorizeUrl.searchParams.set("scope", [...requiredTwitchScopes, ...optionalModerationScopes].join(" "));
+  authorizeUrl.searchParams.set(
+    "scope",
+    [...requiredTwitchScopes, ...optionalModerationScopes].join(" "),
+  );
   authorizeUrl.searchParams.set("state", state);
   authorizeUrl.searchParams.set("force_verify", "true");
 
@@ -1543,10 +1820,13 @@ const handleTwitchCallback = async (url: URL, response: ServerResponse) => {
       code,
       clientId: twitch.clientId,
       clientSecret: twitch.clientSecret,
-      redirectUri: twitch.redirectUri ?? defaultRedirectUri
+      redirectUri: twitch.redirectUri ?? defaultRedirectUri,
     });
   } catch (error) {
-    logger.warn({ error: redactSecrets(error) }, "Twitch OAuth token exchange failed");
+    logger.warn(
+      { error: redactSecrets(error) },
+      "Twitch OAuth token exchange failed",
+    );
     redirectToOAuthNotice(response, classifyOAuthExchangeError(error));
     return;
   }
@@ -1556,7 +1836,10 @@ const handleTwitchCallback = async (url: URL, response: ServerResponse) => {
   try {
     validation = await validateToken(tokens.access_token);
   } catch (error) {
-    logger.warn({ error: redactSecrets(error) }, "Twitch OAuth token validation failed after exchange");
+    logger.warn(
+      { error: redactSecrets(error) },
+      "Twitch OAuth token validation failed after exchange",
+    );
     redirectToOAuthNotice(response, "oauth_token_validation_failed");
     return;
   }
@@ -1571,12 +1854,12 @@ const handleTwitchCallback = async (url: URL, response: ServerResponse) => {
   if (!tokenMatchesConfiguredBot) {
     writeLocalSecrets({
       ...secrets,
-      twitch: clearTwitchAuthorization(twitch)
+      twitch: clearTwitchAuthorization(twitch),
     });
     const params = new URLSearchParams({
       error: "wrong_bot_account",
       connected_login: tokenLogin,
-      expected_login: configuredBotLogin ?? ""
+      expected_login: configuredBotLogin ?? "",
     });
     redirect(response, `/?window=settings&${params.toString()}`);
     return;
@@ -1592,8 +1875,8 @@ const handleTwitchCallback = async (url: URL, response: ServerResponse) => {
       tokenExpiresAt: expiresAt,
       tokenValidatedAt: new Date().toISOString(),
       botLogin: configuredBotLogin || tokenLogin,
-      botUserId: tokenMatchesConfiguredBot ? validation.user_id : undefined
-    }
+      botUserId: tokenMatchesConfiguredBot ? validation.user_id : undefined,
+    },
   });
 
   void queueLaunchPreparation("oauth_connected");
@@ -1605,8 +1888,10 @@ const validateSetup = async () => {
   const twitch = secrets.twitch;
   const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
 
-  const fail = (name: string, detail: string) => checks.push({ name, ok: false, detail });
-  const pass = (name: string, detail: string) => checks.push({ name, ok: true, detail });
+  const fail = (name: string, detail: string) =>
+    checks.push({ name, ok: false, detail });
+  const pass = (name: string, detail: string) =>
+    checks.push({ name, ok: true, detail });
 
   if (!twitch.clientId || !twitch.clientSecret) {
     fail("Twitch app credentials", "Client ID and client secret are required.");
@@ -1625,7 +1910,7 @@ const validateSetup = async () => {
   } catch (error) {
     const detail = safeErrorMessage(
       error,
-      "Twitch token validation failed. Reconnect Twitch and try again."
+      "Twitch token validation failed. Reconnect Twitch and try again.",
     );
     fail("OAuth token", detail);
     return { ok: false, checks, error: detail };
@@ -1638,7 +1923,10 @@ const validateSetup = async () => {
   const activeClientId = activeTwitch.clientId ?? twitch.clientId;
 
   if (!activeClientId || !activeAccessToken) {
-    fail("OAuth token", "Validated Twitch token was not available after refresh.");
+    fail(
+      "OAuth token",
+      "Validated Twitch token was not available after refresh.",
+    );
     return { ok: false, checks };
   }
 
@@ -1646,17 +1934,20 @@ const validateSetup = async () => {
     validated.refreshed ? "Token refreshed" : "Token valid",
     validated.refreshed
       ? `Access token refreshed for ${token.login}.`
-      : `Token belongs to ${token.login}.`
+      : `Token belongs to ${token.login}.`,
   );
 
   if (token.client_id !== activeClientId) {
-    fail("Twitch app", "OAuth token belongs to a different Twitch application.");
+    fail(
+      "Twitch app",
+      "OAuth token belongs to a different Twitch application.",
+    );
   } else {
     pass("Twitch app", "OAuth token matches the saved Client ID.");
   }
 
   const missingScopes = requiredTwitchScopes.filter(
-    (scope) => !token.scopes.includes(scope)
+    (scope) => !token.scopes.includes(scope),
   );
 
   if (missingScopes.length > 0) {
@@ -1666,28 +1957,29 @@ const validateSetup = async () => {
   }
 
   const missingModerationScopes = optionalModerationScopes.filter(
-    (scope) => !token.scopes.includes(scope)
+    (scope) => !token.scopes.includes(scope),
   );
 
   pass(
     "Moderation enforcement scopes",
     missingModerationScopes.length
       ? `Warn-only moderation works. Reconnect Twitch to grant optional scope(s): ${missingModerationScopes.join(", ")}.`
-      : "Delete and timeout enforcement scopes are present."
+      : "Delete and timeout enforcement scopes are present.",
   );
 
   const botLogin = activeTwitch.botLogin ?? twitch.botLogin;
-  const broadcasterLogin = activeTwitch.broadcasterLogin ?? twitch.broadcasterLogin;
+  const broadcasterLogin =
+    activeTwitch.broadcasterLogin ?? twitch.broadcasterLogin;
   const botUser = botLogin
     ? await getTwitchUserByLogin(
         { clientId: activeClientId, accessToken: activeAccessToken },
-        botLogin
+        botLogin,
       )
     : undefined;
   const broadcasterUser = broadcasterLogin
     ? await getTwitchUserByLogin(
         { clientId: activeClientId, accessToken: activeAccessToken },
-        broadcasterLogin
+        broadcasterLogin,
       )
     : undefined;
 
@@ -1696,7 +1988,7 @@ const validateSetup = async () => {
   } else if (botUser.id !== token.user_id) {
     fail(
       "Bot identity",
-      `OAuth token belongs to ${token.login}, but bot login resolves to ${botUser.login}.`
+      `OAuth token belongs to ${token.login}, but bot login resolves to ${botUser.login}.`,
     );
   } else {
     pass("Bot identity", `${botUser.login} (${botUser.id})`);
@@ -1705,17 +1997,22 @@ const validateSetup = async () => {
   if (!broadcasterUser) {
     fail("Broadcaster identity", "Broadcaster login was not found.");
   } else {
-    pass("Broadcaster identity", `${broadcasterUser.login} (${broadcasterUser.id})`);
+    pass(
+      "Broadcaster identity",
+      `${broadcasterUser.login} (${broadcasterUser.id})`,
+    );
   }
 
   const setupOk = checks.every((check) => check.ok);
   const nextTwitch: LocalSecrets["twitch"] = {
     ...activeTwitch,
     scopes: token.scopes,
-    tokenExpiresAt: token.expires_in ? getTokenExpiresAt(token.expires_in) : activeTwitch.tokenExpiresAt,
+    tokenExpiresAt: token.expires_in
+      ? getTokenExpiresAt(token.expires_in)
+      : activeTwitch.tokenExpiresAt,
     tokenValidatedAt: setupOk ? new Date().toISOString() : undefined,
     botUserId: undefined,
-    broadcasterUserId: undefined
+    broadcasterUserId: undefined,
   };
 
   if (botUser && botUser.id === token.user_id) {
@@ -1730,7 +2027,7 @@ const validateSetup = async () => {
 
   writeLocalSecrets({
     ...activeSecrets,
-    twitch: nextTwitch
+    twitch: nextTwitch,
   });
 
   return { ok: setupOk, checks };
@@ -1743,7 +2040,7 @@ const sendTestMessage = async () => {
     return {
       ok: false,
       checks: validation.checks,
-      error: "Validation must pass before sending a test message."
+      error: "Validation must pass before sending a test message.",
     };
   }
 
@@ -1759,12 +2056,17 @@ const sendTestMessage = async () => {
     return { ok: false, error: "Setup is missing resolved Twitch IDs." };
   }
 
-  const result = await sendConfiguredChatMessage("vaexcore console setup test.");
+  const result = await sendConfiguredChatMessage(
+    "vaexcore console setup test.",
+  );
   const structured = typeof result === "string" ? { status: result } : result;
   return {
     ok: structured.status === "sent",
-    error: structured.status === "sent" ? undefined : structured.reason || "Test chat message was not sent.",
-    failureCategory: structured.failureCategory
+    error:
+      structured.status === "sent"
+        ? undefined
+        : structured.reason || "Test chat message was not sent.",
+    failureCategory: structured.failureCategory,
   };
 };
 
@@ -1828,13 +2130,13 @@ const getOperatorStatus = async () => {
       liveChatConfirmed: botProcess.liveChatConfirmed,
       note: botProcess.child
         ? "Live bot runtime is managed by this setup console."
-        : "Start the live bot runtime from Dashboard or Settings to receive chat commands."
+        : "Start the live bot runtime from Dashboard or Settings to receive chat commands.",
     },
     featureGates: featureGateStates,
     timers: summarizeTimers(timers),
     moderation: moderation.summary,
     localRuntime: buildConsoleLocalRuntime(),
-    giveaway: summarizeGiveawayState(giveaway)
+    giveaway: summarizeGiveawayState(giveaway),
   };
 };
 
@@ -1850,57 +2152,65 @@ const runPreflightCheck = async () => {
       ok: isSafeConfigComplete(),
       detail: isSafeConfigComplete()
         ? "Required local Twitch fields are present."
-        : "Open Settings -> Setup Guide and complete credentials, usernames, OAuth, and validation."
+        : "Open Settings -> Setup Guide and complete credentials, usernames, OAuth, and validation.",
     },
     {
       name: "Token and scopes",
       ok: runtime.tokenValid && runtime.requiredScopesPresent,
-      detail: runtime.tokenValid && runtime.requiredScopesPresent
-        ? "OAuth token is valid and required chat scopes are present."
-        : "Reconnect Twitch if automatic launch validation cannot confirm the saved token."
+      detail:
+        runtime.tokenValid && runtime.requiredScopesPresent
+          ? "OAuth token is valid and required chat scopes are present."
+          : "Reconnect Twitch if automatic launch validation cannot confirm the saved token.",
     },
     {
       name: "Setup queue",
       ok: runtime.queueReady,
       detail: runtime.queueReady
         ? "Outbound setup queue is ready."
-        : "Restart the setup console if queue readiness does not recover."
+        : "Restart the setup console if queue readiness does not recover.",
     },
     {
       name: "Bot runtime",
       ok: Boolean(runtime.botProcess.running),
       detail: runtime.botProcess.running
         ? `Bot process is ${runtime.botProcess.status}.`
-        : "Start bot process from Dashboard."
+        : "Start bot process from Dashboard.",
     },
     {
       name: "EventSub chat listener",
       ok: runtime.eventSubConnected && runtime.chatSubscriptionActive,
-      detail: runtime.eventSubConnected && runtime.chatSubscriptionActive
-        ? "Chat subscription is active."
-        : "Wait for the bot process to connect to EventSub and create the chat subscription."
+      detail:
+        runtime.eventSubConnected && runtime.chatSubscriptionActive
+          ? "Chat subscription is active."
+          : "Wait for the bot process to connect to EventSub and create the chat subscription.",
     },
     {
       name: "Live chat confirmation",
       ok: runtime.liveChatConfirmed,
       detail: runtime.liveChatConfirmed
         ? "Live chat has responded to !ping."
-        : "Type !ping in Twitch chat after the bot starts."
+        : "Type !ping in Twitch chat after the bot starts.",
     },
     {
       name: "Critical outbound failures",
       ok: outbound.criticalFailed === 0 && !assurance.blockContinue,
-      detail: outbound.criticalFailed === 0 && !assurance.blockContinue
-        ? "No critical giveaway chat failures are currently tracked."
-        : assurance.nextAction || "Resend failed critical giveaway messages before continuing."
+      detail:
+        outbound.criticalFailed === 0 && !assurance.blockContinue
+          ? "No critical giveaway chat failures are currently tracked."
+          : assurance.nextAction ||
+            "Resend failed critical giveaway messages before continuing.",
     },
     {
       name: "Giveaway controls",
-      ok: giveawayState.summary.status === "none" || giveawayState.summary.status === "open" || giveawayState.summary.status === "closed",
-      detail: giveawayState.summary.status === "none"
-        ? "No active giveaway; start controls are ready."
-        : `Giveaway is ${giveawayState.summary.status}; next action: ${giveawayState.summary.status === "open" ? "close entries before drawing" : "draw or finish delivery"}.`
-    }
+      ok:
+        giveawayState.summary.status === "none" ||
+        giveawayState.summary.status === "open" ||
+        giveawayState.summary.status === "closed",
+      detail:
+        giveawayState.summary.status === "none"
+          ? "No active giveaway; start controls are ready."
+          : `Giveaway is ${giveawayState.summary.status}; next action: ${giveawayState.summary.status === "open" ? "close entries before drawing" : "draw or finish delivery"}.`,
+    },
   ];
   const failed = checks.find((check) => !check.ok);
 
@@ -1908,7 +2218,7 @@ const runPreflightCheck = async () => {
     ok: checks.every((check) => check.ok),
     checks,
     nextAction: failed?.detail ?? "Giveaway controls ready.",
-    summary: giveawayState.summary
+    summary: giveawayState.summary,
   };
 };
 
@@ -1964,14 +2274,14 @@ function createLaunchPreparationState(): LaunchPreparationState {
     preflightReady: false,
     summary: "Launch preparation has not run yet.",
     nextAction: "Waiting for vaexcore console to start.",
-    checks: []
+    checks: [],
   };
 }
 
 function resetLaunchPreparation(
   status: LaunchPreparationStatus,
   summary: string,
-  nextAction: string
+  nextAction: string,
 ) {
   pendingLaunchPreparationReason = undefined;
   const now = new Date().toISOString();
@@ -1988,9 +2298,9 @@ function resetLaunchPreparation(
       {
         name: "Saved setup",
         ok: false,
-        detail: nextAction
-      }
-    ]
+        detail: nextAction,
+      },
+    ],
   };
 }
 
@@ -2000,15 +2310,19 @@ const getLaunchPreparationSnapshot = () => ({
   validation: launchPreparation.validation
     ? {
         ...launchPreparation.validation,
-        checks: launchPreparation.validation.checks.map((check) => ({ ...check }))
+        checks: launchPreparation.validation.checks.map((check) => ({
+          ...check,
+        })),
       }
     : undefined,
   preflight: launchPreparation.preflight
     ? {
         ...launchPreparation.preflight,
-        checks: launchPreparation.preflight.checks.map((check) => ({ ...check }))
+        checks: launchPreparation.preflight.checks.map((check) => ({
+          ...check,
+        })),
       }
-    : undefined
+    : undefined,
 });
 
 const queueLaunchPreparation = (reason: string) => {
@@ -2031,10 +2345,13 @@ const queueLaunchPreparation = (reason: string) => {
         error: detail,
         checks: [
           ...launchPreparation.checks,
-          { name: "Launch preparation", ok: false, detail }
-        ]
+          { name: "Launch preparation", ok: false, detail },
+        ],
       };
-      logger.error({ error: redactSecrets(error) }, "Automatic launch preparation failed");
+      logger.error(
+        { error: redactSecrets(error) },
+        "Automatic launch preparation failed",
+      );
     })
     .finally(() => {
       launchPreparationPromise = undefined;
@@ -2057,7 +2374,7 @@ const runLaunchPreparation = async (reason: string) => {
     step: "setup",
     startedAt,
     summary: "Checking saved setup and Twitch connection.",
-    nextAction: "Automatic launch checks are running."
+    nextAction: "Automatic launch checks are running.",
   };
 
   const config = getSafeConfig();
@@ -2075,7 +2392,7 @@ const runLaunchPreparation = async (reason: string) => {
       preflightReady: false,
       summary: "One-time setup is not complete yet.",
       nextAction: "Open Configuration Settings -> Setup Guide.",
-      checks: [{ name: "Saved setup", ok: false, detail }]
+      checks: [{ name: "Saved setup", ok: false, detail }],
     };
     return;
   }
@@ -2083,7 +2400,7 @@ const runLaunchPreparation = async (reason: string) => {
   launchPreparation = {
     ...launchPreparation,
     step: "validation",
-    summary: "Validating saved Twitch OAuth and refreshing tokens if needed."
+    summary: "Validating saved Twitch OAuth and refreshing tokens if needed.",
   };
 
   const cachedReadiness = getCachedTokenReadiness(config);
@@ -2102,9 +2419,11 @@ const runLaunchPreparation = async (reason: string) => {
       setupReady: false,
       preflightReady: false,
       summary: "Saved Twitch setup needs attention.",
-      nextAction: failedValidation?.detail ?? "Reconnect Twitch in Configuration Settings.",
+      nextAction:
+        failedValidation?.detail ??
+        "Reconnect Twitch in Configuration Settings.",
       checks: validation.checks,
-      validation
+      validation,
     };
     return;
   }
@@ -2113,15 +2432,18 @@ const runLaunchPreparation = async (reason: string) => {
     ...launchPreparation,
     step: "preflight",
     setupReady: true,
-    summary: "Running automatic preflight."
+    summary: "Running automatic preflight.",
   };
 
   const preflight = await runPreflightCheck();
   const checks = [
     ...validation.checks,
-    ...preflight.checks.filter((check) =>
-      !validation.checks.some((validationCheck) => validationCheck.name === check.name)
-    )
+    ...preflight.checks.filter(
+      (check) =>
+        !validation.checks.some(
+          (validationCheck) => validationCheck.name === check.name,
+        ),
+    ),
   ];
 
   launchPreparation = {
@@ -2138,7 +2460,7 @@ const runLaunchPreparation = async (reason: string) => {
     nextAction: preflight.nextAction,
     checks,
     validation,
-    preflight
+    preflight,
   };
 };
 
@@ -2175,10 +2497,14 @@ const getDiagnosticsReport = () => {
     outbound,
     giveawayState,
     botSnapshot,
-    featureGates: featureGateStates
+    featureGates: featureGateStates,
   });
-  const blockers = checks.filter((check) => !check.ok && check.severity === "blocker");
-  const warnings = checks.filter((check) => !check.ok && check.severity === "warning");
+  const blockers = checks.filter(
+    (check) => !check.ok && check.severity === "blocker",
+  );
+  const warnings = checks.filter(
+    (check) => !check.ok && check.severity === "warning",
+  );
 
   return {
     ok: blockers.length === 0,
@@ -2190,14 +2516,14 @@ const getDiagnosticsReport = () => {
       node: process.versions.node,
       electron: process.versions.electron ?? "",
       platform: process.platform,
-      arch: process.arch
+      arch: process.arch,
     },
     paths: {
       configDir: dirname(getLocalSecretsPath()),
       secretsPath: getLocalSecretsPath(),
       databaseUrl: safeDatabaseUrl(databaseUrl),
       databasePath: resolveDatabasePath(databaseUrl),
-      setupUiDir: getSetupUiDir()
+      setupUiDir: getSetupUiDir(),
     },
     launchPreparation: getLaunchPreparationSnapshot(),
     setupUi,
@@ -2212,7 +2538,7 @@ const getDiagnosticsReport = () => {
       queueReady: chatQueue.isReady(),
       queue,
       queueHealth,
-      outboundChat: outbound
+      outboundChat: outbound,
     },
     giveaway: summarizeGiveawayState(giveaway),
     customCommands: {
@@ -2220,58 +2546,72 @@ const getDiagnosticsReport = () => {
       total: commands.length,
       enabled: commands.filter((command) => command.enabled).length,
       disabled: commands.filter((command) => !command.enabled).length,
-      aliases: commands.reduce((total, command) => total + command.aliases.length, 0),
-      uses: commands.reduce((total, command) => total + command.useCount, 0)
+      aliases: commands.reduce(
+        (total, command) => total + command.aliases.length,
+        0,
+      ),
+      uses: commands.reduce((total, command) => total + command.useCount, 0),
     },
     timers: summarizeTimers(timers),
     moderation: moderation.summary,
     featureGates: featureGateStates,
     readiness: {
-      status: blockers.length > 0 ? "not_ready" : warnings.length > 0 ? "attention" : "ready",
+      status:
+        blockers.length > 0
+          ? "not_ready"
+          : warnings.length > 0
+            ? "attention"
+            : "ready",
       blockers: blockers.map((check) => `${check.name}: ${check.detail}`),
       warnings: warnings.map((check) => `${check.name}: ${check.detail}`),
-      nextAction: blockers[0]?.detail ?? warnings[0]?.detail ?? "Diagnostics are clear."
+      nextAction:
+        blockers[0]?.detail ?? warnings[0]?.detail ?? "Diagnostics are clear.",
     },
-    checks
+    checks,
   };
 };
 
 const getSupportBundle = () => {
   const diagnostics = getDiagnosticsReport();
-  const outbound = outboundHistory.list().slice(0, 50).map((record) => ({
-    id: record.id,
-    source: record.source,
-    status: record.status,
-    category: record.category,
-    action: record.action,
-    importance: record.importance,
-    attempts: record.attempts,
-    queuedAt: record.queuedAt,
-    updatedAt: record.updatedAt,
-    reason: safeSupportText(record.reason),
-    failureCategory: record.failureCategory,
-    retryAfterMs: record.retryAfterMs,
-    nextAttemptAt: record.nextAttemptAt,
-    queueDepth: record.queueDepth,
-    giveawayId: record.giveawayId,
-    messagePreview: safeSupportText(record.message).slice(0, 180)
-  }));
+  const outbound = outboundHistory
+    .list()
+    .slice(0, 50)
+    .map((record) => ({
+      id: record.id,
+      source: record.source,
+      status: record.status,
+      category: record.category,
+      action: record.action,
+      importance: record.importance,
+      attempts: record.attempts,
+      queuedAt: record.queuedAt,
+      updatedAt: record.updatedAt,
+      reason: safeSupportText(record.reason),
+      failureCategory: record.failureCategory,
+      retryAfterMs: record.retryAfterMs,
+      nextAttemptAt: record.nextAttemptAt,
+      queueDepth: record.queueDepth,
+      giveawayId: record.giveawayId,
+      messagePreview: safeSupportText(record.message).slice(0, 180),
+    }));
   const audit = giveawaysService.getRecentAuditLogs(50).map((log) => ({
     id: log.id,
     actor: log.actor_twitch_user_id,
     action: log.action,
     target: log.target,
     createdAt: log.created_at,
-    metadata: safeAuditMetadata(log.metadata_json)
+    metadata: safeAuditMetadata(log.metadata_json),
   }));
-  const customCommandInvocations = customCommandsService.getRecentInvocations(50).map((entry) => ({
-    id: entry.id,
-    commandName: entry.commandName,
-    aliasUsed: entry.aliasUsed,
-    userLogin: entry.userLogin,
-    createdAt: entry.createdAt,
-    responsePreview: safeSupportText(entry.responseText).slice(0, 180)
-  }));
+  const customCommandInvocations = customCommandsService
+    .getRecentInvocations(50)
+    .map((entry) => ({
+      id: entry.id,
+      commandName: entry.commandName,
+      aliasUsed: entry.aliasUsed,
+      userLogin: entry.userLogin,
+      createdAt: entry.createdAt,
+      responsePreview: safeSupportText(entry.responseText).slice(0, 180),
+    }));
   const timers = timersService.listTimers().map((timer) => ({
     id: timer.id,
     name: timer.name,
@@ -2284,10 +2624,12 @@ const getSupportBundle = () => {
     nextFireAt: timer.nextFireAt,
     lastStatus: timer.lastStatus,
     lastError: safeSupportText(timer.lastError),
-    messagePreview: safeSupportText(timer.message).slice(0, 180)
+    messagePreview: safeSupportText(timer.message).slice(0, 180),
   }));
   const moderation = moderationService.getState();
-  const botLogs = getBotProcessSnapshot().recentLogs.slice(-40).map(safeSupportText);
+  const botLogs = getBotProcessSnapshot()
+    .recentLogs.slice(-40)
+    .map(safeSupportText);
 
   return {
     ok: true,
@@ -2309,10 +2651,10 @@ const getSupportBundle = () => {
         userLogin: hit.userLogin,
         detail: safeSupportText(hit.detail),
         messagePreview: safeSupportText(hit.messagePreview),
-        createdAt: hit.createdAt
-      }))
+        createdAt: hit.createdAt,
+      })),
     },
-    recovery: diagnostics.firstRun.recoverySteps
+    recovery: diagnostics.firstRun.recoverySteps,
   };
 };
 
@@ -2320,18 +2662,21 @@ const summarizeTimers = (timers: ReturnType<TimersService["listTimers"]>) => ({
   total: timers.length,
   enabled: timers.filter((timer) => timer.enabled).length,
   disabled: timers.filter((timer) => !timer.enabled).length,
-  due: timers.filter((timer) =>
-    timer.enabled &&
-    timer.nextFireAt &&
-    Date.parse(timer.nextFireAt) <= Date.now()
+  due: timers.filter(
+    (timer) =>
+      timer.enabled &&
+      timer.nextFireAt &&
+      Date.parse(timer.nextFireAt) <= Date.now(),
   ).length,
   sent: timers.reduce((total, timer) => total + timer.fireCount, 0),
-  nextFireAt: timers
-    .filter((timer) => timer.enabled && timer.nextFireAt)
-    .map((timer) => timer.nextFireAt)
-    .sort()[0] ?? "",
+  nextFireAt:
+    timers
+      .filter((timer) => timer.enabled && timer.nextFireAt)
+      .map((timer) => timer.nextFireAt)
+      .sort()[0] ?? "",
   blocked: timers.filter((timer) => timer.lastStatus === "blocked").length,
-  waitingForActivity: timers.filter((timer) => timerNeedsActivity(timer)).length
+  waitingForActivity: timers.filter((timer) => timerNeedsActivity(timer))
+    .length,
 });
 
 const getDiagnosticChecks = (input: {
@@ -2349,9 +2694,10 @@ const getDiagnosticChecks = (input: {
     name: "Setup UI assets",
     ok: input.setupUi.appJs && input.setupUi.stylesCss,
     severity: "blocker",
-    detail: input.setupUi.appJs && input.setupUi.stylesCss
-      ? "Static setup UI assets are present."
-      : "Rebuild vaexcore console so setup UI assets are available."
+    detail:
+      input.setupUi.appJs && input.setupUi.stylesCss
+        ? "Static setup UI assets are present."
+        : "Rebuild vaexcore console so setup UI assets are available.",
   },
   {
     name: "Database",
@@ -2359,15 +2705,16 @@ const getDiagnosticChecks = (input: {
     severity: "blocker",
     detail: input.database.ok
       ? `${input.database.driver} responded to SELECT 1.`
-      : input.database.error || "Database did not respond."
+      : input.database.error || "Database did not respond.",
   },
   {
     name: "better-sqlite3",
     ok: input.database.driver === "better-sqlite3",
     severity: "warning",
-    detail: input.database.driver === "better-sqlite3"
-      ? "Native better-sqlite3 is active."
-      : "Using SQLite fallback; rebuild the app package if this appears in Electron."
+    detail:
+      input.database.driver === "better-sqlite3"
+        ? "Native better-sqlite3 is active."
+        : "Using SQLite fallback; rebuild the app package if this appears in Electron.",
   },
   {
     name: "Required Twitch config",
@@ -2375,39 +2722,47 @@ const getDiagnosticChecks = (input: {
     severity: "blocker",
     detail: isSafeConfigComplete()
       ? "Required Twitch config fields are present."
-      : "Open Settings -> Setup Guide and complete missing Twitch fields."
+      : "Open Settings -> Setup Guide and complete missing Twitch fields.",
   },
   {
     name: "OAuth refresh",
     ok: input.config.hasClientSecret && input.config.hasRefreshToken,
     severity: "warning",
-    detail: input.config.hasClientSecret && input.config.hasRefreshToken
-      ? "Token refresh is available."
-      : "Reconnect Twitch or add refresh-capable CLI config to enable automatic token refresh."
+    detail:
+      input.config.hasClientSecret && input.config.hasRefreshToken
+        ? "Token refresh is available."
+        : "Reconnect Twitch or add refresh-capable CLI config to enable automatic token refresh.",
   },
   {
     name: "Validated identities",
     ok: input.config.hasBotUserId && input.config.hasBroadcasterUserId,
     severity: "blocker",
-    detail: input.config.hasBotUserId && input.config.hasBroadcasterUserId
-      ? "Bot and broadcaster identities are resolved."
-      : "Automatic launch validation has not resolved Twitch identities yet."
+    detail:
+      input.config.hasBotUserId && input.config.hasBroadcasterUserId
+        ? "Bot and broadcaster identities are resolved."
+        : "Automatic launch validation has not resolved Twitch identities yet.",
   },
   {
     name: "Outbound queue",
     ok: input.queue.ready && input.queueHealth.status !== "blocked",
     severity: "blocker",
-    detail: input.queue.ready && input.queueHealth.status !== "blocked"
-      ? "Outbound queue is ready."
-      : input.queueHealth.nextAction
+    detail:
+      input.queue.ready && input.queueHealth.status !== "blocked"
+        ? "Outbound queue is ready."
+        : input.queueHealth.nextAction,
   },
   {
     name: "Critical giveaway chat",
-    ok: input.outbound.criticalFailed === 0 && !input.giveawayState.assurance.blockContinue,
+    ok:
+      input.outbound.criticalFailed === 0 &&
+      !input.giveawayState.assurance.blockContinue,
     severity: "blocker",
-    detail: input.outbound.criticalFailed === 0 && !input.giveawayState.assurance.blockContinue
-      ? "No blocking critical giveaway chat issue is tracked."
-      : input.giveawayState.assurance.nextAction || "Resolve critical giveaway chat delivery before continuing."
+    detail:
+      input.outbound.criticalFailed === 0 &&
+      !input.giveawayState.assurance.blockContinue
+        ? "No blocking critical giveaway chat issue is tracked."
+        : input.giveawayState.assurance.nextAction ||
+          "Resolve critical giveaway chat delivery before continuing.",
   },
   {
     name: "Bot runtime",
@@ -2415,7 +2770,7 @@ const getDiagnosticChecks = (input: {
     severity: "warning",
     detail: input.botSnapshot.running
       ? `Bot process is ${input.botSnapshot.status}.`
-      : "Start Bot when you are ready for live chat commands."
+      : "Start Bot when you are ready for live chat commands.",
   },
   {
     name: "Live chat confirmation",
@@ -2423,7 +2778,7 @@ const getDiagnosticChecks = (input: {
     severity: "warning",
     detail: botProcess.liveChatConfirmed
       ? "Live chat confirmation has been observed."
-      : "Type !ping in chat after starting the bot."
+      : "Type !ping in chat after starting the bot.",
   },
   {
     name: "Feature gates",
@@ -2431,8 +2786,8 @@ const getDiagnosticChecks = (input: {
     severity: "info",
     detail: input.featureGates
       .map((gate) => `${gate.label}: ${gate.mode}`)
-      .join("; ")
-  }
+      .join("; "),
+  },
 ];
 
 const getFirstRunStatus = (input: {
@@ -2442,8 +2797,12 @@ const getFirstRunStatus = (input: {
 }) => {
   const configFilePresent = existsSync(getLocalSecretsPath());
   const missingConfig = missingSafeConfigFields(input.config);
-  const identitiesResolved = input.config.hasBotUserId && input.config.hasBroadcasterUserId;
-  const cleanInstall = !configFilePresent && !input.config.hasClientId && !input.config.hasAccessToken;
+  const identitiesResolved =
+    input.config.hasBotUserId && input.config.hasBroadcasterUserId;
+  const cleanInstall =
+    !configFilePresent &&
+    !input.config.hasClientId &&
+    !input.config.hasAccessToken;
   const blockers = [
     !input.setupUi.appJs || !input.setupUi.stylesCss
       ? "Setup UI assets are missing; rebuild vaexcore console."
@@ -2456,7 +2815,7 @@ const getFirstRunStatus = (input: {
       : undefined,
     missingConfig.length === 0 && !identitiesResolved
       ? "Twitch identities are not validated; automatic launch validation will retry after OAuth is connected."
-      : undefined
+      : undefined,
   ].filter(Boolean) as string[];
   const warnings = [
     input.database.driver !== "better-sqlite3"
@@ -2464,14 +2823,12 @@ const getFirstRunStatus = (input: {
       : undefined,
     input.config.hasClientSecret && !input.config.hasRefreshToken
       ? "Automatic token refresh is not available; reconnect Twitch to store a refresh token."
-      : undefined
+      : undefined,
   ].filter(Boolean) as string[];
 
   const nextAction = cleanInstall
     ? "Open Settings -> Setup Guide."
-    : blockers[0]
-    ?? warnings[0]
-    ?? "Start Bot when you are ready.";
+    : (blockers[0] ?? warnings[0] ?? "Start Bot when you are ready.");
 
   return {
     cleanInstall,
@@ -2487,8 +2844,8 @@ const getFirstRunStatus = (input: {
       warnings,
       configFilePresent,
       databaseOk: input.database.ok,
-      setupUiOk: input.setupUi.appJs && input.setupUi.stylesCss
-    })
+      setupUiOk: input.setupUi.appJs && input.setupUi.stylesCss,
+    }),
   };
 };
 
@@ -2516,19 +2873,21 @@ const firstRunRecoverySteps = (input: {
       "Open Settings -> Setup Guide.",
       "Create or reuse a Twitch Developer application.",
       "Save credentials and usernames, then Connect Twitch.",
-      "Automatic validation and preflight will run; then send a test message and start the bot."
+      "Automatic validation and preflight will run; then send a test message and start the bot.",
     ];
   }
 
   if (!input.setupUiOk) {
-    return ["Run npm run build, then reopen vaexcore console or rerun npm run setup."];
+    return [
+      "Run npm run build, then reopen vaexcore console or rerun npm run setup.",
+    ];
   }
 
   if (!input.databaseOk) {
     return [
       "Quit vaexcore console.",
       "Back up the local app data folder if needed.",
-      "Rebuild the app; reset the local data folder only if SQLite remains unhealthy."
+      "Rebuild the app; reset the local data folder only if SQLite remains unhealthy.",
     ];
   }
 
@@ -2536,7 +2895,7 @@ const firstRunRecoverySteps = (input: {
     return [
       "Open Settings -> Setup Guide.",
       "Complete the missing setup item shown in Diagnostics.",
-      "Let automatic launch validation complete before starting the bot."
+      "Let automatic launch validation complete before starting the bot.",
     ];
   }
 
@@ -2544,7 +2903,7 @@ const firstRunRecoverySteps = (input: {
     return [
       "Review the warning before going live.",
       "If token refresh is missing, reconnect Twitch.",
-      "If SQLite fallback appears in Electron, rebuild the packaged app."
+      "If SQLite fallback appears in Electron, rebuild the packaged app.",
     ];
   }
 
@@ -2553,21 +2912,23 @@ const firstRunRecoverySteps = (input: {
 
 const getDatabaseDiagnostics = () => {
   try {
-    const row = db.prepare("SELECT 1 AS ok").get() as { ok?: unknown } | undefined;
+    const row = db.prepare("SELECT 1 AS ok").get() as
+      | { ok?: unknown }
+      | undefined;
     const ok = row?.ok === 1;
 
     return {
       ok,
       driver: db.pragma ? "better-sqlite3" : "node:sqlite fallback",
       path: resolveDatabasePath(databaseUrl),
-      error: ok ? "" : "Unexpected SELECT 1 result."
+      error: ok ? "" : "Unexpected SELECT 1 result.",
     };
   } catch (error) {
     return {
       ok: false,
       driver: db.pragma ? "better-sqlite3" : "node:sqlite fallback",
       path: resolveDatabasePath(databaseUrl),
-      error: safeErrorMessage(error, "Database probe failed.")
+      error: safeErrorMessage(error, "Database probe failed."),
     };
   }
 };
@@ -2578,7 +2939,7 @@ const getSetupUiDiagnostics = () => {
     dir,
     appJs: existsSync(join(dir, "app.js")),
     stylesCss: existsSync(join(dir, "styles.css")),
-    logoJpg: Boolean(resolveSetupUiAssetPath("logo.jpg"))
+    logoJpg: Boolean(resolveSetupUiAssetPath("logo.jpg")),
   };
 };
 
@@ -2587,7 +2948,7 @@ const getPackageInfo = () => {
   const candidates = [
     resolve(process.cwd(), "package.json"),
     resolve(currentDir, "..", "package.json"),
-    resolve(currentDir, "..", "..", "package.json")
+    resolve(currentDir, "..", "..", "package.json"),
   ];
 
   for (const candidate of candidates) {
@@ -2599,7 +2960,7 @@ const getPackageInfo = () => {
         };
         return {
           name: parsed.name ?? "vaexcore",
-          version: parsed.version ?? "unknown"
+          version: parsed.version ?? "unknown",
         };
       }
     } catch {
@@ -2645,7 +3006,7 @@ const safeSupportText = (value: unknown) =>
 
 const summarizeQueueHealth = (
   queue: ReturnType<MessageQueue["snapshot"]>,
-  outbound: ReturnType<typeof outboundHistory.summary>
+  outbound: ReturnType<typeof outboundHistory.summary>,
 ) => {
   const blockers = [
     !queue.ready ? "Outbound queue is not running." : undefined,
@@ -2657,13 +3018,18 @@ const summarizeQueueHealth = (
       : undefined,
     outbound.criticalFailed > 0
       ? `${outbound.criticalFailed} critical outbound message(s) failed.`
-      : undefined
+      : undefined,
   ].filter(Boolean) as string[];
-  const status = !queue.ready || outbound.criticalFailed > 0
-    ? "blocked"
-    : blockers.length || queue.processing || queue.queued > 0 || queue.rateLimitDelayMs > 0 || queue.retryDelayMs > 0
-      ? "watch"
-      : "clear";
+  const status =
+    !queue.ready || outbound.criticalFailed > 0
+      ? "blocked"
+      : blockers.length ||
+          queue.processing ||
+          queue.queued > 0 ||
+          queue.rateLimitDelayMs > 0 ||
+          queue.retryDelayMs > 0
+        ? "watch"
+        : "clear";
   const nextAction = !queue.ready
     ? "Restart the setup console if queue readiness does not recover."
     : outbound.criticalFailed > 0
@@ -2697,7 +3063,7 @@ const summarizeQueueHealth = (
     pending: queue.queued,
     processing: queue.processing,
     maxAttempts: queue.maxAttempts,
-    rateLimitedPending: outbound.rateLimited
+    rateLimitedPending: outbound.rateLimited,
   };
 };
 
@@ -2711,7 +3077,7 @@ const summarizeOutboundRecovery = () => {
       severity: "clear",
       safeToResend: false,
       nextAction: "No outbound recovery needed.",
-      steps: ["Keep monitoring Live Mode during giveaway transitions."]
+      steps: ["Keep monitoring Live Mode during giveaway transitions."],
     };
   }
 
@@ -2732,16 +3098,17 @@ const summarizeOutboundRecovery = () => {
     attempts: latestFailed.attempts,
     giveawayId: latestFailed.giveawayId,
     nextAction: outboundRecoveryNextAction(latestFailed, safeToResend),
-    steps: outboundRecoverySteps(latestFailed, safeToResend)
+    steps: outboundRecoverySteps(latestFailed, safeToResend),
   };
 };
 
 const outboundRecoveryNextAction = (
   latestFailed: OutboundMessageRecord,
-  safeToResend: boolean
+  safeToResend: boolean,
 ) => {
   if (!safeToResend) {
-    return latestFailed.failureCategory === "auth" || latestFailed.failureCategory === "config"
+    return latestFailed.failureCategory === "auth" ||
+      latestFailed.failureCategory === "config"
       ? "Fix Twitch setup and let automatic validation complete before resending outbound chat."
       : "Automatic validation must pass before resending outbound chat.";
   }
@@ -2759,9 +3126,12 @@ const outboundRecoveryNextAction = (
 
 const outboundRecoverySteps = (
   latestFailed: OutboundMessageRecord,
-  safeToResend: boolean
+  safeToResend: boolean,
 ) => {
-  const categorySteps: Record<OutboundMessageRecord["failureCategory"], string> = {
+  const categorySteps: Record<
+    OutboundMessageRecord["failureCategory"],
+    string
+  > = {
     none: "No failure category was recorded.",
     config: "Open Settings and complete missing Twitch IDs or credentials.",
     auth: "Reconnect Twitch with the bot account and required chat scopes.",
@@ -2769,17 +3139,19 @@ const outboundRecoverySteps = (
     twitch_rejected: "Check the message and Twitch response before retrying.",
     network: "Confirm local network connectivity before retrying.",
     timeout: "Retry after Twitch/network latency settles.",
-    unknown: "Review the failure reason before retrying."
+    unknown: "Review the failure reason before retrying.",
   };
 
   return [
     categorySteps[latestFailed.failureCategory],
     "Check Twitch chat for the original message.",
-    safeToResend ? "Resend only if the message is missing or still relevant." : "Automatic validation must pass before resending.",
+    safeToResend
+      ? "Resend only if the message is missing or still relevant."
+      : "Automatic validation must pass before resending.",
     latestFailed.importance === "critical"
       ? "Use Live Mode -> Panic Resend for the latest failed critical giveaway message."
       : "Use Outbound Chat History -> Resend for this message.",
-    "Watch Queue Health until pending messages clear."
+    "Watch Queue Health until pending messages clear.",
   ];
 };
 
@@ -2807,7 +3179,7 @@ const isSafeConfigComplete = () => {
     config.hasAccessToken &&
     config.hasBroadcasterUserId &&
     config.hasBotUserId &&
-    config.tokenValidatedAt
+    config.tokenValidatedAt,
   );
 };
 
@@ -2832,9 +3204,11 @@ function createGiveawayReminderState(): GiveawayReminderState {
     enabled: saved.enabled,
     intervalMinutes: saved.intervalMinutes,
     lastSentAt: saved.lastSentAt,
-    nextSendAt: saved.enabled ? nextGiveawayReminderAt(saved.intervalMinutes) : "",
+    nextSendAt: saved.enabled
+      ? nextGiveawayReminderAt(saved.intervalMinutes)
+      : "",
     lastError: "",
-    timer: undefined
+    timer: undefined,
   };
 }
 
@@ -2849,18 +3223,24 @@ const getGiveawayReminder = () => {
       nextSendAt: giveawayReminder.nextSendAt,
       lastError: giveawayReminder.lastError,
       openGiveaway: Boolean(status?.giveaway.status === "open"),
-      giveawayTitle: status?.giveaway.title ?? ""
-    }
+      giveawayTitle: status?.giveaway.title ?? "",
+    },
   };
 };
 
 const setGiveawayReminder = (body: unknown) => {
-  const input = body as { enabled?: boolean; intervalMinutes?: number | string };
-  const intervalMinutes = parseSafeInteger(input.intervalMinutes ?? giveawayReminder.intervalMinutes, {
-    field: "Reminder interval",
-    min: 2,
-    max: 60
-  });
+  const input = body as {
+    enabled?: boolean;
+    intervalMinutes?: number | string;
+  };
+  const intervalMinutes = parseSafeInteger(
+    input.intervalMinutes ?? giveawayReminder.intervalMinutes,
+    {
+      field: "Reminder interval",
+      min: 2,
+      max: 60,
+    },
+  );
   const intervalChanged = intervalMinutes !== giveawayReminder.intervalMinutes;
 
   giveawayReminder.enabled = Boolean(input.enabled);
@@ -2891,7 +3271,9 @@ const sendGiveawayReminderNow = () => {
     giveawayReminder.lastError = "";
     persistGiveawayReminderSettings();
     if (giveawayReminder.enabled) {
-      giveawayReminder.nextSendAt = nextGiveawayReminderAt(giveawayReminder.intervalMinutes);
+      giveawayReminder.nextSendAt = nextGiveawayReminderAt(
+        giveawayReminder.intervalMinutes,
+      );
       scheduleGiveawayReminder();
     }
   } else {
@@ -2900,11 +3282,13 @@ const sendGiveawayReminderNow = () => {
 
   return {
     ...getGiveawayReminder(),
-    ...result
+    ...result,
   };
 };
 
-const queueGiveawayReminderAnnouncement = (options: { manual?: boolean } = {}) => {
+const queueGiveawayReminderAnnouncement = (
+  options: { manual?: boolean } = {},
+) => {
   const status = giveawaysService.status();
 
   if (!status || status.giveaway.status !== "open") {
@@ -2913,13 +3297,13 @@ const queueGiveawayReminderAnnouncement = (options: { manual?: boolean } = {}) =
         ok: true,
         queued: false,
         skipped: true,
-        reason: "No open giveaway."
+        reason: "No open giveaway.",
       };
     }
 
     return {
       ok: false,
-      error: "Reminder requires an open giveaway."
+      error: "Reminder requires an open giveaway.",
     };
   }
 
@@ -2928,20 +3312,20 @@ const queueGiveawayReminderAnnouncement = (options: { manual?: boolean } = {}) =
       giveawayTemplates.reminder(status.giveaway, status.entries),
       "reminder",
       status.giveaway.id,
-      "important"
-    )
+      "important",
+    ),
   );
 
   if (!queued) {
     return {
       ok: false,
-      error: "Reminder could not queue because chat is not fully configured."
+      error: "Reminder could not queue because chat is not fully configured.",
     };
   }
 
   return {
     ok: true,
-    queued: true
+    queued: true,
   };
 };
 
@@ -2967,10 +3351,15 @@ const scheduleGiveawayReminder = () => {
       persistGiveawayReminderSettings();
     } else if (!result.ok) {
       giveawayReminder.lastError = result.error ?? "Reminder was not queued.";
-      logger.warn({ error: giveawayReminder.lastError }, "Giveaway reminder was not queued");
+      logger.warn(
+        { error: giveawayReminder.lastError },
+        "Giveaway reminder was not queued",
+      );
     }
 
-    giveawayReminder.nextSendAt = nextGiveawayReminderAt(giveawayReminder.intervalMinutes);
+    giveawayReminder.nextSendAt = nextGiveawayReminderAt(
+      giveawayReminder.intervalMinutes,
+    );
     scheduleGiveawayReminder();
   }, delayMs);
   giveawayReminder.timer.unref?.();
@@ -2987,16 +3376,19 @@ const clearGiveawayReminderTimer = () => {
 
 function readGiveawayReminderSettings() {
   const row = db
-    .prepare("SELECT enabled, interval_minutes, last_sent_at FROM giveaway_reminder_settings WHERE id = 1")
+    .prepare(
+      "SELECT enabled, interval_minutes, last_sent_at FROM giveaway_reminder_settings WHERE id = 1",
+    )
     .get() as GiveawayReminderSettingsRow | undefined;
   const interval = Number(row?.interval_minutes ?? 10);
 
   return {
     enabled: row?.enabled === 1,
-    intervalMinutes: Number.isInteger(interval) && interval >= 2 && interval <= 60
-      ? interval
-      : 10,
-    lastSentAt: row?.last_sent_at ?? ""
+    intervalMinutes:
+      Number.isInteger(interval) && interval >= 2 && interval <= 60
+        ? interval
+        : 10,
+    lastSentAt: row?.last_sent_at ?? "",
   };
 }
 
@@ -3021,12 +3413,12 @@ function persistGiveawayReminderSettings() {
         interval_minutes = excluded.interval_minutes,
         last_sent_at = excluded.last_sent_at,
         updated_at = excluded.updated_at
-    `
+    `,
   ).run({
     enabled: giveawayReminder.enabled ? 1 : 0,
     intervalMinutes: giveawayReminder.intervalMinutes,
     lastSentAt: giveawayReminder.lastSentAt,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   });
 }
 
@@ -3066,13 +3458,17 @@ function createBotProcessState(): BotProcessState {
     lastError: "",
     recentLogs: [],
     stdoutBuffer: "",
-    stderrBuffer: ""
+    stderrBuffer: "",
   };
 }
 
 const startBotProcess = async () => {
   if (botProcess.child && !botProcess.child.killed) {
-    return { ok: true, alreadyRunning: true, botProcess: getBotProcessSnapshot() };
+    return {
+      ok: true,
+      alreadyRunning: true,
+      botProcess: getBotProcessSnapshot(),
+    };
   }
 
   const validation = await validateSetup();
@@ -3082,11 +3478,15 @@ const startBotProcess = async () => {
     const failed = startReadiness.checks.find((check) => !check.ok);
     return {
       ok: false,
-      error: failed?.detail || "Resolve readiness blockers before starting the live bot.",
-      nextAction: failed?.detail || "Let automatic launch validation complete before starting the bot.",
+      error:
+        failed?.detail ||
+        "Resolve readiness blockers before starting the live bot.",
+      nextAction:
+        failed?.detail ||
+        "Let automatic launch validation complete before starting the bot.",
       checks: startReadiness.checks,
       diagnostics: getDiagnosticsReport(),
-      botProcess: getBotProcessSnapshot()
+      botProcess: getBotProcessSnapshot(),
     };
   }
 
@@ -3095,17 +3495,20 @@ const startBotProcess = async () => {
   try {
     command = getBotRuntimeCommand();
   } catch (error) {
-    const detail = safeErrorMessage(error, "Unable to find vaexcore console live bot entrypoint.");
+    const detail = safeErrorMessage(
+      error,
+      "Unable to find vaexcore console live bot entrypoint.",
+    );
     return {
       ok: false,
       error: detail,
       nextAction: "Run npm run build, then try Start Bot again.",
       checks: [
         ...startReadiness.checks,
-        { name: "Bot runtime entrypoint", ok: false, detail }
+        { name: "Bot runtime entrypoint", ok: false, detail },
       ],
       diagnostics: getDiagnosticsReport(),
-      botProcess: getBotProcessSnapshot()
+      botProcess: getBotProcessSnapshot(),
     };
   }
 
@@ -3114,7 +3517,7 @@ const startBotProcess = async () => {
   const child = spawn(command.executable, command.args, {
     cwd: command.cwd,
     env: getBotRuntimeEnv(),
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
   botProcess.child = child;
@@ -3129,7 +3532,10 @@ const startBotProcess = async () => {
   });
   child.once("error", (error) => {
     botProcess.status = "failed";
-    botProcess.lastError = safeErrorMessage(error, "Bot process failed to start.");
+    botProcess.lastError = safeErrorMessage(
+      error,
+      "Bot process failed to start.",
+    );
     appendBotLog("error", botProcess.lastError);
   });
   child.once("exit", (code, signal) => {
@@ -3141,7 +3547,12 @@ const startBotProcess = async () => {
     botProcess.signal = signal;
     botProcess.eventSubConnected = false;
     botProcess.chatSubscriptionActive = false;
-    botProcess.status = botProcess.status === "stopping" ? "stopped" : code === 0 ? "exited" : "failed";
+    botProcess.status =
+      botProcess.status === "stopping"
+        ? "stopped"
+        : code === 0
+          ? "exited"
+          : "failed";
     if (code !== 0 && botProcess.status === "failed") {
       botProcess.lastError = `Bot process exited with code ${code ?? "unknown"}.`;
     }
@@ -3153,11 +3564,13 @@ const startBotProcess = async () => {
     started: true,
     nextAction: "Wait for EventSub, then type !ping in Twitch chat.",
     checks: startReadiness.checks,
-    botProcess: getBotProcessSnapshot()
+    botProcess: getBotProcessSnapshot(),
   };
 };
 
-const getBotStartReadiness = (validationChecks: Array<{ name: string; ok: boolean; detail: string }>) => {
+const getBotStartReadiness = (
+  validationChecks: Array<{ name: string; ok: boolean; detail: string }>,
+) => {
   const queue = chatQueue.snapshot();
   const checks = [
     ...validationChecks,
@@ -3166,13 +3579,13 @@ const getBotStartReadiness = (validationChecks: Array<{ name: string; ok: boolea
       ok: queue.ready,
       detail: queue.ready
         ? "Outbound queue is ready."
-        : "Restart the setup console if queue readiness does not recover."
-    }
+        : "Restart the setup console if queue readiness does not recover.",
+    },
   ];
 
   return {
     ok: checks.every((check) => check.ok),
-    checks
+    checks,
   };
 };
 
@@ -3180,7 +3593,11 @@ const stopBotProcess = async (options: { force?: boolean } = {}) => {
   const child = botProcess.child;
 
   if (!child) {
-    return { ok: true, alreadyStopped: true, botProcess: getBotProcessSnapshot() };
+    return {
+      ok: true,
+      alreadyStopped: true,
+      botProcess: getBotProcessSnapshot(),
+    };
   }
 
   botProcess.status = "stopping";
@@ -3239,7 +3656,7 @@ const getBotProcessSnapshot = () => ({
   chatSubscriptionActive: botProcess.chatSubscriptionActive,
   liveChatConfirmed: botProcess.liveChatConfirmed,
   lastError: botProcess.lastError,
-  recentLogs: botProcess.recentLogs.slice(-20)
+  recentLogs: botProcess.recentLogs.slice(-20),
 });
 
 const getBotRuntimeCommand = () => {
@@ -3251,12 +3668,16 @@ const getBotRuntimeCommand = () => {
   const tsxCli = join(sourceRoot, "node_modules/tsx/dist/cli.mjs");
   const bundledIndex = join(currentDir, "live-bot.js");
 
-  if (currentDir.endsWith(join("src", "setup")) && existsSync(sourceIndex) && existsSync(tsxCli)) {
+  if (
+    currentDir.endsWith(join("src", "setup")) &&
+    existsSync(sourceIndex) &&
+    existsSync(tsxCli)
+  ) {
     return {
       executable: process.execPath,
       args: [tsxCli, "desktop/shared/src/index.ts"],
       cwd: sourceRoot,
-      display: "tsx desktop/shared/src/index.ts"
+      display: "tsx desktop/shared/src/index.ts",
     };
   }
 
@@ -3265,7 +3686,7 @@ const getBotRuntimeCommand = () => {
       executable: process.execPath,
       args: [bundledIndex],
       cwd: bundledRoot,
-      display: "node dist-bundle/live-bot.js"
+      display: "node dist-bundle/live-bot.js",
     };
   }
 
@@ -3274,7 +3695,7 @@ const getBotRuntimeCommand = () => {
       executable: process.execPath,
       args: [tsxCli, "desktop/shared/src/index.ts"],
       cwd: sourceRoot,
-      display: "tsx desktop/shared/src/index.ts"
+      display: "tsx desktop/shared/src/index.ts",
     };
   }
 
@@ -3287,7 +3708,7 @@ const getBotRuntimeEnv = () => {
     ...process.env,
     VAEXCORE_MODE: "live",
     VAEXCORE_CONFIG_DIR: configDir,
-    DATABASE_URL: databaseUrl
+    DATABASE_URL: databaseUrl,
   };
 
   if (process.versions.electron) {
@@ -3321,7 +3742,10 @@ const flushBotOutput = () => {
   }
 };
 
-const processBotLog = (stream: "stdout" | "stderr" | "system" | "error", rawLine: string) => {
+const processBotLog = (
+  stream: "stdout" | "stderr" | "system" | "error",
+  rawLine: string,
+) => {
   const line = rawLine.trim();
   if (!line) return;
 
@@ -3331,7 +3755,9 @@ const processBotLog = (stream: "stdout" | "stderr" | "system" | "error", rawLine
 
 const appendBotLog = (stream: string, line: string) => {
   const safeLine = redactSecretText(line);
-  botProcess.recentLogs.push(`${new Date().toISOString()} ${stream}: ${safeLine}`);
+  botProcess.recentLogs.push(
+    `${new Date().toISOString()} ${stream}: ${safeLine}`,
+  );
 
   if (botProcess.recentLogs.length > 100) {
     botProcess.recentLogs.splice(0, botProcess.recentLogs.length - 100);
@@ -3364,9 +3790,12 @@ const updateBotStatusFromLog = (line: string) => {
     const operatorEvent = parsed.operatorEvent ?? "";
 
     const outboundMessageId =
-      typeof parsed.outboundMessageId === "string" ? parsed.outboundMessageId : "";
+      typeof parsed.outboundMessageId === "string"
+        ? parsed.outboundMessageId
+        : "";
     const outboundStatus =
-      typeof parsed.outboundStatus === "string" && isOutboundStatus(parsed.outboundStatus)
+      typeof parsed.outboundStatus === "string" &&
+      isOutboundStatus(parsed.outboundStatus)
         ? parsed.outboundStatus
         : undefined;
 
@@ -3375,33 +3804,55 @@ const updateBotStatusFromLog = (line: string) => {
         id: outboundMessageId,
         source: "bot",
         status: outboundStatus,
-        message: typeof parsed.message === "string" ? parsed.message : undefined,
+        message:
+          typeof parsed.message === "string" ? parsed.message : undefined,
         attempts: parseOptionalNumber(parsed.attempts ?? parsed.attempt),
         reason: typeof parsed.reason === "string" ? parsed.reason : undefined,
-        failureCategory: typeof parsed.failureCategory === "string" && isOutboundFailureCategory(parsed.failureCategory)
-          ? parsed.failureCategory
-          : undefined,
+        failureCategory:
+          typeof parsed.failureCategory === "string" &&
+          isOutboundFailureCategory(parsed.failureCategory)
+            ? parsed.failureCategory
+            : undefined,
         retryAfterMs: parseOptionalNumber(parsed.retryAfterMs),
-        nextAttemptAt: typeof parsed.nextAttemptAt === "string" ? parsed.nextAttemptAt : undefined,
+        nextAttemptAt:
+          typeof parsed.nextAttemptAt === "string"
+            ? parsed.nextAttemptAt
+            : undefined,
         queueDepth: parseOptionalNumber(parsed.queued),
         metadata: {
-          category: typeof parsed.outboundCategory === "string" && isOutboundCategory(parsed.outboundCategory)
-            ? parsed.outboundCategory
-            : undefined,
-          action: typeof parsed.outboundAction === "string" ? parsed.outboundAction : undefined,
-          importance: typeof parsed.outboundImportance === "string" && isOutboundImportance(parsed.outboundImportance)
-            ? parsed.outboundImportance
-            : undefined,
+          category:
+            typeof parsed.outboundCategory === "string" &&
+            isOutboundCategory(parsed.outboundCategory)
+              ? parsed.outboundCategory
+              : undefined,
+          action:
+            typeof parsed.outboundAction === "string"
+              ? parsed.outboundAction
+              : undefined,
+          importance:
+            typeof parsed.outboundImportance === "string" &&
+            isOutboundImportance(parsed.outboundImportance)
+              ? parsed.outboundImportance
+              : undefined,
           giveawayId: parseOptionalNumber(parsed.giveawayId),
-          resentFrom: typeof parsed.resentFrom === "string" ? parsed.resentFrom : undefined
-        }
+          resentFrom:
+            typeof parsed.resentFrom === "string"
+              ? parsed.resentFrom
+              : undefined,
+        },
       });
     }
 
-    if (msg === "EventSub WebSocket opened" || msg === "Startup checklist: EventSub connected") {
+    if (
+      msg === "EventSub WebSocket opened" ||
+      msg === "Startup checklist: EventSub connected"
+    ) {
       botProcess.eventSubConnected = true;
     }
-    if (operatorEvent === "chat subscription created" || msg === "Startup checklist: chat subscription created") {
+    if (
+      operatorEvent === "chat subscription created" ||
+      msg === "Startup checklist: chat subscription created"
+    ) {
       botProcess.chatSubscriptionActive = true;
     }
     if (msg === "LIVE CHAT CONFIRMED") {
@@ -3429,7 +3880,7 @@ const parseOptionalNumber = (value: unknown) =>
 
 const enqueueChatMessage = async (
   message: string | undefined,
-  metadata: MessageQueueMetadata = {}
+  metadata: MessageQueueMetadata = {},
 ) => {
   const text = sanitizeChatMessage(message);
 
@@ -3439,7 +3890,7 @@ const enqueueChatMessage = async (
     return {
       ok: false,
       error: "Validation must pass before sending chat messages.",
-      checks: validation.checks
+      checks: validation.checks,
     };
   }
 
@@ -3449,27 +3900,30 @@ const enqueueChatMessage = async (
 
 const getOperatorMessages = () => ({
   ok: true,
-  templates: operatorMessages.list()
+  templates: operatorMessages.list(),
 });
 
 const saveOperatorMessages = (body: unknown) => ({
   ...getOperatorMessages(),
-  templates: operatorMessages.save(body)
+  templates: operatorMessages.save(body),
 });
 
 const resetOperatorMessages = (ids: unknown) => ({
   ...getOperatorMessages(),
-  templates: operatorMessages.reset(ids)
+  templates: operatorMessages.reset(ids),
 });
 
-const sendOperatorMessage = async (body: { id?: string; confirmed?: boolean }) => {
+const sendOperatorMessage = async (body: {
+  id?: string;
+  confirmed?: boolean;
+}) => {
   const template = operatorMessages.find(body.id);
 
   if (!template) {
     return {
       ...getOperatorMessages(),
       ok: false,
-      error: "Unknown operator message preset."
+      error: "Unknown operator message preset.",
     };
   }
 
@@ -3477,20 +3931,20 @@ const sendOperatorMessage = async (body: { id?: string; confirmed?: boolean }) =
     return {
       ...getOperatorMessages(),
       ok: false,
-      error: `${template.label} requires confirmation before sending.`
+      error: `${template.label} requires confirmation before sending.`,
     };
   }
 
   const result = await enqueueChatMessage(template.template, {
     category: "operator",
     action: template.id,
-    importance: template.requiresConfirmation ? "important" : "normal"
+    importance: template.requiresConfirmation ? "important" : "normal",
   });
 
   return {
     ...getOperatorMessages(),
     ...result,
-    sentPreset: template.id
+    sentPreset: template.id,
   };
 };
 
@@ -3510,29 +3964,29 @@ const exportBotConfigBundle = () => {
       settings: safeModerationSettings(moderation.settings),
       terms: moderation.terms.map((term) => ({
         term: term.term,
-        enabled: term.enabled
+        enabled: term.enabled,
       })),
       allowedLinks: moderation.allowedLinks.map((link) => ({
         domain: link.domain,
-        enabled: link.enabled
+        enabled: link.enabled,
       })),
       blockedLinks: moderation.blockedLinks.map((link) => ({
         domain: link.domain,
-        enabled: link.enabled
-      }))
+        enabled: link.enabled,
+      })),
     },
     operatorMacros: operatorMessages.list().map((template) => ({
       id: template.id,
-      template: template.template
+      template: template.template,
     })),
     giveawayTemplates: giveawayTemplates.list().map((template) => ({
       action: template.action,
-      template: template.template
+      template: template.template,
     })),
     giveawayReminder: {
       enabled: reminder.enabled,
-      intervalMinutes: reminder.intervalMinutes
-    }
+      intervalMinutes: reminder.intervalMinutes,
+    },
   };
 };
 
@@ -3548,7 +4002,7 @@ const importBotConfigBundle = (body: unknown) => {
       moderationBlockedLinks: 0,
       operatorMacros: 0,
       giveawayTemplates: 0,
-      giveawayReminder: 0
+      giveawayReminder: 0,
     };
 
     const commandEntries = bundleArray(payload.commands);
@@ -3556,7 +4010,7 @@ const importBotConfigBundle = (body: unknown) => {
       imported.commands = customCommandsService.importCommands(
         { commands: commandEntries },
         localUiActor,
-        { reservedNames: getCustomCommandReservedNames() }
+        { reservedNames: getCustomCommandReservedNames() },
       ).length;
     }
 
@@ -3565,49 +4019,72 @@ const importBotConfigBundle = (body: unknown) => {
       imported.timers = importTimerEntries(timerEntries);
     }
 
-    const moderationPayload = payload.moderation as Record<string, unknown> | undefined;
+    const moderationPayload = payload.moderation as
+      | Record<string, unknown>
+      | undefined;
     if (moderationPayload && typeof moderationPayload === "object") {
-      if (moderationPayload.settings && typeof moderationPayload.settings === "object") {
-        moderationService.saveSettings(moderationPayload.settings, localUiActor);
+      if (
+        moderationPayload.settings &&
+        typeof moderationPayload.settings === "object"
+      ) {
+        moderationService.saveSettings(
+          moderationPayload.settings,
+          localUiActor,
+        );
         imported.moderationSettings = 1;
       }
 
-      imported.moderationTerms = importModerationTerms(bundleArray(moderationPayload.terms));
+      imported.moderationTerms = importModerationTerms(
+        bundleArray(moderationPayload.terms),
+      );
       imported.moderationAllowedLinks = importModerationLinks(
         bundleArray(moderationPayload.allowedLinks),
-        "allowed"
+        "allowed",
       );
       imported.moderationBlockedLinks = importModerationLinks(
         bundleArray(moderationPayload.blockedLinks),
-        "blocked"
+        "blocked",
       );
     }
 
     imported.operatorMacros = importOperatorMacros(
-      payload.operatorMacros ?? payload.operatorMessages
+      payload.operatorMacros ?? payload.operatorMessages,
     );
-    imported.giveawayTemplates = importGiveawayTemplates(payload.giveawayTemplates);
+    imported.giveawayTemplates = importGiveawayTemplates(
+      payload.giveawayTemplates,
+    );
 
-    if (payload.giveawayReminder && typeof payload.giveawayReminder === "object") {
+    if (
+      payload.giveawayReminder &&
+      typeof payload.giveawayReminder === "object"
+    ) {
       setGiveawayReminder(payload.giveawayReminder);
       imported.giveawayReminder = 1;
     }
 
     if (!Object.values(imported).some((count) => count > 0)) {
-      throw new Error("Import payload did not include commands, timers, moderation, operator macros, or giveaway templates.");
+      throw new Error(
+        "Import payload did not include commands, timers, moderation, operator macros, or giveaway templates.",
+      );
     }
 
-    writeAuditLog(db, localUiActor, "bot_config.import", "bot_config", imported);
+    writeAuditLog(
+      db,
+      localUiActor,
+      "bot_config.import",
+      "bot_config",
+      imported,
+    );
 
     return {
       ...exportBotConfigBundle(),
       ok: true,
-      imported
+      imported,
     };
   } catch (error) {
     return {
       ok: false,
-      error: safeErrorMessage(error, "Bot config import failed")
+      error: safeErrorMessage(error, "Bot config import failed"),
     };
   }
 };
@@ -3615,15 +4092,20 @@ const importBotConfigBundle = (body: unknown) => {
 const importTimerEntries = (entries: unknown[]) => {
   const saved = entries.slice(0, 50).map((entry) => {
     const input = entry as Record<string, unknown>;
-    const name = String(input.name ?? "").trim().toLowerCase();
+    const name = String(input.name ?? "")
+      .trim()
+      .toLowerCase();
     const existing = timersService
       .listTimers()
       .find((timer) => timer.name.toLowerCase() === name);
 
-    return timersService.saveTimer({
-      ...input,
-      id: existing?.id
-    }, localUiActor);
+    return timersService.saveTimer(
+      {
+        ...input,
+        id: existing?.id,
+      },
+      localUiActor,
+    );
   });
 
   return saved.length;
@@ -3634,20 +4116,30 @@ const importModerationTerms = (entries: unknown[]) => {
 
   for (const entry of entries.slice(0, 100)) {
     const input = entry as Record<string, unknown>;
-    const term = String(input.term ?? "").trim().toLowerCase();
-    const existing = moderationService.listTerms().find((item) => item.term === term);
+    const term = String(input.term ?? "")
+      .trim()
+      .toLowerCase();
+    const existing = moderationService
+      .listTerms()
+      .find((item) => item.term === term);
 
-    moderationService.saveTerm({
-      ...input,
-      id: existing?.id
-    }, localUiActor);
+    moderationService.saveTerm(
+      {
+        ...input,
+        id: existing?.id,
+      },
+      localUiActor,
+    );
     imported += 1;
   }
 
   return imported;
 };
 
-const importModerationLinks = (entries: unknown[], type: "allowed" | "blocked") => {
+const importModerationLinks = (
+  entries: unknown[],
+  type: "allowed" | "blocked",
+) => {
   let imported = 0;
 
   for (const entry of entries.slice(0, 100)) {
@@ -3659,19 +4151,25 @@ const importModerationLinks = (entries: unknown[], type: "allowed" | "blocked") 
         .listAllowedLinks()
         .find((item) => item.domain === domain);
 
-      moderationService.saveAllowedLink({
-        ...input,
-        id: existing?.id
-      }, localUiActor);
+      moderationService.saveAllowedLink(
+        {
+          ...input,
+          id: existing?.id,
+        },
+        localUiActor,
+      );
     } else {
       const existing = moderationService
         .listBlockedLinks()
         .find((item) => item.domain === domain);
 
-      moderationService.saveBlockedLink({
-        ...input,
-        id: existing?.id
-      }, localUiActor);
+      moderationService.saveBlockedLink(
+        {
+          ...input,
+          id: existing?.id,
+        },
+        localUiActor,
+      );
     }
 
     imported += 1;
@@ -3719,7 +4217,7 @@ const bundleArray = (input: unknown) => {
 const bundleTemplateMap = (
   input: unknown,
   keyField: string,
-  templateField: string
+  templateField: string,
 ) => {
   if (Array.isArray(input)) {
     return input.reduce<Record<string, unknown>>((templates, entry) => {
@@ -3742,19 +4240,20 @@ const bundleTemplateMap = (
 };
 
 const normalizeBundleDomain = (value: unknown) => {
-  const domain = String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .split(/[/?#]/)[0] ?? "";
+  const domain =
+    String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .split(/[/?#]/)[0] ?? "";
 
-  return domain
-    .replace(/:\d+$/, "")
-    .trim();
+  return domain.replace(/:\d+$/, "").trim();
 };
 
-const safeModerationSettings = (settings: ReturnType<ModerationService["getSettings"]>) => ({
+const safeModerationSettings = (
+  settings: ReturnType<ModerationService["getSettings"]>,
+) => ({
   blockedTermsEnabled: settings.blockedTermsEnabled,
   linkFilterEnabled: settings.linkFilterEnabled,
   capsFilterEnabled: settings.capsFilterEnabled,
@@ -3783,12 +4282,12 @@ const safeModerationSettings = (settings: ReturnType<ModerationService["getSetti
   exemptBroadcaster: settings.exemptBroadcaster,
   exemptModerators: settings.exemptModerators,
   exemptVips: settings.exemptVips,
-  exemptSubscribers: settings.exemptSubscribers
+  exemptSubscribers: settings.exemptSubscribers,
 });
 
 const getFeatureGates = () => ({
   ok: true,
-  featureGates: featureGates.list()
+  featureGates: featureGates.list(),
 });
 
 const setFeatureGate = (body: { key?: FeatureKey; mode?: FeatureGateMode }) => {
@@ -3798,13 +4297,13 @@ const setFeatureGate = (body: { key?: FeatureKey; mode?: FeatureGateMode }) => {
     return {
       ...getFeatureGates(),
       ok: true,
-      featureGate
+      featureGate,
     };
   } catch (error) {
     return {
       ...getFeatureGates(),
       ok: false,
-      error: safeErrorMessage(error, "Feature gate update failed")
+      error: safeErrorMessage(error, "Feature gate update failed"),
     };
   }
 };
@@ -3814,8 +4313,10 @@ const getStreamPresets = () => {
 
   return {
     ok: true,
-    presets: streamPresetDefinitions.map((preset) => inspectStreamPreset(preset, gates)),
-    featureGates: gates
+    presets: streamPresetDefinitions.map((preset) =>
+      inspectStreamPreset(preset, gates),
+    ),
+    featureGates: gates,
   };
 };
 
@@ -3831,35 +4332,45 @@ const applyStreamPreset = (body: { id?: string; confirmed?: boolean }) => {
       return {
         ...getStreamPresets(),
         ok: false,
-        error: `${preset.label} requires confirmation before changing live feature gates.`
+        error: `${preset.label} requires confirmation before changing live feature gates.`,
       };
     }
 
     const before = featureGates.list();
     const applied = Object.entries(preset.modes).map(([key, mode]) =>
-      featureGates.setMode(key as FeatureKey, mode as FeatureGateMode, localUiActor)
+      featureGates.setMode(
+        key as FeatureKey,
+        mode as FeatureGateMode,
+        localUiActor,
+      ),
     );
     const after = featureGates.list();
 
-    writeAuditLog(db, localUiActor, "stream_preset.apply", `stream_preset:${preset.id}`, {
-      preset: preset.id,
-      label: preset.label,
-      modes: preset.modes,
-      before: before.map(({ key, mode }) => ({ key, mode })),
-      after: after.map(({ key, mode }) => ({ key, mode }))
-    });
+    writeAuditLog(
+      db,
+      localUiActor,
+      "stream_preset.apply",
+      `stream_preset:${preset.id}`,
+      {
+        preset: preset.id,
+        label: preset.label,
+        modes: preset.modes,
+        before: before.map(({ key, mode }) => ({ key, mode })),
+        after: after.map(({ key, mode }) => ({ key, mode })),
+      },
+    );
 
     return {
       ...getStreamPresets(),
       ok: true,
       appliedPreset: preset.id,
-      applied
+      applied,
     };
   } catch (error) {
     return {
       ...getStreamPresets(),
       ok: false,
-      error: safeErrorMessage(error, "Stream preset apply failed")
+      error: safeErrorMessage(error, "Stream preset apply failed"),
     };
   }
 };
@@ -3872,7 +4383,7 @@ const getTimers = () => {
     ok: true,
     timers: timers.map((timer) => ({
       ...timer,
-      inspection: inspectTimer(timer, readiness)
+      inspection: inspectTimer(timer, readiness),
     })),
     featureGate: featureGates.get("timers"),
     readiness,
@@ -3883,12 +4394,14 @@ const getTimers = () => {
       disabled: timers.filter((timer) => !timer.enabled).length,
       sent: timers.reduce((total, timer) => total + timer.fireCount, 0),
       blocked: timers.filter((timer) => timer.lastStatus === "blocked").length,
-      waitingForActivity: timers.filter((timer) => timerNeedsActivity(timer)).length,
-      nextFireAt: timers
-        .filter((timer) => timer.enabled && timer.nextFireAt)
-        .map((timer) => timer.nextFireAt)
-        .sort()[0] ?? ""
-    }
+      waitingForActivity: timers.filter((timer) => timerNeedsActivity(timer))
+        .length,
+      nextFireAt:
+        timers
+          .filter((timer) => timer.enabled && timer.nextFireAt)
+          .map((timer) => timer.nextFireAt)
+          .sort()[0] ?? "",
+    },
   };
 };
 
@@ -3902,14 +4415,16 @@ const exportTimers = () => ({
     minChatMessages: timer.minChatMessages,
     enabled: timer.enabled,
     fireCount: timer.fireCount,
-    lastSentAt: timer.lastSentAt
-  }))
+    lastSentAt: timer.lastSentAt,
+  })),
 });
 
 const importTimers = (body: unknown) => {
   try {
     const payload = body as { timers?: unknown[] };
-    const entries = Array.isArray(payload.timers) ? payload.timers.slice(0, 50) : [];
+    const entries = Array.isArray(payload.timers)
+      ? payload.timers.slice(0, 50)
+      : [];
 
     if (entries.length === 0) {
       throw new Error("Import payload must include at least one timer.");
@@ -3917,25 +4432,32 @@ const importTimers = (body: unknown) => {
 
     const saved = entries.map((entry) => {
       const input = entry as Record<string, unknown>;
-      const name = String(input.name ?? "").trim().toLowerCase();
-      const existing = timersService.listTimers().find((timer) => timer.name.toLowerCase() === name);
-      return timersService.saveTimer({
-        ...input,
-        minChatMessages: input.minChatMessages,
-        id: existing?.id
-      }, localUiActor);
+      const name = String(input.name ?? "")
+        .trim()
+        .toLowerCase();
+      const existing = timersService
+        .listTimers()
+        .find((timer) => timer.name.toLowerCase() === name);
+      return timersService.saveTimer(
+        {
+          ...input,
+          minChatMessages: input.minChatMessages,
+          id: existing?.id,
+        },
+        localUiActor,
+      );
     });
 
     return {
       ...getTimers(),
       ok: true,
-      imported: saved.length
+      imported: saved.length,
     };
   } catch (error) {
     return {
       ...getTimers(),
       ok: false,
-      error: safeErrorMessage(error, "Timer import failed")
+      error: safeErrorMessage(error, "Timer import failed"),
     };
   }
 };
@@ -3948,47 +4470,55 @@ const createTimerFromPreset = (id: string | undefined) => {
       throw new Error("Unknown timer preset.");
     }
 
-    const existing = timersService.listTimers().find((timer) => timer.name.toLowerCase() === preset.name.toLowerCase());
+    const existing = timersService
+      .listTimers()
+      .find((timer) => timer.name.toLowerCase() === preset.name.toLowerCase());
 
     if (existing) {
       throw new Error(`Timer "${preset.name}" already exists.`);
     }
 
-    const timer = timersService.saveTimer({
-      name: preset.name,
-      message: preset.message,
-      intervalMinutes: preset.intervalMinutes,
-      minChatMessages: preset.minChatMessages,
-      enabled: false
-    }, localUiActor);
+    const timer = timersService.saveTimer(
+      {
+        name: preset.name,
+        message: preset.message,
+        intervalMinutes: preset.intervalMinutes,
+        minChatMessages: preset.minChatMessages,
+        enabled: false,
+      },
+      localUiActor,
+    );
 
     return {
       ...getTimers(),
       ok: true,
-      timer
+      timer,
     };
   } catch (error) {
     return {
       ...getTimers(),
       ok: false,
-      error: safeErrorMessage(error, "Timer preset failed")
+      error: safeErrorMessage(error, "Timer preset failed"),
     };
   }
 };
 
 const saveTimer = (body: unknown) => {
   try {
-    const timer = timersService.saveTimer(body as Record<string, unknown>, localUiActor);
+    const timer = timersService.saveTimer(
+      body as Record<string, unknown>,
+      localUiActor,
+    );
     return {
       ...getTimers(),
       ok: true,
-      timer
+      timer,
     };
   } catch (error) {
     return {
       ...getTimers(),
       ok: false,
-      error: safeErrorMessage(error, "Timer save failed")
+      error: safeErrorMessage(error, "Timer save failed"),
     };
   }
 };
@@ -3996,21 +4526,25 @@ const saveTimer = (body: unknown) => {
 const setTimerEnabled = (body: { id?: number; enabled?: boolean }) => {
   try {
     const timer = timersService.setEnabled(
-      parseSafeInteger(body.id, { field: "Timer ID", min: 1, max: Number.MAX_SAFE_INTEGER }),
+      parseSafeInteger(body.id, {
+        field: "Timer ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
       Boolean(body.enabled),
-      localUiActor
+      localUiActor,
     );
 
     return {
       ...getTimers(),
       ok: true,
-      timer
+      timer,
     };
   } catch (error) {
     return {
       ...getTimers(),
       ok: false,
-      error: safeErrorMessage(error, "Timer update failed")
+      error: safeErrorMessage(error, "Timer update failed"),
     };
   }
 };
@@ -4018,20 +4552,24 @@ const setTimerEnabled = (body: { id?: number; enabled?: boolean }) => {
 const deleteTimer = (id: number | undefined) => {
   try {
     const timer = timersService.deleteTimer(
-      parseSafeInteger(id, { field: "Timer ID", min: 1, max: Number.MAX_SAFE_INTEGER }),
-      localUiActor
+      parseSafeInteger(id, {
+        field: "Timer ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
+      localUiActor,
     );
 
     return {
       ...getTimers(),
       ok: true,
-      deleted: timer
+      deleted: timer,
     };
   } catch (error) {
     return {
       ...getTimers(),
       ok: false,
-      error: safeErrorMessage(error, "Timer delete failed")
+      error: safeErrorMessage(error, "Timer delete failed"),
     };
   }
 };
@@ -4039,7 +4577,11 @@ const deleteTimer = (id: number | undefined) => {
 const sendTimerNow = async (id: number | undefined) => {
   try {
     const timer = timersService.requireTimer(
-      parseSafeInteger(id, { field: "Timer ID", min: 1, max: Number.MAX_SAFE_INTEGER })
+      parseSafeInteger(id, {
+        field: "Timer ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
     );
     const readiness = getTimerSendReadiness();
 
@@ -4048,7 +4590,7 @@ const sendTimerNow = async (id: number | undefined) => {
       return {
         ...getTimers(),
         ok: false,
-        error: "Enable the timer before sending it."
+        error: "Enable the timer before sending it.",
       };
     }
 
@@ -4057,11 +4599,14 @@ const sendTimerNow = async (id: number | undefined) => {
       return {
         ...getTimers(),
         ok: false,
-        error: readiness.reason
+        error: readiness.reason,
       };
     }
 
-    const result = await enqueueChatMessage(timer.message, timerMetadata(timer));
+    const result = await enqueueChatMessage(
+      timer.message,
+      timerMetadata(timer),
+    );
 
     if (!result.ok || typeof result.outboundMessageId !== "string") {
       const error = result.error || "Timer message could not queue.";
@@ -4070,7 +4615,7 @@ const sendTimerNow = async (id: number | undefined) => {
         ...getTimers(),
         ...result,
         ok: false,
-        error
+        error,
       };
     }
 
@@ -4081,13 +4626,13 @@ const sendTimerNow = async (id: number | undefined) => {
       ok: true,
       queued: true,
       timer: sent,
-      outboundMessageId: result.outboundMessageId
+      outboundMessageId: result.outboundMessageId,
     };
   } catch (error) {
     return {
       ...getTimers(),
       ok: false,
-      error: safeErrorMessage(error, "Timer send failed")
+      error: safeErrorMessage(error, "Timer send failed"),
     };
   }
 };
@@ -4098,40 +4643,41 @@ const timerPresetDefinitions = [
     name: "Discord reminder",
     intervalMinutes: 15,
     minChatMessages: 5,
-    message: "Join the Discord for stream updates: https://example.com"
+    message: "Join the Discord for stream updates: https://example.com",
   },
   {
     id: "socials",
     name: "Social links",
     intervalMinutes: 20,
     minChatMessages: 8,
-    message: "Follow socials and find links here: https://example.com"
+    message: "Follow socials and find links here: https://example.com",
   },
   {
     id: "schedule",
     name: "Stream schedule",
     intervalMinutes: 30,
     minChatMessages: 5,
-    message: "Stream schedule: check the channel panels for upcoming streams."
+    message: "Stream schedule: check the channel panels for upcoming streams.",
   },
   {
     id: "commands",
     name: "Command reminder",
     intervalMinutes: 25,
     minChatMessages: 5,
-    message: "Try !gstatus during giveaways, or ask a mod for current channel commands."
-  }
+    message:
+      "Try !gstatus during giveaways, or ask a mod for current channel commands.",
+  },
 ] as const;
 
 const inspectTimer = (
   timer: ReturnType<TimersService["listTimers"]>[number],
-  readiness = getTimerSendReadiness()
+  readiness = getTimerSendReadiness(),
 ) => {
   if (!timer.enabled) {
     return {
       status: "disabled",
       detail: "Timer is saved but disabled.",
-      nextAction: "Enable when you want it to participate in live delivery."
+      nextAction: "Enable when you want it to participate in live delivery.",
     };
   }
 
@@ -4139,7 +4685,7 @@ const inspectTimer = (
     return {
       status: "blocked",
       detail: readiness.reason,
-      nextAction: readiness.nextAction
+      nextAction: readiness.nextAction,
     };
   }
 
@@ -4149,7 +4695,7 @@ const inspectTimer = (
       detail: timer.lastError,
       nextAction: timer.nextFireAt
         ? `Will retry after ${timer.nextFireAt}.`
-        : "Disable and re-enable the timer to schedule the next send."
+        : "Disable and re-enable the timer to schedule the next send.",
     };
   }
 
@@ -4157,7 +4703,7 @@ const inspectTimer = (
     return {
       status: "unscheduled",
       detail: "Timer is enabled but has no next fire time.",
-      nextAction: "Disable and re-enable the timer to reschedule it."
+      nextAction: "Disable and re-enable the timer to reschedule it.",
     };
   }
 
@@ -4166,18 +4712,23 @@ const inspectTimer = (
 
   if (Number.isFinite(nextFireMs) && nextFireMs <= Date.now()) {
     if (timerNeedsActivity(timer)) {
-      const remaining = Math.max(0, timer.minChatMessages - timer.chatMessagesSinceLastFire);
+      const remaining = Math.max(
+        0,
+        timer.minChatMessages - timer.chatMessagesSinceLastFire,
+      );
       return {
         status: "waiting_activity",
         detail: `Interval elapsed; waiting for ${remaining} more chat message${remaining === 1 ? "" : "s"} (${activity}).`,
-        nextAction: "Let chat activity build or use Send now for an explicit operator send."
+        nextAction:
+          "Let chat activity build or use Send now for an explicit operator send.",
       };
     }
 
     return {
       status: "due",
-      detail: "Timer is due and will send on the next scheduler tick if the bot remains live-ready.",
-      nextAction: "Wait for the scheduler tick or use Send now."
+      detail:
+        "Timer is due and will send on the next scheduler tick if the bot remains live-ready.",
+      nextAction: "Wait for the scheduler tick or use Send now.",
     };
   }
 
@@ -4186,27 +4737,32 @@ const inspectTimer = (
     detail: timer.nextFireAt
       ? `Next send is scheduled for ${timer.nextFireAt}.`
       : "Timer is waiting for its next schedule.",
-    nextAction: timer.minChatMessages > 0
-      ? `Needs ${activity} chat activity before the next automatic send.`
-      : "No action needed."
+    nextAction:
+      timer.minChatMessages > 0
+        ? `Needs ${activity} chat activity before the next automatic send.`
+        : "No action needed.",
   };
 };
 
-const timerNeedsActivity = (timer: ReturnType<TimersService["listTimers"]>[number]) =>
+const timerNeedsActivity = (
+  timer: ReturnType<TimersService["listTimers"]>[number],
+) =>
   timer.enabled &&
   timer.minChatMessages > 0 &&
   timer.chatMessagesSinceLastFire < timer.minChatMessages &&
   Boolean(timer.nextFireAt) &&
   Date.parse(timer.nextFireAt) <= Date.now();
 
-const timerActivityProgress = (timer: ReturnType<TimersService["listTimers"]>[number]) =>
+const timerActivityProgress = (
+  timer: ReturnType<TimersService["listTimers"]>[number],
+) =>
   timer.minChatMessages > 0
     ? `${Math.min(timer.chatMessagesSinceLastFire, timer.minChatMessages)}/${timer.minChatMessages}`
     : "off";
 
 const getModerationState = () => ({
   ...moderationService.getState(),
-  enforcement: getModerationEnforcementStatus()
+  enforcement: getModerationEnforcementStatus(),
 });
 
 const getModerationEnforcementStatus = () => {
@@ -4218,11 +4774,13 @@ const getModerationEnforcementStatus = () => {
     twitch.accessToken &&
     twitch.clientId &&
     twitch.broadcasterUserId &&
-    twitch.botUserId
+    twitch.botUserId,
   );
   const deleteReady = identityReady && hasScope(deleteScope);
   const timeoutReady = identityReady && hasScope(timeoutScope);
-  const missingScopes = optionalModerationScopes.filter((scope) => !hasScope(scope));
+  const missingScopes = optionalModerationScopes.filter(
+    (scope) => !hasScope(scope),
+  );
 
   return {
     ok: true,
@@ -4234,7 +4792,7 @@ const getModerationEnforcementStatus = () => {
         ? "Message deletion is available for live moderation hits."
         : identityReady
           ? `Reconnect Twitch with ${deleteScope} to enable message deletion.`
-          : "Complete Twitch setup and validation before message deletion can run."
+          : "Complete Twitch setup and validation before message deletion can run.",
     },
     timeoutUsers: {
       available: timeoutReady,
@@ -4243,12 +4801,12 @@ const getModerationEnforcementStatus = () => {
         ? "Timeouts are available for live moderation hits."
         : identityReady
           ? `Reconnect Twitch with ${timeoutScope} to enable timeouts.`
-          : "Complete Twitch setup and validation before timeouts can run."
+          : "Complete Twitch setup and validation before timeouts can run.",
     },
     missingScopes,
     nextAction: missingScopes.length
       ? `Reconnect Twitch to grant optional moderation scope(s): ${missingScopes.join(", ")}.`
-      : "Choose delete or timeout actions per filter, test locally, then enable moderation live."
+      : "Choose delete or timeout actions per filter, test locally, then enable moderation live.",
   };
 };
 
@@ -4259,7 +4817,7 @@ const saveModerationSettings = (body: unknown) => {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Moderation settings save failed")
+      error: safeErrorMessage(error, "Moderation settings save failed"),
     };
   }
 };
@@ -4271,7 +4829,7 @@ const saveModerationTerm = (body: unknown) => {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Blocked phrase save failed")
+      error: safeErrorMessage(error, "Blocked phrase save failed"),
     };
   }
 };
@@ -4279,15 +4837,19 @@ const saveModerationTerm = (body: unknown) => {
 const setModerationTermEnabled = (body: { id?: number; enabled?: boolean }) => {
   try {
     return moderationService.setTermEnabled(
-      parseSafeInteger(body.id, { field: "Blocked phrase ID", min: 1, max: Number.MAX_SAFE_INTEGER }),
+      parseSafeInteger(body.id, {
+        field: "Blocked phrase ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
       Boolean(body.enabled),
-      localUiActor
+      localUiActor,
     );
   } catch (error) {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Blocked phrase update failed")
+      error: safeErrorMessage(error, "Blocked phrase update failed"),
     };
   }
 };
@@ -4295,14 +4857,18 @@ const setModerationTermEnabled = (body: { id?: number; enabled?: boolean }) => {
 const deleteModerationTerm = (id: number | undefined) => {
   try {
     return moderationService.deleteTerm(
-      parseSafeInteger(id, { field: "Blocked phrase ID", min: 1, max: Number.MAX_SAFE_INTEGER }),
-      localUiActor
+      parseSafeInteger(id, {
+        field: "Blocked phrase ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
+      localUiActor,
     );
   } catch (error) {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Blocked phrase delete failed")
+      error: safeErrorMessage(error, "Blocked phrase delete failed"),
     };
   }
 };
@@ -4314,23 +4880,30 @@ const saveModerationAllowedLink = (body: unknown) => {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Allowed domain save failed")
+      error: safeErrorMessage(error, "Allowed domain save failed"),
     };
   }
 };
 
-const setModerationAllowedLinkEnabled = (body: { id?: number; enabled?: boolean }) => {
+const setModerationAllowedLinkEnabled = (body: {
+  id?: number;
+  enabled?: boolean;
+}) => {
   try {
     return moderationService.setAllowedLinkEnabled(
-      parseSafeInteger(body.id, { field: "Allowed domain ID", min: 1, max: Number.MAX_SAFE_INTEGER }),
+      parseSafeInteger(body.id, {
+        field: "Allowed domain ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
       Boolean(body.enabled),
-      localUiActor
+      localUiActor,
     );
   } catch (error) {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Allowed domain update failed")
+      error: safeErrorMessage(error, "Allowed domain update failed"),
     };
   }
 };
@@ -4338,14 +4911,18 @@ const setModerationAllowedLinkEnabled = (body: { id?: number; enabled?: boolean 
 const deleteModerationAllowedLink = (id: number | undefined) => {
   try {
     return moderationService.deleteAllowedLink(
-      parseSafeInteger(id, { field: "Allowed domain ID", min: 1, max: Number.MAX_SAFE_INTEGER }),
-      localUiActor
+      parseSafeInteger(id, {
+        field: "Allowed domain ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
+      localUiActor,
     );
   } catch (error) {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Allowed domain delete failed")
+      error: safeErrorMessage(error, "Allowed domain delete failed"),
     };
   }
 };
@@ -4357,23 +4934,30 @@ const saveModerationBlockedLink = (body: unknown) => {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Blocked domain save failed")
+      error: safeErrorMessage(error, "Blocked domain save failed"),
     };
   }
 };
 
-const setModerationBlockedLinkEnabled = (body: { id?: number; enabled?: boolean }) => {
+const setModerationBlockedLinkEnabled = (body: {
+  id?: number;
+  enabled?: boolean;
+}) => {
   try {
     return moderationService.setBlockedLinkEnabled(
-      parseSafeInteger(body.id, { field: "Blocked domain ID", min: 1, max: Number.MAX_SAFE_INTEGER }),
+      parseSafeInteger(body.id, {
+        field: "Blocked domain ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
       Boolean(body.enabled),
-      localUiActor
+      localUiActor,
     );
   } catch (error) {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Blocked domain update failed")
+      error: safeErrorMessage(error, "Blocked domain update failed"),
     };
   }
 };
@@ -4381,14 +4965,18 @@ const setModerationBlockedLinkEnabled = (body: { id?: number; enabled?: boolean 
 const deleteModerationBlockedLink = (id: number | undefined) => {
   try {
     return moderationService.deleteBlockedLink(
-      parseSafeInteger(id, { field: "Blocked domain ID", min: 1, max: Number.MAX_SAFE_INTEGER }),
-      localUiActor
+      parseSafeInteger(id, {
+        field: "Blocked domain ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
+      localUiActor,
     );
   } catch (error) {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Blocked domain delete failed")
+      error: safeErrorMessage(error, "Blocked domain delete failed"),
     };
   }
 };
@@ -4400,7 +4988,7 @@ const grantModerationLinkPermit = (body: unknown) => {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Link permit grant failed")
+      error: safeErrorMessage(error, "Link permit grant failed"),
     };
   }
 };
@@ -4414,7 +5002,7 @@ const simulateModeration = (body: {
     const actor = createLocalChatMessage({
       login: body.actor || "viewer",
       role: body.role ?? "viewer",
-      text: body.text || ""
+      text: body.text || "",
     });
     const result = moderationService.evaluate(actor, { consumePermits: false });
     const enforcement = getModerationEnforcementStatus();
@@ -4423,7 +5011,7 @@ const simulateModeration = (body: {
           canDeleteMessages: enforcement.deleteMessages.available,
           canTimeoutUsers: enforcement.timeoutUsers.available,
           deleteUnavailableReason: enforcement.deleteMessages.reason,
-          timeoutUnavailableReason: enforcement.timeoutUsers.reason
+          timeoutUnavailableReason: enforcement.timeoutUsers.reason,
         })
       : undefined;
 
@@ -4431,13 +5019,13 @@ const simulateModeration = (body: {
       ...getModerationState(),
       ok: true,
       result,
-      enforcementPlan
+      enforcementPlan,
     };
   } catch (error) {
     return {
       ...getModerationState(),
       ok: false,
-      error: safeErrorMessage(error, "Moderation simulation failed")
+      error: safeErrorMessage(error, "Moderation simulation failed"),
     };
   }
 };
@@ -4450,53 +5038,59 @@ const getTimerSendReadiness = () => {
     {
       name: "Feature gate",
       ok: gate.mode === "live",
-      detail: gate.mode === "live"
-        ? "Timers are live."
-        : gate.mode === "test"
-          ? "Timers are in test mode and will not send to Twitch chat."
-          : "Timers are off."
+      detail:
+        gate.mode === "live"
+          ? "Timers are live."
+          : gate.mode === "test"
+            ? "Timers are in test mode and will not send to Twitch chat."
+            : "Timers are off.",
     },
     {
       name: "Live bot",
       ok: Boolean(botProcess.child && getBotProcessSnapshot().running),
-      detail: botProcess.child && getBotProcessSnapshot().running
-        ? "Live bot is running."
-        : "Start the live bot before timers can send."
+      detail:
+        botProcess.child && getBotProcessSnapshot().running
+          ? "Live bot is running."
+          : "Start the live bot before timers can send.",
     },
     {
       name: "EventSub chat",
       ok: botProcess.eventSubConnected && botProcess.chatSubscriptionActive,
-      detail: botProcess.eventSubConnected && botProcess.chatSubscriptionActive
-        ? "EventSub chat is connected."
-        : "Timers wait for EventSub chat to be connected."
+      detail:
+        botProcess.eventSubConnected && botProcess.chatSubscriptionActive
+          ? "EventSub chat is connected."
+          : "Timers wait for EventSub chat to be connected.",
     },
     {
       name: "Live chat confirmation",
       ok: botProcess.liveChatConfirmed,
       detail: botProcess.liveChatConfirmed
         ? "Live chat was confirmed with !ping."
-        : "Timers wait for live chat confirmation. Type !ping in chat."
+        : "Timers wait for live chat confirmation. Type !ping in chat.",
     },
     {
       name: "Outbound queue",
       ok: queueHealth.status === "clear",
-      detail: queueHealth.status === "clear"
-        ? "Outbound queue is clear."
-        : queueHealth.nextAction
-    }
+      detail:
+        queueHealth.status === "clear"
+          ? "Outbound queue is clear."
+          : queueHealth.nextAction,
+    },
   ];
 
   if (gate.mode !== "live") {
     return {
       ok: false,
-      reason: gate.mode === "test"
-        ? "Timers are in test mode and will not send to Twitch chat."
-        : "Timers are off. Move the Timers feature gate to Live before sending.",
-      nextAction: gate.mode === "test"
-        ? "Move Timers to Live when you are ready for Twitch delivery."
-        : "Use the Timers feature gate card to switch to Live.",
+      reason:
+        gate.mode === "test"
+          ? "Timers are in test mode and will not send to Twitch chat."
+          : "Timers are off. Move the Timers feature gate to Live before sending.",
+      nextAction:
+        gate.mode === "test"
+          ? "Move Timers to Live when you are ready for Twitch delivery."
+          : "Use the Timers feature gate card to switch to Live.",
       gateMode: gate.mode,
-      checks
+      checks,
     };
   }
 
@@ -4506,7 +5100,7 @@ const getTimerSendReadiness = () => {
       reason: "Start the live bot before timers can send.",
       nextAction: "Start Bot from the setup console.",
       gateMode: gate.mode,
-      checks
+      checks,
     };
   }
 
@@ -4514,9 +5108,10 @@ const getTimerSendReadiness = () => {
     return {
       ok: false,
       reason: "Timers wait for EventSub chat to be connected.",
-      nextAction: "Wait for EventSub chat subscription to connect or restart the bot.",
+      nextAction:
+        "Wait for EventSub chat subscription to connect or restart the bot.",
       gateMode: gate.mode,
-      checks
+      checks,
     };
   }
 
@@ -4526,7 +5121,7 @@ const getTimerSendReadiness = () => {
       reason: "Timers wait for live chat confirmation. Type !ping in chat.",
       nextAction: "Type !ping in Twitch chat and wait for pong.",
       gateMode: gate.mode,
-      checks
+      checks,
     };
   }
 
@@ -4536,7 +5131,7 @@ const getTimerSendReadiness = () => {
       reason: queueHealth.nextAction,
       nextAction: queueHealth.nextAction,
       gateMode: gate.mode,
-      checks
+      checks,
     };
   }
 
@@ -4545,7 +5140,7 @@ const getTimerSendReadiness = () => {
     reason: "Timers can queue.",
     nextAction: "No action needed.",
     gateMode: gate.mode,
-    checks
+    checks,
   };
 };
 
@@ -4559,37 +5154,52 @@ const getCustomCommands = () => {
     invocations,
     reservedNames: getCustomCommandReservedNames(),
     presets: customCommandPresetDefinitions.map((preset) =>
-      inspectCustomCommandPreset(preset, commands, getCustomCommandReservedNames())
+      inspectCustomCommandPreset(
+        preset,
+        commands,
+        getCustomCommandReservedNames(),
+      ),
     ),
     presetPacks: customCommandPresetPackDefinitions.map((pack) =>
-      inspectCustomCommandPresetPack(pack, commands, getCustomCommandReservedNames())
+      inspectCustomCommandPresetPack(
+        pack,
+        commands,
+        getCustomCommandReservedNames(),
+      ),
     ),
     featureGate: featureGates.get("custom_commands"),
     summary: {
       total: commands.length,
       enabled: commands.filter((command) => command.enabled).length,
       disabled: commands.filter((command) => !command.enabled).length,
-      aliases: commands.reduce((total, command) => total + command.aliases.length, 0),
-      uses: commands.reduce((total, command) => total + command.useCount, 0)
-    }
+      aliases: commands.reduce(
+        (total, command) => total + command.aliases.length,
+        0,
+      ),
+      uses: commands.reduce((total, command) => total + command.useCount, 0),
+    },
   };
 };
 
 const saveCustomCommand = (body: unknown) => {
   try {
-    const command = customCommandsService.saveCommand(body as Record<string, unknown>, localUiActor, {
-      reservedNames: getCustomCommandReservedNames()
-    });
+    const command = customCommandsService.saveCommand(
+      body as Record<string, unknown>,
+      localUiActor,
+      {
+        reservedNames: getCustomCommandReservedNames(),
+      },
+    );
     return {
       ...getCustomCommands(),
       ok: true,
-      command
+      command,
     };
   } catch (error) {
     return {
       ...getCustomCommands(),
       ok: false,
-      error: safeErrorMessage(error, "Custom command save failed")
+      error: safeErrorMessage(error, "Custom command save failed"),
     };
   }
 };
@@ -4597,20 +5207,24 @@ const saveCustomCommand = (body: unknown) => {
 const setCustomCommandEnabled = (body: { id?: number; enabled?: boolean }) => {
   try {
     const command = customCommandsService.setEnabled(
-      parseSafeInteger(body.id, { field: "Command ID", min: 1, max: Number.MAX_SAFE_INTEGER }),
+      parseSafeInteger(body.id, {
+        field: "Command ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
       Boolean(body.enabled),
-      localUiActor
+      localUiActor,
     );
     return {
       ...getCustomCommands(),
       ok: true,
-      command
+      command,
     };
   } catch (error) {
     return {
       ...getCustomCommands(),
       ok: false,
-      error: safeErrorMessage(error, "Custom command update failed")
+      error: safeErrorMessage(error, "Custom command update failed"),
     };
   }
 };
@@ -4618,19 +5232,23 @@ const setCustomCommandEnabled = (body: { id?: number; enabled?: boolean }) => {
 const duplicateCustomCommand = (id: number | undefined) => {
   try {
     const command = customCommandsService.duplicateCommand(
-      parseSafeInteger(id, { field: "Command ID", min: 1, max: Number.MAX_SAFE_INTEGER }),
-      localUiActor
+      parseSafeInteger(id, {
+        field: "Command ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
+      localUiActor,
     );
     return {
       ...getCustomCommands(),
       ok: true,
-      command
+      command,
     };
   } catch (error) {
     return {
       ...getCustomCommands(),
       ok: false,
-      error: safeErrorMessage(error, "Custom command duplicate failed")
+      error: safeErrorMessage(error, "Custom command duplicate failed"),
     };
   }
 };
@@ -4638,26 +5256,32 @@ const duplicateCustomCommand = (id: number | undefined) => {
 const deleteCustomCommand = (id: number | undefined) => {
   try {
     const deleted = customCommandsService.deleteCommand(
-      parseSafeInteger(id, { field: "Command ID", min: 1, max: Number.MAX_SAFE_INTEGER }),
-      localUiActor
+      parseSafeInteger(id, {
+        field: "Command ID",
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
+      localUiActor,
     );
     return {
       ...getCustomCommands(),
       ok: true,
-      deleted
+      deleted,
     };
   } catch (error) {
     return {
       ...getCustomCommands(),
       ok: false,
-      error: safeErrorMessage(error, "Custom command delete failed")
+      error: safeErrorMessage(error, "Custom command delete failed"),
     };
   }
 };
 
 const createCustomCommandFromPreset = (id: string | undefined) => {
   try {
-    const preset = customCommandPresetDefinitions.find((item) => item.id === id);
+    const preset = customCommandPresetDefinitions.find(
+      (item) => item.id === id,
+    );
 
     if (!preset) {
       throw new Error("Command preset was not found.");
@@ -4671,29 +5295,31 @@ const createCustomCommandFromPreset = (id: string | undefined) => {
         globalCooldownSeconds: preset.globalCooldownSeconds,
         userCooldownSeconds: preset.userCooldownSeconds,
         aliases: preset.aliases,
-        responses: preset.responses
+        responses: preset.responses,
       },
       localUiActor,
-      { reservedNames: getCustomCommandReservedNames() }
+      { reservedNames: getCustomCommandReservedNames() },
     );
 
     return {
       ...getCustomCommands(),
       ok: true,
-      command
+      command,
     };
   } catch (error) {
     return {
       ...getCustomCommands(),
       ok: false,
-      error: safeErrorMessage(error, "Command preset create failed")
+      error: safeErrorMessage(error, "Command preset create failed"),
     };
   }
 };
 
 const createCustomCommandPresetPack = (id: string | undefined) => {
   try {
-    const pack = customCommandPresetPackDefinitions.find((item) => item.id === id);
+    const pack = customCommandPresetPackDefinitions.find(
+      (item) => item.id === id,
+    );
 
     if (!pack) {
       throw new Error("Command preset pack was not found.");
@@ -4702,10 +5328,19 @@ const createCustomCommandPresetPack = (id: string | undefined) => {
     const beforeCommands = customCommandsService.listCommands();
     const reservedNames = getCustomCommandReservedNames();
     const inspected = pack.presetIds
-      .map((presetId) => customCommandPresetDefinitions.find((preset) => preset.id === presetId))
-      .filter((preset): preset is (typeof customCommandPresetDefinitions)[number] => Boolean(preset))
-      .map((preset) => inspectCustomCommandPreset(preset, beforeCommands, reservedNames));
-    const ready = inspected.filter((preset) => preset.inspection.status === "ready");
+      .map((presetId) =>
+        customCommandPresetDefinitions.find((preset) => preset.id === presetId),
+      )
+      .filter(
+        (preset): preset is (typeof customCommandPresetDefinitions)[number] =>
+          Boolean(preset),
+      )
+      .map((preset) =>
+        inspectCustomCommandPreset(preset, beforeCommands, reservedNames),
+      );
+    const ready = inspected.filter(
+      (preset) => preset.inspection.status === "ready",
+    );
 
     if (!ready.length) {
       throw new Error("No preset commands in this pack are ready to create.");
@@ -4720,39 +5355,45 @@ const createCustomCommandPresetPack = (id: string | undefined) => {
           globalCooldownSeconds: preset.globalCooldownSeconds,
           userCooldownSeconds: preset.userCooldownSeconds,
           aliases: preset.aliases,
-          responses: preset.responses
+          responses: preset.responses,
         },
         localUiActor,
-        { reservedNames }
-      )
+        { reservedNames },
+      ),
     );
     const skipped = inspected
       .filter((preset) => preset.inspection.status !== "ready")
       .map((preset) => ({
         id: preset.id,
         commandName: preset.commandName,
-        reason: preset.inspection.detail
+        reason: preset.inspection.detail,
       }));
 
-    writeAuditLog(db, localUiActor, "custom_command.preset_pack_create", `custom_command_pack:${pack.id}`, {
-      packId: pack.id,
-      label: pack.label,
-      created: created.map((command) => command.name),
-      skipped
-    });
+    writeAuditLog(
+      db,
+      localUiActor,
+      "custom_command.preset_pack_create",
+      `custom_command_pack:${pack.id}`,
+      {
+        packId: pack.id,
+        label: pack.label,
+        created: created.map((command) => command.name),
+        skipped,
+      },
+    );
 
     return {
       ...getCustomCommands(),
       ok: true,
       pack,
       created,
-      skipped
+      skipped,
     };
   } catch (error) {
     return {
       ...getCustomCommands(),
       ok: false,
-      error: safeErrorMessage(error, "Command preset pack create failed")
+      error: safeErrorMessage(error, "Command preset pack create failed"),
     };
   }
 };
@@ -4760,18 +5401,18 @@ const createCustomCommandPresetPack = (id: string | undefined) => {
 const importCustomCommands = (body: unknown) => {
   try {
     const commands = customCommandsService.importCommands(body, localUiActor, {
-      reservedNames: getCustomCommandReservedNames()
+      reservedNames: getCustomCommandReservedNames(),
     });
     return {
       ...getCustomCommands(),
       ok: true,
-      imported: commands.length
+      imported: commands.length,
     };
   } catch (error) {
     return {
       ...getCustomCommands(),
       ok: false,
-      error: safeErrorMessage(error, "Custom command import failed")
+      error: safeErrorMessage(error, "Custom command import failed"),
     };
   }
 };
@@ -4788,7 +5429,7 @@ const previewCustomCommand = (body: unknown) => {
     const actor = createLocalChatMessage({
       login: input.actor || "viewer",
       role: input.role ?? "viewer",
-      text: "!preview"
+      text: "!preview",
     });
     return {
       ok: true,
@@ -4796,13 +5437,13 @@ const previewCustomCommand = (body: unknown) => {
         commandId: input.commandId,
         responseText: input.responseText,
         actor,
-        rawArgs: input.rawArgs
-      })
+        rawArgs: input.rawArgs,
+      }),
     };
   } catch (error) {
     return {
       ok: false,
-      error: safeErrorMessage(error, "Custom command preview failed")
+      error: safeErrorMessage(error, "Custom command preview failed"),
     };
   }
 };
@@ -4829,7 +5470,7 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 30,
     userCooldownSeconds: 10,
     aliases: ["dc"],
-    responses: ["Join the Discord: https://example.com"]
+    responses: ["Join the Discord: https://example.com"],
   },
   {
     id: "socials",
@@ -4841,7 +5482,7 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 30,
     userCooldownSeconds: 10,
     aliases: ["links"],
-    responses: ["Find links and socials here: https://example.com"]
+    responses: ["Find links and socials here: https://example.com"],
   },
   {
     id: "schedule",
@@ -4853,7 +5494,9 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 30,
     userCooldownSeconds: 10,
     aliases: ["when"],
-    responses: ["Stream schedule: check the channel panels for upcoming streams."]
+    responses: [
+      "Stream schedule: check the channel panels for upcoming streams.",
+    ],
   },
   {
     id: "commands",
@@ -4865,7 +5508,9 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 20,
     userCooldownSeconds: 20,
     aliases: ["cmds"],
-    responses: ["Common commands: !discord, !socials, !schedule, !lurk, !rules"]
+    responses: [
+      "Common commands: !discord, !socials, !schedule, !lurk, !rules",
+    ],
   },
   {
     id: "lurk",
@@ -4877,7 +5522,7 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 10,
     userCooldownSeconds: 30,
     aliases: [],
-    responses: ["{user} is lurking. Thanks for hanging out."]
+    responses: ["{user} is lurking. Thanks for hanging out."],
   },
   {
     id: "unlurk",
@@ -4889,7 +5534,7 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 10,
     userCooldownSeconds: 30,
     aliases: ["back"],
-    responses: ["Welcome back, {user}."]
+    responses: ["Welcome back, {user}."],
   },
   {
     id: "shoutout",
@@ -4901,7 +5546,7 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 10,
     userCooldownSeconds: 5,
     aliases: ["shoutout"],
-    responses: ["Go check out {target}: https://twitch.tv/{target}"]
+    responses: ["Go check out {target}: https://twitch.tv/{target}"],
   },
   {
     id: "rules",
@@ -4913,7 +5558,7 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 30,
     userCooldownSeconds: 10,
     aliases: [],
-    responses: ["Keep chat respectful, avoid spoilers, and listen to mods."]
+    responses: ["Keep chat respectful, avoid spoilers, and listen to mods."],
   },
   {
     id: "youtube",
@@ -4925,7 +5570,7 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 30,
     userCooldownSeconds: 10,
     aliases: ["yt"],
-    responses: ["YouTube and VODs: https://example.com"]
+    responses: ["YouTube and VODs: https://example.com"],
   },
   {
     id: "tip",
@@ -4937,7 +5582,9 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 60,
     userCooldownSeconds: 30,
     aliases: ["donate"],
-    responses: ["Support is never required, but you can find the tip link here: https://example.com"]
+    responses: [
+      "Support is never required, but you can find the tip link here: https://example.com",
+    ],
   },
   {
     id: "merch",
@@ -4949,7 +5596,7 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 60,
     userCooldownSeconds: 30,
     aliases: ["store"],
-    responses: ["Merch/store link: https://example.com"]
+    responses: ["Merch/store link: https://example.com"],
   },
   {
     id: "specs",
@@ -4961,7 +5608,9 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 30,
     userCooldownSeconds: 15,
     aliases: ["setup"],
-    responses: ["Stream setup/specs: update this command with your current gear list."]
+    responses: [
+      "Stream setup/specs: update this command with your current gear list.",
+    ],
   },
   {
     id: "giveaway",
@@ -4973,42 +5622,58 @@ const customCommandPresetDefinitions = [
     globalCooldownSeconds: 15,
     userCooldownSeconds: 10,
     aliases: ["raffle"],
-    responses: ["Giveaway status: use !gstatus when a giveaway is active."]
-  }
+    responses: ["Giveaway status: use !gstatus when a giveaway is active."],
+  },
 ] as const;
 
 const customCommandPresetPackDefinitions = [
   {
     id: "core-utilities",
     label: "Core Utility Pack",
-    description: "Discord, socials, schedule, command list, lurk/unlurk, rules, and shoutout.",
-    presetIds: ["discord", "socials", "schedule", "commands", "lurk", "unlurk", "rules", "shoutout"]
+    description:
+      "Discord, socials, schedule, command list, lurk/unlurk, rules, and shoutout.",
+    presetIds: [
+      "discord",
+      "socials",
+      "schedule",
+      "commands",
+      "lurk",
+      "unlurk",
+      "rules",
+      "shoutout",
+    ],
   },
   {
     id: "support-links",
     label: "Support Links Pack",
     description: "YouTube, tips, merch, and setup/specs placeholders.",
-    presetIds: ["youtube", "tip", "merch", "specs"]
-  }
+    presetIds: ["youtube", "tip", "merch", "specs"],
+  },
 ] as const;
 
 const inspectCustomCommandPreset = (
   preset: (typeof customCommandPresetDefinitions)[number],
   commands: ReturnType<CustomCommandsService["listCommands"]>,
-  reservedNames: string[]
+  reservedNames: string[],
 ) => {
   const reserved = new Set(reservedNames);
   const commandNames = new Set(commands.map((command) => command.name));
   const aliases = new Set(commands.flatMap((command) => command.aliases));
   const conflicts = [
-    reserved.has(preset.commandName) ? `!${preset.commandName} is reserved` : undefined,
-    commandNames.has(preset.commandName) ? `!${preset.commandName} already exists` : undefined,
-    aliases.has(preset.commandName) ? `!${preset.commandName} is already an alias` : undefined,
+    reserved.has(preset.commandName)
+      ? `!${preset.commandName} is reserved`
+      : undefined,
+    commandNames.has(preset.commandName)
+      ? `!${preset.commandName} already exists`
+      : undefined,
+    aliases.has(preset.commandName)
+      ? `!${preset.commandName} is already an alias`
+      : undefined,
     ...preset.aliases.flatMap((alias) => [
       reserved.has(alias) ? `!${alias} is reserved` : undefined,
       commandNames.has(alias) ? `!${alias} already exists` : undefined,
-      aliases.has(alias) ? `!${alias} is already an alias` : undefined
-    ])
+      aliases.has(alias) ? `!${alias} is already an alias` : undefined,
+    ]),
   ].filter(Boolean);
 
   return {
@@ -5016,22 +5681,35 @@ const inspectCustomCommandPreset = (
     inspection: {
       status: conflicts.length ? "blocked" : "ready",
       detail: conflicts.join("; ") || "Ready to create disabled.",
-      nextAction: conflicts.length ? "Resolve the command or alias conflict first." : "Create, edit links/copy, then enable when tested."
-    }
+      nextAction: conflicts.length
+        ? "Resolve the command or alias conflict first."
+        : "Create, edit links/copy, then enable when tested.",
+    },
   };
 };
 
 const inspectCustomCommandPresetPack = (
   pack: (typeof customCommandPresetPackDefinitions)[number],
   commands: ReturnType<CustomCommandsService["listCommands"]>,
-  reservedNames: string[]
+  reservedNames: string[],
 ) => {
   const presets = pack.presetIds
-    .map((presetId) => customCommandPresetDefinitions.find((preset) => preset.id === presetId))
-    .filter((preset): preset is (typeof customCommandPresetDefinitions)[number] => Boolean(preset))
-    .map((preset) => inspectCustomCommandPreset(preset, commands, reservedNames));
-  const ready = presets.filter((preset) => preset.inspection.status === "ready");
-  const blocked = presets.filter((preset) => preset.inspection.status !== "ready");
+    .map((presetId) =>
+      customCommandPresetDefinitions.find((preset) => preset.id === presetId),
+    )
+    .filter(
+      (preset): preset is (typeof customCommandPresetDefinitions)[number] =>
+        Boolean(preset),
+    )
+    .map((preset) =>
+      inspectCustomCommandPreset(preset, commands, reservedNames),
+    );
+  const ready = presets.filter(
+    (preset) => preset.inspection.status === "ready",
+  );
+  const blocked = presets.filter(
+    (preset) => preset.inspection.status !== "ready",
+  );
 
   return {
     ...pack,
@@ -5042,17 +5720,18 @@ const inspectCustomCommandPresetPack = (
       id: preset.id,
       commandName: preset.commandName,
       label: preset.label,
-      status: preset.inspection.status
+      status: preset.inspection.status,
     })),
     inspection: {
-      status: ready.length === 0 ? "blocked" : blocked.length ? "partial" : "ready",
+      status:
+        ready.length === 0 ? "blocked" : blocked.length ? "partial" : "ready",
       detail: blocked.length
         ? `${ready.length} ready, ${blocked.length} already present or blocked.`
         : `${ready.length} commands ready to create disabled.`,
       nextAction: ready.length
         ? "Create ready commands disabled, edit placeholder links/copy, then enable after local tests."
-        : "Resolve command or alias conflicts before creating this pack."
-    }
+        : "Resolve command or alias conflicts before creating this pack.",
+    },
   };
 };
 
@@ -5060,43 +5739,47 @@ const streamPresetDefinitions = [
   {
     id: "giveaway-night",
     label: "Giveaway Night",
-    description: "Keep giveaways and custom commands live while optional timers and moderation stay off.",
+    description:
+      "Keep giveaways and custom commands live while optional timers and moderation stay off.",
     modes: {
       custom_commands: "live",
       timers: "off",
-      moderation_filters: "off"
-    }
+      moderation_filters: "off",
+    },
   },
   {
     id: "local-bot-rehearsal",
     label: "Local Bot Rehearsal",
-    description: "Keep custom commands live and move timers/moderation into local test mode.",
+    description:
+      "Keep custom commands live and move timers/moderation into local test mode.",
     modes: {
       custom_commands: "live",
       timers: "test",
-      moderation_filters: "test"
-    }
+      moderation_filters: "test",
+    },
   },
   {
     id: "timers-live",
     label: "Timers Live",
-    description: "Use custom commands and timers in live chat while moderation remains local-test only.",
+    description:
+      "Use custom commands and timers in live chat while moderation remains local-test only.",
     modes: {
       custom_commands: "live",
       timers: "live",
-      moderation_filters: "test"
-    }
+      moderation_filters: "test",
+    },
   },
   {
     id: "bot-replacement",
     label: "Bot Replacement",
-    description: "Enable custom commands, timers, and scoped moderation for live Twitch chat.",
+    description:
+      "Enable custom commands, timers, and scoped moderation for live Twitch chat.",
     modes: {
       custom_commands: "live",
       timers: "live",
-      moderation_filters: "live"
-    }
-  }
+      moderation_filters: "live",
+    },
+  },
 ] as const satisfies Array<{
   id: string;
   label: string;
@@ -5106,7 +5789,7 @@ const streamPresetDefinitions = [
 
 const inspectStreamPreset = (
   preset: (typeof streamPresetDefinitions)[number],
-  gates: FeatureGateState[]
+  gates: FeatureGateState[],
 ) => {
   const gateModes = new Map(gates.map((gate) => [gate.key, gate.mode]));
   const changes = Object.entries(preset.modes)
@@ -5114,7 +5797,7 @@ const inspectStreamPreset = (
     .map(([key, mode]) => ({
       key,
       from: gateModes.get(key as FeatureKey) || "off",
-      to: mode
+      to: mode,
     }));
 
   return {
@@ -5123,16 +5806,20 @@ const inspectStreamPreset = (
     inspection: {
       status: changes.length ? "changes" : "current",
       detail: changes.length
-        ? changes.map((change) => `${change.key}: ${change.from} -> ${change.to}`).join("; ")
+        ? changes
+            .map((change) => `${change.key}: ${change.from} -> ${change.to}`)
+            .join("; ")
         : "Preset is already active.",
       nextAction: changes.length
         ? "Apply explicitly, then run preflight and local tests before relying on live chat behavior."
-        : "No feature gate changes needed."
-    }
+        : "No feature gate changes needed.",
+    },
   };
 };
 
-const presetRequiresConfirmation = (preset: (typeof streamPresetDefinitions)[number]) => {
+const presetRequiresConfirmation = (
+  preset: (typeof streamPresetDefinitions)[number],
+) => {
   const modes: Record<FeatureKey, FeatureGateMode> = preset.modes;
   return modes.timers === "live" || modes.moderation_filters === "live";
 };
@@ -5140,7 +5827,7 @@ const presetRequiresConfirmation = (preset: (typeof streamPresetDefinitions)[num
 const getOutboundMessages = () => ({
   ok: true,
   summary: outboundHistory.summary(),
-  messages: outboundHistory.list()
+  messages: outboundHistory.list(),
 });
 
 const resendOutboundMessage = async (id: string | undefined) => {
@@ -5151,7 +5838,7 @@ const resendOutboundMessage = async (id: string | undefined) => {
     return {
       ...outbound,
       ok: false,
-      error: "No failed outbound message is available to resend."
+      error: "No failed outbound message is available to resend.",
     };
   }
 
@@ -5160,7 +5847,7 @@ const resendOutboundMessage = async (id: string | undefined) => {
     action: record.action,
     importance: record.importance,
     giveawayId: record.giveawayId,
-    resentFrom: record.id
+    resentFrom: record.id,
   });
 
   if (result.ok && typeof result.outboundMessageId === "string") {
@@ -5172,7 +5859,7 @@ const resendOutboundMessage = async (id: string | undefined) => {
   return {
     ...outbound,
     ...result,
-    resentFrom: record.id
+    resentFrom: record.id,
   };
 };
 
@@ -5183,7 +5870,7 @@ const resendGiveawayAnnouncement = async (action: string | undefined) => {
     return {
       ...getGiveawayState(),
       ok: false,
-      error: "Unknown giveaway announcement phase."
+      error: "Unknown giveaway announcement phase.",
     };
   }
 
@@ -5193,7 +5880,7 @@ const resendGiveawayAnnouncement = async (action: string | undefined) => {
     return {
       ...getGiveawayState(),
       ok: false,
-      error: "No giveaway is available for announcement resend."
+      error: "No giveaway is available for announcement resend.",
     };
   }
 
@@ -5206,9 +5893,9 @@ const resendGiveawayAnnouncement = async (action: string | undefined) => {
           action: existing.action || phase.actions[0],
           importance: existing.importance,
           giveawayId: state.giveaway.id,
-          resentFrom: existing.id
+          resentFrom: existing.id,
         },
-        resentFrom: existing.id
+        resentFrom: existing.id,
       }
     : buildGiveawayAnnouncementForPhase(phase, state);
 
@@ -5216,12 +5903,16 @@ const resendGiveawayAnnouncement = async (action: string | undefined) => {
     return {
       ...getGiveawayState(),
       ok: false,
-      error: `Cannot reconstruct the ${phase.label} announcement from current giveaway state.`
+      error: `Cannot reconstruct the ${phase.label} announcement from current giveaway state.`,
     };
   }
 
-  const result = await enqueueChatMessage(announcement.message, announcement.metadata);
-  const resentFrom = "resentFrom" in announcement ? announcement.resentFrom : undefined;
+  const result = await enqueueChatMessage(
+    announcement.message,
+    announcement.metadata,
+  );
+  const resentFrom =
+    "resentFrom" in announcement ? announcement.resentFrom : undefined;
 
   if (result.ok && resentFrom && typeof result.outboundMessageId === "string") {
     outboundHistory.markResent(resentFrom, result.outboundMessageId);
@@ -5231,7 +5922,7 @@ const resendGiveawayAnnouncement = async (action: string | undefined) => {
     ...getGiveawayState(),
     ...result,
     action: phase.actions[0],
-    resentFrom
+    resentFrom,
   };
 };
 
@@ -5242,7 +5933,8 @@ const resendCriticalGiveawayMessage = async () => {
     return {
       ...getGiveawayState(),
       ok: false,
-      error: "No failed critical giveaway message is available for panic resend."
+      error:
+        "No failed critical giveaway message is available for panic resend.",
     };
   }
 
@@ -5252,23 +5944,25 @@ const resendCriticalGiveawayMessage = async () => {
     ...getGiveawayState(),
     ...result,
     resentAction: record.action,
-    resentFrom: record.id
+    resentFrom: record.id,
   };
 };
 
 const latestFailedCriticalGiveawayMessage = () => {
   const state = giveawaysService.getLatestGiveawayState();
   const currentGiveawayId = state.giveaway?.id;
-  const failedCritical = outboundHistory.list().filter(
-    (message) =>
-      message.category === "giveaway" &&
-      message.importance === "critical" &&
-      message.status === "failed"
-  );
+  const failedCritical = outboundHistory
+    .list()
+    .filter(
+      (message) =>
+        message.category === "giveaway" &&
+        message.importance === "critical" &&
+        message.status === "failed",
+    );
 
   if (currentGiveawayId !== undefined) {
     const currentFailure = failedCritical.find(
-      (message) => Number(message.giveawayId) === Number(currentGiveawayId)
+      (message) => Number(message.giveawayId) === Number(currentGiveawayId),
     );
 
     if (currentFailure) {
@@ -5287,7 +5981,7 @@ const sendCurrentGiveawayStatus = async () => {
     return {
       ...getGiveawayState(),
       ok: false,
-      error: "No giveaway is available for a status message."
+      error: "No giveaway is available for a status message.",
     };
   }
 
@@ -5295,13 +5989,13 @@ const sendCurrentGiveawayStatus = async () => {
     category: "giveaway",
     action: "status",
     importance: "normal",
-    giveawayId: state.giveaway.id
+    giveawayId: state.giveaway.id,
   });
 
   return {
     ...getGiveawayState(),
     ...result,
-    message
+    message,
   };
 };
 
@@ -5318,7 +6012,7 @@ const sendConfiguredChatMessage = async (message: string) => {
     return {
       status: "failed" as const,
       failureCategory: "config" as const,
-      reason: "Setup is missing resolved Twitch IDs."
+      reason: "Setup is missing resolved Twitch IDs.",
     };
   }
 
@@ -5335,12 +6029,12 @@ const sendConfiguredChatMessage = async (message: string) => {
       expectedClientId: twitch.clientId,
       expectedBotUserId: twitch.botUserId,
       expectedBotLogin: twitch.botLogin,
-      logger
+      logger,
     });
 
     logger.warn(
       { failureCategory: structured.failureCategory },
-      "Outbound chat auth failed; token refreshed and message will be retried once"
+      "Outbound chat auth failed; token refreshed and message will be retried once",
     );
 
     return createSetupChatSender(refreshed.twitch).send(message);
@@ -5348,7 +6042,10 @@ const sendConfiguredChatMessage = async (message: string) => {
     return {
       status: "failed" as const,
       failureCategory: "auth" as const,
-      reason: safeErrorMessage(error, "Twitch token refresh failed. Reconnect Twitch.")
+      reason: safeErrorMessage(
+        error,
+        "Twitch token refresh failed. Reconnect Twitch.",
+      ),
     };
   }
 };
@@ -5368,7 +6065,7 @@ const createSetupChatSender = (twitch: LocalSecrets["twitch"]) => {
     accessToken: twitch.accessToken,
     broadcasterId: twitch.broadcasterUserId,
     senderId: twitch.botUserId,
-    logger
+    logger,
   });
 };
 
@@ -5387,18 +6084,18 @@ const getGiveawayTemplates = () => ({
     "requestedCount",
     "partial",
     "rerolled",
-    "replacement"
-  ]
+    "replacement",
+  ],
 });
 
 const saveGiveawayTemplates = (body: unknown) => ({
   ...getGiveawayTemplates(),
-  templates: giveawayTemplates.save(body)
+  templates: giveawayTemplates.save(body),
 });
 
 const resetGiveawayTemplates = (actions: unknown) => ({
   ...getGiveawayTemplates(),
-  templates: giveawayTemplates.reset(actions)
+  templates: giveawayTemplates.reset(actions),
 });
 
 type GiveawayAnnouncementPhase = {
@@ -5406,7 +6103,9 @@ type GiveawayAnnouncementPhase = {
   label: string;
   actions: [string, ...string[]];
   importance: NonNullable<MessageQueueMetadata["importance"]>;
-  requiredWhen: (state: ReturnType<GiveawaysService["getLatestGiveawayState"]>) => boolean;
+  requiredWhen: (
+    state: ReturnType<GiveawaysService["getLatestGiveawayState"]>,
+  ) => boolean;
 };
 
 const giveawayAnnouncementPhases: GiveawayAnnouncementPhase[] = [
@@ -5415,14 +6114,14 @@ const giveawayAnnouncementPhases: GiveawayAnnouncementPhase[] = [
     label: "Start",
     actions: ["start"],
     importance: "critical",
-    requiredWhen: (state) => Boolean(state.giveaway)
+    requiredWhen: (state) => Boolean(state.giveaway),
   },
   {
     id: "reminder",
     label: "Reminder / Last call",
     actions: ["reminder", "last-call"],
     importance: "important",
-    requiredWhen: () => false
+    requiredWhen: () => false,
   },
   {
     id: "close",
@@ -5430,22 +6129,22 @@ const giveawayAnnouncementPhases: GiveawayAnnouncementPhase[] = [
     actions: ["close"],
     importance: "critical",
     requiredWhen: (state) =>
-      state.giveaway?.status === "closed" || state.giveaway?.status === "ended"
+      state.giveaway?.status === "closed" || state.giveaway?.status === "ended",
   },
   {
     id: "draw",
     label: "Draw",
     actions: ["draw"],
     importance: "critical",
-    requiredWhen: (state) => state.counts.activeWinners > 0
+    requiredWhen: (state) => state.counts.activeWinners > 0,
   },
   {
     id: "end",
     label: "End",
     actions: ["end"],
     importance: "critical",
-    requiredWhen: (state) => state.giveaway?.status === "ended"
-  }
+    requiredWhen: (state) => state.giveaway?.status === "ended",
+  },
 ];
 
 const getGiveawayAnnouncementPhase = (action: string | undefined) => {
@@ -5454,7 +6153,7 @@ const getGiveawayAnnouncementPhase = (action: string | undefined) => {
   }
 
   return giveawayAnnouncementPhases.find(
-    (phase) => phase.id === action || phase.actions.includes(action)
+    (phase) => phase.id === action || phase.actions.includes(action),
   );
 };
 
@@ -5467,19 +6166,23 @@ const getGiveawayState = () => {
     ...state,
     summary: summarizeGiveawayState(state),
     recap: summarizeGiveawayRecap(latest, assurance),
-    assurance
+    assurance,
   };
 };
 
 const summarizeGiveawayState = (
-  state: ReturnType<GiveawaysService["getOperatorState"]>
+  state: ReturnType<GiveawaysService["getOperatorState"]>,
 ) => {
   const activeWinners = state.winners.filter((winner) => !winner.rerolled_at);
   const undeliveredWinnersCount = activeWinners.filter(
-    (winner) => !winner.delivered_at
+    (winner) => !winner.delivered_at,
   ).length;
   const winnerCount = state.giveaway?.winner_count ?? 6;
-  const liveState = giveawayLiveState(state, activeWinners, undeliveredWinnersCount);
+  const liveState = giveawayLiveState(
+    state,
+    activeWinners,
+    undeliveredWinnersCount,
+  );
 
   return {
     status: state.giveaway?.status ?? "none",
@@ -5501,15 +6204,15 @@ const summarizeGiveawayState = (
       state.giveaway?.status === "open" ? "Giveaway is still open." : undefined,
       undeliveredWinnersCount > 0
         ? `${undeliveredWinnersCount} winner(s) are not marked delivered.`
-        : undefined
-    ].filter(Boolean)
+        : undefined,
+    ].filter(Boolean),
   };
 };
 
 const giveawayLiveState = (
   state: ReturnType<GiveawaysService["getOperatorState"]>,
   activeWinners: ReturnType<GiveawaysService["getOperatorState"]>["winners"],
-  undeliveredWinnersCount: number
+  undeliveredWinnersCount: number,
 ) => {
   const giveaway = state.giveaway;
 
@@ -5518,7 +6221,7 @@ const giveawayLiveState = (
       label: "no giveaway",
       detail: "Start a giveaway when stream operations are ready.",
       tone: "muted",
-      safeToEnd: false
+      safeToEnd: false,
     };
   }
 
@@ -5527,7 +6230,7 @@ const giveawayLiveState = (
       label: "entries open",
       detail: `Viewers enter with !${giveaway.keyword}. Close entries before drawing.`,
       tone: "ok",
-      safeToEnd: false
+      safeToEnd: false,
     };
   }
 
@@ -5536,18 +6239,19 @@ const giveawayLiveState = (
       label: "ready to draw",
       detail: `${state.counts.entries} entr${state.counts.entries === 1 ? "y" : "ies"} recorded. Draw winners when ready.`,
       tone: "ok",
-      safeToEnd: false
+      safeToEnd: false,
     };
   }
 
   if (giveaway.status === "ended") {
     return {
       label: "giveaway ended",
-      detail: undeliveredWinnersCount > 0
-        ? `${undeliveredWinnersCount} winner(s) were still pending delivery at end.`
-        : "Post-stream recap is ready.",
+      detail:
+        undeliveredWinnersCount > 0
+          ? `${undeliveredWinnersCount} winner(s) were still pending delivery at end.`
+          : "Post-stream recap is ready.",
       tone: undeliveredWinnersCount > 0 ? "warn" : "ok",
-      safeToEnd: false
+      safeToEnd: false,
     };
   }
 
@@ -5556,7 +6260,7 @@ const giveawayLiveState = (
       label: "delivery pending",
       detail: `${undeliveredWinnersCount} active winner(s) still need manual delivery.`,
       tone: "warn",
-      safeToEnd: false
+      safeToEnd: false,
     };
   }
 
@@ -5564,12 +6268,12 @@ const giveawayLiveState = (
     label: "safe to end",
     detail: "Active winners are marked delivered.",
     tone: "ok",
-    safeToEnd: true
+    safeToEnd: true,
   };
 };
 
 const summarizeGiveawayAssurance = (
-  state: ReturnType<GiveawaysService["getLatestGiveawayState"]>
+  state: ReturnType<GiveawaysService["getLatestGiveawayState"]>,
 ) => {
   if (!state.giveaway) {
     return {
@@ -5586,43 +6290,50 @@ const summarizeGiveawayAssurance = (
         pendingCritical: 0,
         missingCritical: 0,
         failedCritical: 0,
-        blockingCritical: 0
+        blockingCritical: 0,
       },
-      nextAction: "Start a giveaway."
+      nextAction: "Start a giveaway.",
     };
   }
 
   const messages = giveawayOutboundMessagesFor(state.giveaway.id);
   const phases = giveawayAnnouncementPhases.map((phase) =>
-    summarizeGiveawayPhase(phase, state, messages)
+    summarizeGiveawayPhase(phase, state, messages),
   );
   const failedCritical = phases.filter(
-    (phase) => phase.importance === "critical" && phase.status === "failed"
+    (phase) => phase.importance === "critical" && phase.status === "failed",
   );
   const missingCritical = phases.filter(
-    (phase) => phase.importance === "critical" && phase.status === "missing"
+    (phase) => phase.importance === "critical" && phase.status === "missing",
   );
   const pendingCritical = phases.filter(
-    (phase) => phase.importance === "critical" && phase.status === "pending"
+    (phase) => phase.importance === "critical" && phase.status === "pending",
   );
   const requiredCritical = phases.filter(
-    (phase) => phase.importance === "critical" && phase.required
+    (phase) => phase.importance === "critical" && phase.required,
   );
-  const confirmedCritical = requiredCritical.filter((phase) => phase.status === "sent");
+  const confirmedCritical = requiredCritical.filter(
+    (phase) => phase.status === "sent",
+  );
   const failed = messages.filter((message) => message.status === "failed");
-  const pending = messages.filter((message) => isPendingOutboundStatus(message.status));
+  const pending = messages.filter((message) =>
+    isPendingOutboundStatus(message.status),
+  );
   const sent = messages.filter((message) => message.status === "sent");
   const resent = messages.filter((message) => message.status === "resent");
-  const blockingCritical = [...failedCritical, ...missingCritical, ...pendingCritical];
+  const blockingCritical = [
+    ...failedCritical,
+    ...missingCritical,
+    ...pendingCritical,
+  ];
   const blockContinue = blockingCritical.length > 0;
-  const nextAction =
-    failedCritical[0]
-      ? `Resend failed ${failedCritical[0].label} announcement before continuing.`
-      : missingCritical[0]
-        ? `Send missing ${missingCritical[0].label} announcement before continuing.`
-        : pendingCritical[0]
-          ? `Wait for ${pendingCritical[0].label} announcement to send.`
-          : "Giveaway chat assurance is clear.";
+  const nextAction = failedCritical[0]
+    ? `Resend failed ${failedCritical[0].label} announcement before continuing.`
+    : missingCritical[0]
+      ? `Send missing ${missingCritical[0].label} announcement before continuing.`
+      : pendingCritical[0]
+        ? `Wait for ${pendingCritical[0].label} announcement to send.`
+        : "Giveaway chat assurance is clear.";
 
   return {
     available: true,
@@ -5639,7 +6350,7 @@ const summarizeGiveawayAssurance = (
       pendingCritical: pendingCritical.length,
       missingCritical: missingCritical.length,
       failedCritical: failedCritical.length,
-      blockingCritical: blockingCritical.length
+      blockingCritical: blockingCritical.length,
     },
     latestBlocking: blockingCritical[0]
       ? {
@@ -5647,7 +6358,7 @@ const summarizeGiveawayAssurance = (
           status: blockingCritical[0].status,
           queueStatus: blockingCritical[0].queueStatus,
           action: blockingCritical[0].action,
-          reason: blockingCritical[0].reason
+          reason: blockingCritical[0].reason,
         }
       : undefined,
     nextAction,
@@ -5656,25 +6367,30 @@ const summarizeGiveawayAssurance = (
           action: failed[0].action,
           failureCategory: failed[0].failureCategory,
           reason: failed[0].reason,
-          updatedAt: failed[0].updatedAt
+          updatedAt: failed[0].updatedAt,
         }
-      : undefined
+      : undefined,
   };
 };
 
 const summarizeGiveawayPhase = (
   phase: GiveawayAnnouncementPhase,
   state: ReturnType<GiveawaysService["getLatestGiveawayState"]>,
-  messages: OutboundMessageRecord[]
+  messages: OutboundMessageRecord[],
 ) => {
-  const latest = latestOutboundForActions(state.giveaway?.id, phase.actions, messages);
+  const latest = latestOutboundForActions(
+    state.giveaway?.id,
+    phase.actions,
+    messages,
+  );
   const required = phase.requiredWhen(state);
   const status = latest
     ? phaseStatusFromOutbound(latest)
     : required
       ? "missing"
       : "not-reached";
-  const blocksContinue = phase.importance === "critical" &&
+  const blocksContinue =
+    phase.importance === "critical" &&
     required &&
     (status === "failed" || status === "missing" || status === "pending");
 
@@ -5696,12 +6412,15 @@ const summarizeGiveawayPhase = (
     queueDepth: latest?.queueDepth ?? 0,
     updatedAt: latest?.updatedAt ?? "",
     ageMs: latest?.updatedAt ? Date.now() - Date.parse(latest.updatedAt) : 0,
-    age: latest?.updatedAt ? formatDuration(Date.now() - Date.parse(latest.updatedAt)) : "",
+    age: latest?.updatedAt
+      ? formatDuration(Date.now() - Date.parse(latest.updatedAt))
+      : "",
     blocksContinue,
     canSend: status === "failed" || status === "missing",
-    safeToResend: (status === "failed" || status === "missing") && canSendConfiguredChat(),
+    safeToResend:
+      (status === "failed" || status === "missing") && canSendConfiguredChat(),
     deliveryDetail: giveawayPhaseDeliveryDetail(phase, status, latest),
-    recovery: giveawayPhaseRecoveryText(phase, status)
+    recovery: giveawayPhaseRecoveryText(phase, status),
   };
 };
 
@@ -5715,7 +6434,7 @@ const phaseStatusFromOutbound = (message: OutboundMessageRecord) => {
 const giveawayPhaseDeliveryDetail = (
   phase: GiveawayAnnouncementPhase,
   status: string,
-  latest: OutboundMessageRecord | undefined
+  latest: OutboundMessageRecord | undefined,
 ) => {
   if (!latest) {
     return status === "missing"
@@ -5754,7 +6473,7 @@ const giveawayPhaseDeliveryDetail = (
 
 const giveawayPhaseRecoveryText = (
   phase: GiveawayAnnouncementPhase,
-  status: string
+  status: string,
 ) => {
   if (status === "failed") {
     return `Resend the ${phase.label} announcement if chat missed it.`;
@@ -5777,24 +6496,34 @@ const giveawayPhaseRecoveryText = (
 
 const summarizeGiveawayRecap = (
   state: ReturnType<GiveawaysService["getLatestGiveawayState"]>,
-  assurance = summarizeGiveawayAssurance(state)
+  assurance = summarizeGiveawayAssurance(state),
 ) => {
   if (!state.giveaway) {
     return {
-      available: false
+      available: false,
     };
   }
 
   const activeWinners = state.winners.filter((winner) => !winner.rerolled_at);
-  const deliveredWinners = activeWinners.filter((winner) => winner.delivered_at);
-  const pendingDelivery = activeWinners.filter((winner) => !winner.delivered_at);
-  const messages = outboundHistory.list().filter(
-    (message) =>
-      message.category === "giveaway" &&
-      Number(message.giveawayId) === Number(state.giveaway?.id)
+  const deliveredWinners = activeWinners.filter(
+    (winner) => winner.delivered_at,
   );
-  const criticalMessages = messages.filter((message) => message.importance === "critical");
-  const failedMessages = messages.filter((message) => message.status === "failed");
+  const pendingDelivery = activeWinners.filter(
+    (winner) => !winner.delivered_at,
+  );
+  const messages = outboundHistory
+    .list()
+    .filter(
+      (message) =>
+        message.category === "giveaway" &&
+        Number(message.giveawayId) === Number(state.giveaway?.id),
+    );
+  const criticalMessages = messages.filter(
+    (message) => message.importance === "critical",
+  );
+  const failedMessages = messages.filter(
+    (message) => message.status === "failed",
+  );
 
   return {
     available: true,
@@ -5808,7 +6537,9 @@ const summarizeGiveawayRecap = (
     rerolledCount: state.counts.rerolledWinners,
     criticalMessageCount: criticalMessages.length,
     failedMessageCount: failedMessages.length,
-    criticalFailedCount: criticalMessages.filter((message) => message.status === "failed").length,
+    criticalFailedCount: criticalMessages.filter(
+      (message) => message.status === "failed",
+    ).length,
     sentMessageCount: assurance.summary.sent,
     resentMessageCount: assurance.summary.resent,
     pendingMessageCount: assurance.summary.pending,
@@ -5820,34 +6551,36 @@ const summarizeGiveawayRecap = (
     winners: activeWinners.map((winner) => ({
       login: winner.login,
       displayName: winner.display_name,
-      delivered: Boolean(winner.delivered_at)
-    }))
+      delivered: Boolean(winner.delivered_at),
+    })),
   };
 };
 
 const giveawayOutboundMessagesFor = (giveawayId: number | undefined) =>
-  outboundHistory.list().filter(
-    (message) =>
-      message.category === "giveaway" &&
-      giveawayId !== undefined &&
-      Number(message.giveawayId) === Number(giveawayId)
-  );
+  outboundHistory
+    .list()
+    .filter(
+      (message) =>
+        message.category === "giveaway" &&
+        giveawayId !== undefined &&
+        Number(message.giveawayId) === Number(giveawayId),
+    );
 
 const latestOutboundForActions = (
   giveawayId: number | undefined,
   actions: readonly string[],
-  messages = giveawayOutboundMessagesFor(giveawayId)
+  messages = giveawayOutboundMessagesFor(giveawayId),
 ) =>
   messages.find(
     (message) =>
       actions.includes(message.action) &&
       giveawayId !== undefined &&
-      Number(message.giveawayId) === Number(giveawayId)
+      Number(message.giveawayId) === Number(giveawayId),
   );
 
 const buildGiveawayAnnouncementForPhase = (
   phase: GiveawayAnnouncementPhase,
-  state: ReturnType<GiveawaysService["getLatestGiveawayState"]>
+  state: ReturnType<GiveawaysService["getLatestGiveawayState"]>,
 ) => {
   const giveaway = state.giveaway;
 
@@ -5862,12 +6595,16 @@ const buildGiveawayAnnouncementForPhase = (
       ? giveawayTemplates.start(giveaway)
       : action === "reminder"
         ? giveawayTemplates.reminder(giveaway, state.counts.entries)
-        : action === "close" && (giveaway.status === "closed" || giveaway.status === "ended")
+        : action === "close" &&
+            (giveaway.status === "closed" || giveaway.status === "ended")
           ? giveawayTemplates.close(giveaway, state.counts.entries)
           : action === "draw" && activeWinners.length > 0
             ? giveawayTemplates.draw({
                 winners: activeWinners,
-                requestedCount: Math.max(activeWinners.length, giveaway.winner_count)
+                requestedCount: Math.max(
+                  activeWinners.length,
+                  giveaway.winner_count,
+                ),
               })
             : action === "end" && giveaway.status === "ended"
               ? giveawayTemplates.end(giveaway, state.winners)
@@ -5883,13 +6620,13 @@ const buildGiveawayAnnouncementForPhase = (
       category: "giveaway" as const,
       action,
       importance: phase.importance,
-      giveawayId: giveaway.id
-    }
+      giveawayId: giveaway.id,
+    },
   };
 };
 
 const buildGiveawayStatusMessage = (
-  state: ReturnType<GiveawaysService["getLatestGiveawayState"]>
+  state: ReturnType<GiveawaysService["getLatestGiveawayState"]>,
 ) => {
   const giveaway = state.giveaway;
 
@@ -5898,7 +6635,9 @@ const buildGiveawayStatusMessage = (
   }
 
   const activeWinners = state.winners.filter((winner) => !winner.rerolled_at);
-  const pendingDelivery = activeWinners.filter((winner) => !winner.delivered_at);
+  const pendingDelivery = activeWinners.filter(
+    (winner) => !winner.delivered_at,
+  );
 
   if (giveaway.status === "open") {
     return `Giveaway status: entries open for ${giveaway.title}. Type !${giveaway.keyword} to enter. Entries: ${state.counts.entries}. Winners: ${giveaway.winner_count}.`;
@@ -5913,12 +6652,12 @@ const buildGiveawayStatusMessage = (
   }
 
   const winnerText = formatWinnerNames(activeWinners, 5);
-  const deliveryText = pendingDelivery.length > 0
-    ? `Delivery pending for ${pendingDelivery.length}.`
-    : "All active winners are marked delivered.";
-  const prefix = giveaway.status === "ended"
-    ? "Final giveaway status"
-    : "Giveaway status";
+  const deliveryText =
+    pendingDelivery.length > 0
+      ? `Delivery pending for ${pendingDelivery.length}.`
+      : "All active winners are marked delivered.";
+  const prefix =
+    giveaway.status === "ended" ? "Final giveaway status" : "Giveaway status";
 
   return `${prefix}: ${giveaway.title}. Winner${activeWinners.length === 1 ? "" : "s"}: ${winnerText}. ${deliveryText}`;
 };
@@ -5928,15 +6667,25 @@ const runGiveawayAction = <TResult extends Record<string, unknown>>(
   options: {
     echoToChat?: boolean;
     echoCommand?: string;
-    announcements?: (result: TResult) => GiveawayAnnouncement | GiveawayAnnouncement[] | string | string[] | undefined;
+    announcements?: (
+      result: TResult,
+    ) =>
+      | GiveawayAnnouncement
+      | GiveawayAnnouncement[]
+      | string
+      | string[]
+      | undefined;
     studioMarker?: (result: TResult) => StudioMarkerInput | undefined;
-  } = {}
+  } = {},
 ) => {
   try {
     const result = action();
-    const echoQueued = maybeEchoCommand(options.echoToChat, options.echoCommand);
+    const echoQueued = maybeEchoCommand(
+      options.echoToChat,
+      options.echoCommand,
+    );
     const announcementsQueued = maybeQueueGiveawayAnnouncements(
-      options.announcements?.(result)
+      options.announcements?.(result),
     );
     maybeCreateStudioEventMarker(options.studioMarker?.(result));
 
@@ -5945,13 +6694,13 @@ const runGiveawayAction = <TResult extends Record<string, unknown>>(
       ...result,
       echoQueued,
       announcementsQueued,
-      state: getGiveawayState()
+      state: getGiveawayState(),
     };
   } catch (error) {
     return {
       ok: false,
       error: safeErrorMessage(error, "Giveaway action failed"),
-      state: getGiveawayState()
+      state: getGiveawayState(),
     };
   }
 };
@@ -5965,15 +6714,15 @@ const giveawayAnnouncement = (
   message: string,
   action: string,
   giveawayId: number,
-  importance: MessageQueueMetadata["importance"] = "normal"
+  importance: MessageQueueMetadata["importance"] = "normal",
 ): GiveawayAnnouncement => ({
   message,
   metadata: {
     category: "giveaway",
     action,
     importance,
-    giveawayId
-  }
+    giveawayId,
+  },
 });
 
 type GiveawayStudioAction =
@@ -5996,16 +6745,17 @@ const giveawayStudioActionLabels: Record<GiveawayStudioAction, string> = {
   "last-call": "last call",
   draw: "draw",
   reroll: "reroll",
-  end: "ended"
+  end: "ended",
 };
 
 const giveawayStudioMarker = (
   action: GiveawayStudioAction,
   giveaway: Giveaway,
-  options: GiveawayStudioMarkerOptions = {}
+  options: GiveawayStudioMarkerOptions = {},
 ): StudioMarkerInput => {
   const timestamp = options.statusTimestamp ?? new Date().toISOString();
-  const sourceEventSuffix = options.sourceEventSuffix ?? safeStudioSourceEventPart(timestamp);
+  const sourceEventSuffix =
+    options.sourceEventSuffix ?? safeStudioSourceEventPart(timestamp);
 
   return {
     label: sanitizeText(
@@ -6013,19 +6763,21 @@ const giveawayStudioMarker = (
       {
         field: "Studio marker label",
         maxLength: 140,
-        required: true
-      }
+        required: true,
+      },
     ),
     source_app: "vaexcore-console",
     source_event_id: `vaexcore-console:giveaway:${giveaway.id}:${action}:${sourceEventSuffix}`,
     metadata: studioConsoleMarkerMetadata(`console.giveaway.${action}`, {
       giveaway: giveawayMetadata(giveaway),
-      ...options.metadata
-    })
+      ...options.metadata,
+    }),
   };
 };
 
-const maybeCreateStudioEventMarker = (marker: StudioMarkerInput | undefined) => {
+const maybeCreateStudioEventMarker = (
+  marker: StudioMarkerInput | undefined,
+) => {
   if (!marker || !studioIntegration.enabled) {
     return;
   }
@@ -6035,9 +6787,9 @@ const maybeCreateStudioEventMarker = (marker: StudioMarkerInput | undefined) => 
       {
         error,
         label: marker.label,
-        sourceEventId: marker.source_event_id
+        sourceEventId: marker.source_event_id,
       },
-      "Studio event marker creation failed"
+      "Studio event marker creation failed",
     );
   });
 };
@@ -6051,7 +6803,7 @@ const giveawayMetadata = (giveaway: Giveaway) => ({
   createdAt: giveaway.created_at,
   openedAt: giveaway.opened_at,
   closedAt: giveaway.closed_at,
-  endedAt: giveaway.ended_at
+  endedAt: giveaway.ended_at,
 });
 
 const giveawayWinnerMetadata = (winner: GiveawayWinner) => ({
@@ -6062,7 +6814,7 @@ const giveawayWinnerMetadata = (winner: GiveawayWinner) => ({
   drawnAt: winner.drawn_at,
   claimedAt: winner.claimed_at,
   deliveredAt: winner.delivered_at,
-  rerolledAt: winner.rerolled_at
+  rerolledAt: winner.rerolled_at,
 });
 
 const firstWinnerTimestamp = (winners: GiveawayWinner[]) =>
@@ -6080,9 +6832,16 @@ const safeStudioSourceEventPart = (value: string) =>
     .replace(/^-|-$/g, "");
 
 const maybeQueueGiveawayAnnouncements = (
-  messages: GiveawayAnnouncement | GiveawayAnnouncement[] | string | string[] | undefined
+  messages:
+    | GiveawayAnnouncement
+    | GiveawayAnnouncement[]
+    | string
+    | string[]
+    | undefined,
 ) => {
-  const list = (Array.isArray(messages) ? messages : [messages]).filter(isGiveawayAnnouncementInput);
+  const list = (Array.isArray(messages) ? messages : [messages]).filter(
+    isGiveawayAnnouncementInput,
+  );
 
   if (list.length === 0 || !canSendConfiguredChat()) {
     return false;
@@ -6093,7 +6852,10 @@ const maybeQueueGiveawayAnnouncements = (
   for (const item of list) {
     try {
       const message = typeof item === "string" ? item : item.message;
-      const metadata = typeof item === "string" ? classifyOutboundMessage(item) : item.metadata;
+      const metadata =
+        typeof item === "string"
+          ? classifyOutboundMessage(item)
+          : item.metadata;
       const text = sanitizeChatMessage(message);
       chatQueue.enqueue(text, metadata);
       queued = true;
@@ -6110,7 +6872,7 @@ const maybeQueueGiveawayAnnouncements = (
 };
 
 const isGiveawayAnnouncementInput = (
-  item: GiveawayAnnouncement | string | undefined
+  item: GiveawayAnnouncement | string | undefined,
 ): item is GiveawayAnnouncement | string => Boolean(item);
 
 const canSendConfiguredChat = () => {
@@ -6120,11 +6882,14 @@ const canSendConfiguredChat = () => {
     twitch.clientId &&
     twitch.accessToken &&
     twitch.broadcasterUserId &&
-    twitch.botUserId
+    twitch.botUserId,
   );
 };
 
-const maybeEchoCommand = (echoToChat: boolean | undefined, command: string | undefined) => {
+const maybeEchoCommand = (
+  echoToChat: boolean | undefined,
+  command: string | undefined,
+) => {
   let text: string;
 
   try {
@@ -6143,7 +6908,10 @@ const maybeEchoCommand = (echoToChat: boolean | undefined, command: string | und
     logger.info({ command: text }, "Operator command echo queued");
     return true;
   } catch (error) {
-    logger.warn({ error, command: text }, "Operator command echo failed to queue");
+    logger.warn(
+      { error, command: text },
+      "Operator command echo failed to queue",
+    );
     return false;
   }
 };
@@ -6161,7 +6929,7 @@ const localUiActor: ChatMessage = {
   isVip: false,
   isSubscriber: false,
   source: "local",
-  receivedAt: new Date()
+  receivedAt: new Date(),
 };
 
 const simulatedChatActor: ChatMessage = {
@@ -6169,7 +6937,7 @@ const simulatedChatActor: ChatMessage = {
   id: "simulated-chat",
   userId: "simulated-chat",
   userLogin: "simulated-chat",
-  userDisplayName: "Simulated Chat"
+  userDisplayName: "Simulated Chat",
 };
 
 type LocalChatRole = "viewer" | "subscriber" | "vip" | "mod" | "broadcaster";
@@ -6193,13 +6961,21 @@ const createLocalChatMessage = (input: {
     userLogin: login,
     userDisplayName: sanitizeDisplayName(input.displayName, login),
     broadcasterUserId: "local-broadcaster",
-    badges: isBroadcaster ? ["broadcaster"] : isMod ? ["moderator"] : isVip ? ["vip"] : isSubscriber ? ["subscriber"] : [],
+    badges: isBroadcaster
+      ? ["broadcaster"]
+      : isMod
+        ? ["moderator"]
+        : isVip
+          ? ["vip"]
+          : isSubscriber
+            ? ["subscriber"]
+            : [],
     isBroadcaster,
     isMod,
     isVip,
     isSubscriber,
     source: "local",
-    receivedAt: new Date()
+    receivedAt: new Date(),
   };
 };
 
@@ -6217,7 +6993,7 @@ const simulateCommand = async (body: {
     return {
       ok: false,
       error: safeErrorMessage(error, "Command text is required."),
-      state: getGiveawayState()
+      state: getGiveawayState(),
     };
   }
 
@@ -6225,29 +7001,29 @@ const simulateCommand = async (body: {
   const router = new CommandRouter({
     prefix: "!",
     logger,
-    enqueueMessage: (message) => replies.push(message)
+    enqueueMessage: (message) => replies.push(message),
   });
   registerGiveawayCommands({
     router,
     service: giveawaysService,
     runtimeStatus: setupRuntimeStatus,
-    messages: giveawayTemplates
+    messages: giveawayTemplates,
   });
   registerCommandsModule({
     router,
     db,
-    featureGates
+    featureGates,
   });
   registerStudioCommands({
     router,
-    logger
+    logger,
   });
 
   try {
     const actor = createLocalChatMessage({
       login: body.actor || "viewer",
       role: body.role ?? "viewer",
-      text: command
+      text: command,
     });
     let moderation: ReturnType<ModerationService["evaluate"]> | undefined;
 
@@ -6259,14 +7035,15 @@ const simulateCommand = async (body: {
     } catch (error) {
       logger.warn(
         { error: redactSecrets(error), command },
-        "Moderation simulation failed open"
+        "Moderation simulation failed open",
       );
     }
 
     const routerResult = await router.handle(actor);
-    const echoQueued = routerResult === "handled"
-      ? maybeEchoCommand(body.echoToChat, command)
-      : false;
+    const echoQueued =
+      routerResult === "handled"
+        ? maybeEchoCommand(body.echoToChat, command)
+        : false;
 
     return {
       ok: true,
@@ -6274,33 +7051,38 @@ const simulateCommand = async (body: {
       moderation,
       routerResult,
       echoQueued,
-      state: getGiveawayState()
+      state: getGiveawayState(),
     };
   } catch (error) {
     return {
       ok: false,
       error: safeErrorMessage(error, "Simulated command failed"),
       replies,
-      state: getGiveawayState()
+      state: getGiveawayState(),
     };
   }
 };
 
-const runLocalLifecycleTest = (options: { echoToChat: boolean; confirmed: boolean }) =>
+const runLocalLifecycleTest = (options: {
+  echoToChat: boolean;
+  confirmed: boolean;
+}) =>
   runGiveawayAction(() => {
     if (!options.confirmed) {
       throw new Error("Confirm before running the local lifecycle test.");
     }
 
     if (giveawaysService.status()) {
-      throw new Error("End the active giveaway before running the local lifecycle test.");
+      throw new Error(
+        "End the active giveaway before running the local lifecycle test.",
+      );
     }
 
     const giveaway = giveawaysService.start({
       actor: localUiActor,
       title: "Community Giveaway",
       keyword: "enter",
-      winnerCount: 6
+      winnerCount: 6,
     });
 
     for (const login of ["alice", "bob", "carol", "dave", "erin", "frank"]) {
@@ -6309,8 +7091,8 @@ const runLocalLifecycleTest = (options: { echoToChat: boolean; confirmed: boolea
         createLocalChatMessage({
           login,
           role: "viewer",
-          text: "!enter"
-        })
+          text: "!enter",
+        }),
       );
     }
 
@@ -6325,7 +7107,7 @@ const runLocalLifecycleTest = (options: { echoToChat: boolean; confirmed: boolea
 
     maybeEchoCommand(
       options.echoToChat,
-      '!gstart codes=6 keyword=enter title="Community Giveaway"'
+      '!gstart codes=6 keyword=enter title="Community Giveaway"',
     );
     maybeEchoCommand(options.echoToChat, "!gclose");
     maybeEchoCommand(options.echoToChat, "!gdraw 6");
@@ -6345,7 +7127,7 @@ class TwitchOAuthExchangeError extends Error {
   constructor(
     readonly status: number,
     readonly twitchMessage: string,
-    readonly body: string
+    readonly body: string,
   ) {
     super(`Twitch OAuth exchange failed: ${status} ${twitchMessage}`);
     this.name = "TwitchOAuthExchangeError";
@@ -6354,7 +7136,10 @@ class TwitchOAuthExchangeError extends Error {
 
 const classifyOAuthExchangeError = (error: unknown) => {
   if (error instanceof TwitchOAuthExchangeError) {
-    if (error.status === 403 && /invalid client secret/i.test(error.twitchMessage)) {
+    if (
+      error.status === 403 &&
+      /invalid client secret/i.test(error.twitchMessage)
+    ) {
       return "invalid_client_secret";
     }
 
@@ -6373,8 +7158,11 @@ const classifyOAuthExchangeError = (error: unknown) => {
 const parseTwitchOAuthErrorMessage = (body: string) => {
   try {
     const parsed = JSON.parse(body) as { message?: unknown; error?: unknown };
-    const message = typeof parsed.message === "string" ? parsed.message : parsed.error;
-    return typeof message === "string" && message.trim() ? message.trim() : body;
+    const message =
+      typeof parsed.message === "string" ? parsed.message : parsed.error;
+    return typeof message === "string" && message.trim()
+      ? message.trim()
+      : body;
   } catch {
     return body;
   }
@@ -6391,12 +7179,12 @@ const exchangeCode = async (input: {
     client_secret: input.clientSecret,
     code: input.code,
     grant_type: "authorization_code",
-    redirect_uri: input.redirectUri
+    redirect_uri: input.redirectUri,
   });
   const response = await fetch("https://id.twitch.tv/oauth2/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params
+    body: params,
   });
 
   if (!response.ok) {
@@ -6404,14 +7192,16 @@ const exchangeCode = async (input: {
     throw new TwitchOAuthExchangeError(
       response.status,
       parseTwitchOAuthErrorMessage(body),
-      body
+      body,
     );
   }
 
   const tokens = (await response.json()) as Partial<TwitchOAuthTokenResponse>;
 
   if (!tokens.access_token || !tokens.refresh_token || !tokens.expires_in) {
-    throw new Error("Twitch OAuth exchange did not return usable access and refresh tokens.");
+    throw new Error(
+      "Twitch OAuth exchange did not return usable access and refresh tokens.",
+    );
   }
 
   return {
@@ -6419,7 +7209,7 @@ const exchangeCode = async (input: {
     refresh_token: tokens.refresh_token,
     expires_in: tokens.expires_in,
     scope: tokens.scope ?? [],
-    token_type: tokens.token_type ?? "bearer"
+    token_type: tokens.token_type ?? "bearer",
   };
 };
 
@@ -6450,7 +7240,7 @@ const sendJson = (response: ServerResponse, status: number, body: unknown) => {
   response.writeHead(status, {
     ...securityHeaders,
     "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
   });
   response.end(JSON.stringify(body));
 };
@@ -6459,7 +7249,7 @@ const sendHtml = (response: ServerResponse, html: string) => {
   response.writeHead(200, {
     ...securityHeaders,
     "Content-Type": "text/html; charset=utf-8",
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
   });
   response.end(html);
 };
@@ -6470,7 +7260,7 @@ const sendPlatformHtml = (response: ServerResponse, html: string) => {
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "no-store",
     "Content-Security-Policy":
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-src https://player.twitch.tv https://www.twitch.tv; connect-src 'self'; img-src 'self' data: https:"
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-src https://player.twitch.tv https://www.twitch.tv; connect-src 'self'; img-src 'self' data: https:",
   });
   response.end(html);
 };
@@ -6495,7 +7285,7 @@ const sendStaticUiAsset = (response: ServerResponse, pathname: string) => {
   response.writeHead(200, {
     ...securityHeaders,
     "Content-Type": contentType,
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
   });
   response.end(readFileSync(filePath));
 };
@@ -6535,7 +7325,9 @@ type SuiteLaunchResult = {
 };
 
 const launchVaexcoreSuite = async () => {
-  const results = await Promise.all(vaexcoreSuiteApps.map((appName) => launchDesktopApp(appName)));
+  const results = await Promise.all(
+    vaexcoreSuiteApps.map((appName) => launchDesktopApp(appName)),
+  );
 
   appendSuiteTimelineEvent({
     sourceApp: "vaexcore-console",
@@ -6545,12 +7337,12 @@ const launchVaexcoreSuite = async () => {
     detail: results.every((result) => result.ok)
       ? "Launch requested for Studio, Pulse, and Console."
       : "One or more suite apps could not be launched.",
-    metadata: { results }
+    metadata: { results },
   });
 
   return {
     ok: results.every((result) => result.ok),
-    results
+    results,
   };
 };
 
@@ -6566,14 +7358,14 @@ const launchDesktopApp = (appName: string): Promise<SuiteLaunchResult> => {
   return Promise.resolve({
     appName,
     ok: false,
-    detail: "Suite launching is supported on macOS and Windows desktop builds."
+    detail: "Suite launching is supported on macOS and Windows desktop builds.",
   });
 };
 
 const launchMacApp = (appName: string): Promise<SuiteLaunchResult> =>
   new Promise((resolveLaunch) => {
     const child = spawn("open", ["-a", appName], {
-      stdio: ["ignore", "ignore", "pipe"]
+      stdio: ["ignore", "ignore", "pipe"],
     });
     let stderr = "";
 
@@ -6585,7 +7377,7 @@ const launchMacApp = (appName: string): Promise<SuiteLaunchResult> =>
       resolveLaunch({
         appName,
         ok: false,
-        detail: safeErrorMessage(error, "Launch failed.")
+        detail: safeErrorMessage(error, "Launch failed."),
       });
     });
 
@@ -6593,9 +7385,10 @@ const launchMacApp = (appName: string): Promise<SuiteLaunchResult> =>
       resolveLaunch({
         appName,
         ok: code === 0,
-        detail: code === 0
-          ? "Launch requested."
-          : stderr.trim() || `open exited with code ${code}.`
+        detail:
+          code === 0
+            ? "Launch requested."
+            : stderr.trim() || `open exited with code ${code}.`,
       });
     });
   });
@@ -6607,7 +7400,7 @@ const launchWindowsApp = (appName: string): Promise<SuiteLaunchResult> =>
       ? spawn(executable, [], { stdio: ["ignore", "ignore", "pipe"] })
       : spawn("cmd", ["/C", "start", "", appName], {
           stdio: ["ignore", "ignore", "pipe"],
-          windowsHide: true
+          windowsHide: true,
         });
     let stderr = "";
 
@@ -6619,7 +7412,7 @@ const launchWindowsApp = (appName: string): Promise<SuiteLaunchResult> =>
       resolveLaunch({
         appName,
         ok: false,
-        detail: safeErrorMessage(error, "Launch failed.")
+        detail: safeErrorMessage(error, "Launch failed."),
       });
     });
 
@@ -6627,11 +7420,12 @@ const launchWindowsApp = (appName: string): Promise<SuiteLaunchResult> =>
       resolveLaunch({
         appName,
         ok: code === 0,
-        detail: code === 0
-          ? executable
-            ? `Launch requested from ${executable}.`
-            : "Launch requested through Windows shell."
-          : stderr.trim() || `start exited with code ${code}.`
+        detail:
+          code === 0
+            ? executable
+              ? `Launch requested from ${executable}.`
+              : "Launch requested through Windows shell."
+            : stderr.trim() || `start exited with code ${code}.`,
       });
     });
   });
@@ -6642,7 +7436,10 @@ const startSuiteDiscoveryHeartbeat = (port: number) => {
     try {
       writeSuiteDiscoveryDocument(port, startedAt);
     } catch (error) {
-      logger.warn({ error: redactSecrets(error) }, "Unable to write vaexcore console suite discovery");
+      logger.warn(
+        { error: redactSecrets(error) },
+        "Unable to write vaexcore console suite discovery",
+      );
     }
   };
 
@@ -6675,7 +7472,7 @@ const writeSuiteDiscoveryDocument = (port: number, startedAt: string) => {
       "suite.launcher",
       "suite.timeline",
       "twitch.stream_key",
-      "platform.local_page"
+      "platform.local_page",
     ],
     launchName: CONSOLE_APP.launchName,
     suiteSessionId: session?.sessionId ?? null,
@@ -6683,14 +7480,14 @@ const writeSuiteDiscoveryDocument = (port: number, startedAt: string) => {
     activityDetail: session
       ? `Monitoring chat operations for ${session.title}`
       : "Ready for chat and stream operations",
-    localRuntime: buildConsoleLocalRuntime(apiUrl)
+    localRuntime: buildConsoleLocalRuntime(apiUrl),
   };
 
   validateSuiteDiscoveryDocument(document);
   mkdirSync(directory, { recursive: true });
   writeFileSync(
     join(directory, CONSOLE_APP.discoveryFile),
-    `${JSON.stringify(document, null, 2)}\n`
+    `${JSON.stringify(document, null, 2)}\n`,
   );
 };
 
@@ -6710,7 +7507,7 @@ const buildConsoleLocalRuntime = (apiUrl?: string): SuiteLocalRuntime => {
     durableStorage: [
       "SQLite command configuration, audit logs, giveaways, timers, and moderation settings",
       "local.secrets.json",
-      "setup UI diagnostics and support bundle data"
+      "setup UI diagnostics and support bundle data",
     ],
     networkPolicy: "localhost-only",
     dependencies: [
@@ -6718,40 +7515,48 @@ const buildConsoleLocalRuntime = (apiUrl?: string): SuiteLocalRuntime => {
         name: "setup-server",
         kind: "local-http-service",
         state: apiUrl ? "reachable" : "running",
-        detail: apiUrl ? `Operator API is bound to ${apiUrl}.` : "Operator API is running locally."
+        detail: apiUrl
+          ? `Operator API is bound to ${apiUrl}.`
+          : "Operator API is running locally.",
       },
       {
         name: "sqlite",
         kind: "local-database",
         state: existsSync(databasePath) ? "ready" : "initializing",
-        detail: databasePath
+        detail: databasePath,
       },
       {
         name: "twitch",
         kind: "network-platform",
-        state: config.mode === "local" ? "offline-rehearsal" : "operator-controlled",
+        state:
+          config.mode === "local" ? "offline-rehearsal" : "operator-controlled",
         detail:
           config.mode === "local"
             ? "Console is in local mode; Twitch is not required for rehearsal."
-            : "Twitch is required only for live chat operations, not local setup or rehearsal."
-      }
-    ]
+            : "Twitch is required only for live chat operations, not local setup or rehearsal.",
+      },
+    ],
   };
 };
 
-const suiteDiscoveryDir = () =>
-  join(vaexcoreSharedDataDir(), "suite");
+const suiteDiscoveryDir = () => join(vaexcoreSharedDataDir(), "suite");
 
 const vaexcoreSharedDataDir = () => {
   if (process.platform === "win32") {
-    return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "vaexcore");
+    return join(
+      process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"),
+      "vaexcore",
+    );
   }
 
   if (process.platform === "darwin") {
     return join(homedir(), "Library", "Application Support", "vaexcore");
   }
 
-  return join(process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"), "vaexcore");
+  return join(
+    process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"),
+    "vaexcore",
+  );
 };
 
 const consoleSecretStorageState = () => {
@@ -6766,10 +7571,18 @@ const consoleSecretStorageState = () => {
   return "app-owned-file-needs-secure-store-migration";
 };
 
-const readSuiteSessionDocument = (): { sessionId: string; title: string } | null => {
+const readSuiteSessionDocument = (): {
+  sessionId: string;
+  title: string;
+} | null => {
   try {
-    const parsed = JSON.parse(readFileSync(join(suiteDiscoveryDir(), "session.json"), "utf8"));
-    if (typeof parsed?.sessionId === "string" && typeof parsed?.title === "string") {
+    const parsed = JSON.parse(
+      readFileSync(join(suiteDiscoveryDir(), "session.json"), "utf8"),
+    );
+    if (
+      typeof parsed?.sessionId === "string" &&
+      typeof parsed?.title === "string"
+    ) {
       return { sessionId: parsed.sessionId, title: parsed.title };
     }
   } catch {
@@ -6779,7 +7592,7 @@ const readSuiteSessionDocument = (): { sessionId: string; title: string } | null
 };
 
 const suiteAppStatus = (
-  definition: (typeof vaexcoreSuiteAppDefinitions)[number]
+  definition: (typeof vaexcoreSuiteAppDefinitions)[number],
 ): SuiteAppStatus => {
   const discoveryFile = join(suiteDiscoveryDir(), `${definition.appId}.json`);
   const discovery = readSuiteDiscoveryDocument(discoveryFile);
@@ -6803,16 +7616,26 @@ const suiteAppStatus = (
     apiUrl: discovery?.apiUrl ?? null,
     healthUrl: discovery?.healthUrl ?? null,
     updatedAt: discovery?.updatedAt ?? null,
-    capabilities: Array.isArray(discovery?.capabilities) ? discovery.capabilities : [],
+    capabilities: Array.isArray(discovery?.capabilities)
+      ? discovery.capabilities
+      : [],
     suiteSessionId: discovery?.suiteSessionId ?? null,
     activity: discovery?.activity ?? null,
     activityDetail: discovery?.activityDetail ?? null,
     localRuntime: discovery?.localRuntime ?? null,
-    detail: suiteStatusDetail(installed, Boolean(discovery), running, stale, reachable)
+    detail: suiteStatusDetail(
+      installed,
+      Boolean(discovery),
+      running,
+      stale,
+      reachable,
+    ),
   };
 };
 
-const readSuiteDiscoveryDocument = (path: string): SuiteDiscoveryDocument | null => {
+const readSuiteDiscoveryDocument = (
+  path: string,
+): SuiteDiscoveryDocument | null => {
   try {
     return JSON.parse(readFileSync(path, "utf8")) as SuiteDiscoveryDocument;
   } catch {
@@ -6842,7 +7665,7 @@ const suiteStatusDetail = (
   discovered: boolean,
   running: boolean,
   stale: boolean,
-  reachable: boolean
+  reachable: boolean,
 ) => {
   if (!installed) {
     return platformInstallHint();
@@ -6893,11 +7716,19 @@ const windowsAppExecutablePath = (appName: string) => {
 
   const exeName = `${appName}.exe`;
   const candidates = [
-    process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "Programs", appName, exeName) : undefined,
+    process.env.LOCALAPPDATA
+      ? join(process.env.LOCALAPPDATA, "Programs", appName, exeName)
+      : undefined,
     join(homedir(), "AppData", "Local", "Programs", appName, exeName),
-    process.env.ProgramFiles ? join(process.env.ProgramFiles, appName, exeName) : undefined,
-    process.env["ProgramFiles(x86)"] ? join(process.env["ProgramFiles(x86)"], appName, exeName) : undefined,
-    process.argv[0]?.toLowerCase().endsWith(exeName.toLowerCase()) ? process.argv[0] : undefined
+    process.env.ProgramFiles
+      ? join(process.env.ProgramFiles, appName, exeName)
+      : undefined,
+    process.env["ProgramFiles(x86)"]
+      ? join(process.env["ProgramFiles(x86)"], appName, exeName)
+      : undefined,
+    process.argv[0]?.toLowerCase().endsWith(exeName.toLowerCase())
+      ? process.argv[0]
+      : undefined,
   ].filter((candidate): candidate is string => Boolean(candidate));
 
   return candidates.find((candidate) => existsSync(candidate));
@@ -6908,7 +7739,10 @@ const startSuiteCommandPoller = () => {
     try {
       consumeSuiteCommands();
     } catch (error) {
-      logger.warn({ error: redactSecrets(error) }, "Unable to consume vaexcore console suite commands");
+      logger.warn(
+        { error: redactSecrets(error) },
+        "Unable to consume vaexcore console suite commands",
+      );
     }
   };
 
@@ -6922,7 +7756,9 @@ const consumeSuiteCommands = () => {
     return;
   }
 
-  for (const fileName of readdirSync(directory).filter((file) => file.endsWith(".json"))) {
+  for (const fileName of readdirSync(directory).filter((file) =>
+    file.endsWith(".json"),
+  )) {
     const path = join(directory, fileName);
     let command: SuiteCommandDocument;
     try {
@@ -6930,7 +7766,7 @@ const consumeSuiteCommands = () => {
     } catch (error) {
       logger.warn(
         { error: redactSecrets(error), fileName },
-        "Skipping unreadable vaexcore console suite command"
+        "Skipping unreadable vaexcore console suite command",
       );
       continue;
     }
@@ -6940,7 +7776,7 @@ const consumeSuiteCommands = () => {
     } catch (error) {
       logger.warn(
         { error: redactSecrets(error), fileName },
-        "Skipping invalid vaexcore console suite command"
+        "Skipping invalid vaexcore console suite command",
       );
       unlinkSync(path);
       continue;
@@ -6957,17 +7793,17 @@ const consumeSuiteCommands = () => {
       metadata: {
         commandId: command.commandId ?? null,
         command: command.command ?? null,
-        sourceAppName: command.sourceAppName ?? null
-      }
+        sourceAppName: command.sourceAppName ?? null,
+      },
     });
 
     if (command.command === "focus-ops") {
       logger.info(
         {
           commandId: command.commandId,
-          sourceAppName: command.sourceAppName
+          sourceAppName: command.sourceAppName,
         },
-        "Received suite focus request for vaexcore console"
+        "Received suite focus request for vaexcore console",
       );
     }
   }
@@ -6993,7 +7829,7 @@ const sendText = (response: ServerResponse, status: number, text: string) => {
   response.writeHead(status, {
     ...securityHeaders,
     "Content-Type": "text/plain; charset=utf-8",
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
   });
   response.end(text);
 };
@@ -7005,7 +7841,9 @@ const redirect = (response: ServerResponse, location: string) => {
 
 const isLocalRequest = (request: IncomingMessage) => {
   const remote = request.socket.remoteAddress;
-  return remote === "127.0.0.1" || remote === "::1" || remote === "::ffff:127.0.0.1";
+  return (
+    remote === "127.0.0.1" || remote === "::1" || remote === "::ffff:127.0.0.1"
+  );
 };
 
 const isAllowedHost = (hostHeader: string | undefined) => {
@@ -7014,7 +7852,9 @@ const isAllowedHost = (hostHeader: string | undefined) => {
   }
 
   const hostName = hostHeader.split(":")[0]?.replace(/^\[|\]$/g, "");
-  return hostName === "localhost" || hostName === "127.0.0.1" || hostName === "::1";
+  return (
+    hostName === "localhost" || hostName === "127.0.0.1" || hostName === "::1"
+  );
 };
 
 const normalizeLogin = (value: string | undefined) => {
@@ -7055,14 +7895,17 @@ const extractLoginInput = (value: string | undefined) => {
 const sanitizeOptionalText = (
   value: string | undefined,
   field: string,
-  maxLength: number
-) => (value?.trim() ? sanitizeText(value, { field, maxLength, required: true }) : undefined);
+  maxLength: number,
+) =>
+  value?.trim()
+    ? sanitizeText(value, { field, maxLength, required: true })
+    : undefined;
 
 const sanitizeRedirectUri = (value: string | undefined) => {
   const redirectUri = sanitizeText(value || defaultRedirectUri, {
     field: "Redirect URI",
     maxLength: 200,
-    required: true
+    required: true,
   });
   const parsed = new URL(redirectUri);
 
@@ -7072,7 +7915,9 @@ const sanitizeRedirectUri = (value: string | undefined) => {
     parsed.port !== "3434" ||
     parsed.pathname !== "/auth/twitch/callback"
   ) {
-    throw new Error("Redirect URI must be http://localhost:3434/auth/twitch/callback.");
+    throw new Error(
+      "Redirect URI must be http://localhost:3434/auth/twitch/callback.",
+    );
   }
 
   return parsed.toString();
@@ -7091,7 +7936,10 @@ const consumeOauthState = (state: string) => {
   return Boolean(expiresAt && expiresAt >= Date.now());
 };
 
-const valueOrExisting = (value: string | undefined, existing: string | undefined) => {
+const valueOrExisting = (
+  value: string | undefined,
+  existing: string | undefined,
+) => {
   const trimmed = value?.trim();
   return trimmed ? trimmed : existing;
 };
@@ -7099,15 +7947,16 @@ const valueOrExisting = (value: string | undefined, existing: string | undefined
 const valueOrExistingLogin = (
   input: Record<string, string>,
   field: "broadcasterLogin" | "botLogin",
-  existing: string | undefined
-) => (hasSubmittedField(input, field) ? normalizeLogin(input[field]) : existing);
+  existing: string | undefined,
+) =>
+  hasSubmittedField(input, field) ? normalizeLogin(input[field]) : existing;
 
 const hasSubmittedField = (input: Record<string, string>, field: string) =>
   Object.prototype.hasOwnProperty.call(input, field);
 
 const clearTwitchAuthorization = (
   twitch: LocalSecrets["twitch"],
-  options: { clearBroadcasterIdentity?: boolean } = {}
+  options: { clearBroadcasterIdentity?: boolean } = {},
 ): LocalSecrets["twitch"] => ({
   ...twitch,
   accessToken: undefined,
@@ -7116,7 +7965,9 @@ const clearTwitchAuthorization = (
   tokenExpiresAt: undefined,
   tokenValidatedAt: undefined,
   botUserId: undefined,
-  broadcasterUserId: options.clearBroadcasterIdentity ? undefined : twitch.broadcasterUserId
+  broadcasterUserId: options.clearBroadcasterIdentity
+    ? undefined
+    : twitch.broadcasterUserId,
 });
 
 const maskToken = (token: string) =>
@@ -7127,7 +7978,7 @@ const securityHeaders = {
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "no-referrer",
   "Content-Security-Policy":
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:"
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:",
 };
 
 const setupShellHtml = String.raw`<!doctype html>

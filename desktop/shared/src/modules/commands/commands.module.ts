@@ -10,7 +10,11 @@ type CommandsModuleOptions = {
   featureGates?: FeatureGateStore;
 };
 
-export const registerCommandsModule = ({ router, db, featureGates }: CommandsModuleOptions) => {
+export const registerCommandsModule = ({
+  router,
+  db,
+  featureGates,
+}: CommandsModuleOptions) => {
   const service = new CustomCommandsService(db, { featureGates });
   registerCustomCommands({ router, service });
 

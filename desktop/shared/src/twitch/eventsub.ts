@@ -5,7 +5,7 @@ import type { RuntimeStatus } from "../core/runtimeStatus";
 import {
   normalizeLogin,
   sanitizeChatMessage,
-  sanitizeDisplayName
+  sanitizeDisplayName,
 } from "../core/security";
 import { createTwitchHeaders } from "./auth";
 import { explainTwitchHttpError } from "./errors";
@@ -35,10 +35,16 @@ export class TwitchEventSubClient {
 
   constructor(private readonly options: EventSubOptions) {}
 
-  async connect(url = this.options.eventSubUrl, twitchInitiatedReconnect = false) {
+  async connect(
+    url = this.options.eventSubUrl,
+    twitchInitiatedReconnect = false,
+  ) {
     this.manuallyClosed = false;
 
-    this.options.logger.info({ url }, "Connecting to Twitch EventSub WebSocket");
+    this.options.logger.info(
+      { url },
+      "Connecting to Twitch EventSub WebSocket",
+    );
 
     await new Promise<void>((resolve, reject) => {
       const nextSocket = new WebSocket(url);
@@ -47,8 +53,8 @@ export class TwitchEventSubClient {
       const startupTimeout = setTimeout(() => {
         settleWithError(
           new Error(
-            "Timed out waiting for EventSub welcome and chat subscription confirmation"
-          )
+            "Timed out waiting for EventSub welcome and chat subscription confirmation",
+          ),
         );
         nextSocket.close();
       }, 15000);
@@ -83,7 +89,7 @@ export class TwitchEventSubClient {
         void this.handleRawMessage(
           nextSocket,
           raw.toString(),
-          twitchInitiatedReconnect
+          twitchInitiatedReconnect,
         )
           .then((ready) => {
             if (ready) {
@@ -99,7 +105,7 @@ export class TwitchEventSubClient {
       nextSocket.on("close", (code, reason) => {
         this.options.logger.warn(
           { code, reason: reason.toString() },
-          "EventSub WebSocket closed"
+          "EventSub WebSocket closed",
         );
 
         const wasActiveSocket = this.socket === nextSocket;
@@ -113,8 +119,8 @@ export class TwitchEventSubClient {
         if (!settled) {
           settleWithError(
             new Error(
-              `EventSub WebSocket closed before startup completed: ${code} ${reason.toString()}`
-            )
+              `EventSub WebSocket closed before startup completed: ${code} ${reason.toString()}`,
+            ),
           );
           return;
         }
@@ -167,7 +173,7 @@ export class TwitchEventSubClient {
   private async handleRawMessage(
     socket: WebSocket,
     raw: string,
-    twitchInitiatedReconnect: boolean
+    twitchInitiatedReconnect: boolean,
   ): Promise<boolean> {
     const message = JSON.parse(raw) as EventSubMessage;
     const type = message.metadata.message_type;
@@ -181,7 +187,9 @@ export class TwitchEventSubClient {
       const sessionId = message.payload.session?.id;
 
       if (!sessionId) {
-        this.options.logger.error("EventSub welcome did not include a session ID");
+        this.options.logger.error(
+          "EventSub welcome did not include a session ID",
+        );
         return false;
       }
 
@@ -211,7 +219,9 @@ export class TwitchEventSubClient {
       const reconnectUrl = message.payload.session?.reconnect_url;
 
       if (!reconnectUrl) {
-        this.options.logger.error("EventSub reconnect message did not include a URL");
+        this.options.logger.error(
+          "EventSub reconnect message did not include a URL",
+        );
         return false;
       }
 
@@ -220,7 +230,10 @@ export class TwitchEventSubClient {
     }
 
     if (type === "revocation") {
-      this.options.logger.warn({ payload: message.payload }, "EventSub subscription revoked");
+      this.options.logger.warn(
+        { payload: message.payload },
+        "EventSub subscription revoked",
+      );
       return false;
     }
 
@@ -228,7 +241,7 @@ export class TwitchEventSubClient {
       if (this.isDuplicate(message.metadata.message_id)) {
         this.options.logger.debug(
           { messageId: message.metadata.message_id },
-          "Duplicate EventSub notification ignored"
+          "Duplicate EventSub notification ignored",
         );
         return false;
       }
@@ -260,14 +273,20 @@ export class TwitchEventSubClient {
         userId: event.chatter_user_id,
         userLogin: event.chatter_user_login,
         userDisplayName: event.chatter_user_name,
-        badges: event.badges ?? []
+        badges: event.badges ?? [],
       });
     } catch (error) {
-      this.options.logger.warn({ error }, "Malformed EventSub chat message ignored");
+      this.options.logger.warn(
+        { error },
+        "Malformed EventSub chat message ignored",
+      );
       return;
     }
 
-    this.options.logger.debug({ chatMessage: normalized }, "Normalized ChatMessage");
+    this.options.logger.debug(
+      { chatMessage: normalized },
+      "Normalized ChatMessage",
+    );
 
     await this.options.onChatMessage(normalized);
   }
@@ -276,33 +295,39 @@ export class TwitchEventSubClient {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       this.options.logger.info(
         { attempt, sessionId },
-        "EventSub chat subscription request sent"
+        "EventSub chat subscription request sent",
       );
 
-      const response = await fetch("https://api.twitch.tv/helix/eventsub/subscriptions", {
-        method: "POST",
-        headers: createTwitchHeaders({
-          clientId: this.options.clientId,
-          accessToken: await this.getAccessToken()
-        }),
-        body: JSON.stringify({
-          type: "channel.chat.message",
-          version: "1",
-          condition: {
-            broadcaster_user_id: this.options.broadcasterUserId,
-            user_id: this.options.botUserId
-          },
-          transport: {
-            method: "websocket",
-            session_id: sessionId
-          }
-        })
-      });
+      const response = await fetch(
+        "https://api.twitch.tv/helix/eventsub/subscriptions",
+        {
+          method: "POST",
+          headers: createTwitchHeaders({
+            clientId: this.options.clientId,
+            accessToken: await this.getAccessToken(),
+          }),
+          body: JSON.stringify({
+            type: "channel.chat.message",
+            version: "1",
+            condition: {
+              broadcaster_user_id: this.options.broadcasterUserId,
+              user_id: this.options.botUserId,
+            },
+            transport: {
+              method: "websocket",
+              session_id: sessionId,
+            },
+          }),
+        },
+      );
 
       if (response.ok) {
         this.options.logger.info(
-          { operatorEvent: "chat subscription created", subscriptionType: "channel.chat.message" },
-          "Chat subscription created"
+          {
+            operatorEvent: "chat subscription created",
+            subscriptionType: "channel.chat.message",
+          },
+          "Chat subscription created",
         );
         return;
       }
@@ -313,7 +338,7 @@ export class TwitchEventSubClient {
         if (refreshed) {
           this.options.logger.warn(
             { attempt },
-            "EventSub chat subscription auth failed; token refreshed and request will be retried"
+            "EventSub chat subscription auth failed; token refreshed and request will be retried",
           );
           continue;
         }
@@ -321,12 +346,12 @@ export class TwitchEventSubClient {
 
       const error = await explainTwitchHttpError(
         response,
-        "eventsub_chat_subscription"
+        "eventsub_chat_subscription",
       );
 
       this.options.logger.error(
         { error, attempt },
-        "EventSub chat subscription attempt failed"
+        "EventSub chat subscription attempt failed",
       );
 
       if (attempt === 3) {
@@ -347,7 +372,7 @@ export class TwitchEventSubClient {
 
     this.options.logger.warn(
       { attempt: this.reconnectAttempt, delayMs },
-      "EventSub reconnect scheduled"
+      "EventSub reconnect scheduled",
     );
 
     this.reconnectTimer = setTimeout(() => {
@@ -421,6 +446,6 @@ const normalizeEventSubChatMessage = (input: {
     isVip: badges.includes("vip"),
     isSubscriber: badges.includes("subscriber"),
     source: "eventsub",
-    receivedAt: new Date()
+    receivedAt: new Date(),
   };
 };

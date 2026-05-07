@@ -37,9 +37,9 @@ type StudioApiResponse<T> = {
 export const loadStudioIntegrationConfig = (): StudioIntegrationConfig => ({
   enabled: parseBoolean(process.env.VAEXCORE_STUDIO_INTEGRATION),
   apiUrl: normalizeApiUrl(
-    process.env.VAEXCORE_STUDIO_API_URL || "http://127.0.0.1:51287"
+    process.env.VAEXCORE_STUDIO_API_URL || "http://127.0.0.1:51287",
   ),
-  token: optionalString(process.env.VAEXCORE_STUDIO_API_TOKEN)
+  token: optionalString(process.env.VAEXCORE_STUDIO_API_TOKEN),
 });
 
 export class StudioClient {
@@ -63,7 +63,7 @@ export class StudioClient {
 
     return this.request<StudioMarker>("/marker/create", {
       method: "POST",
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
     });
   }
 
@@ -80,16 +80,16 @@ export class StudioClient {
 
     const response = await fetch(`${this.config.apiUrl}${path}`, {
       ...init,
-      headers
+      headers,
     });
-    const payload = (await response.json().catch(() => null)) as
-      | StudioApiResponse<T>
-      | null;
+    const payload = (await response
+      .json()
+      .catch(() => null)) as StudioApiResponse<T> | null;
 
     if (!response.ok || !payload?.ok || payload.data === null) {
       throw new Error(
         payload?.error?.message ||
-          `Studio request failed with HTTP ${response.status}`
+          `Studio request failed with HTTP ${response.status}`,
       );
     }
 

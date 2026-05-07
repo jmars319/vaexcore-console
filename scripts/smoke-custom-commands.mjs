@@ -26,35 +26,86 @@ try {
 
 async function runSmoke() {
   const appJs = await text("/ui/app.js");
-  assert(appJs.includes("Command Library"), "Commands tab renders command library");
-  assert(appJs.includes("Response variants"), "Commands tab renders response variants");
+  assert(
+    appJs.includes("Command Library"),
+    "Commands tab renders command library",
+  );
+  assert(
+    appJs.includes("Response variants"),
+    "Commands tab renders response variants",
+  );
   assert(appJs.includes("Utility Packs"), "Commands tab renders utility packs");
-  assert(appJs.includes("Starter Commands"), "Commands tab renders starter presets");
+  assert(
+    appJs.includes("Starter Commands"),
+    "Commands tab renders starter presets",
+  );
   assert(appJs.includes("Category"), "Commands tab renders preset categories");
-  assert(appJs.includes("Create disabled"), "Commands tab can create disabled preset commands");
+  assert(
+    appJs.includes("Create disabled"),
+    "Commands tab can create disabled preset commands",
+  );
   assert(appJs.includes("Export commands JSON"), "Commands tab exposes export");
   assert(appJs.includes("Import commands JSON"), "Commands tab exposes import");
 
   const initial = await json("/api/commands");
   assert(initial.ok === true, "custom command route returns ok");
   assert(initial.summary.total === 0, "custom command list starts empty");
-  assert(initial.reservedNames.includes("ping"), "reserved command names are returned");
-  assert(initial.presets.some((preset) => preset.id === "lurk" && preset.inspection.status === "ready"), "starter command presets are returned");
-  assert(initial.presets.some((preset) => preset.id === "commands" && preset.category === "Channel Info"), "viewer utility command presets are returned");
-  assert(initial.presetPacks.some((pack) => pack.id === "support-links" && pack.inspection.status === "ready"), "utility command packs are returned");
+  assert(
+    initial.reservedNames.includes("ping"),
+    "reserved command names are returned",
+  );
+  assert(
+    initial.presets.some(
+      (preset) => preset.id === "lurk" && preset.inspection.status === "ready",
+    ),
+    "starter command presets are returned",
+  );
+  assert(
+    initial.presets.some(
+      (preset) =>
+        preset.id === "commands" && preset.category === "Channel Info",
+    ),
+    "viewer utility command presets are returned",
+  );
+  assert(
+    initial.presetPacks.some(
+      (pack) =>
+        pack.id === "support-links" && pack.inspection.status === "ready",
+    ),
+    "utility command packs are returned",
+  );
 
   const pack = await post("/api/commands/preset-pack", { id: "support-links" });
   assert(pack.ok === true, "utility command preset pack can be created");
-  assert(pack.created.length >= 4, "utility command preset pack creates ready commands");
-  assert(pack.commands.some((command) => command.name === "youtube" && command.enabled === false), "utility pack commands start disabled");
-  assert(pack.presetPacks.find((item) => item.id === "support-links")?.inspection.status === "blocked", "created utility pack reports conflicts");
+  assert(
+    pack.created.length >= 4,
+    "utility command preset pack creates ready commands",
+  );
+  assert(
+    pack.commands.some(
+      (command) => command.name === "youtube" && command.enabled === false,
+    ),
+    "utility pack commands start disabled",
+  );
+  assert(
+    pack.presetPacks.find((item) => item.id === "support-links")?.inspection
+      .status === "blocked",
+    "created utility pack reports conflicts",
+  );
 
   const preset = await post("/api/commands/preset", { id: "lurk" });
   assert(preset.ok === true, "starter command preset can be created");
   const lurk = preset.commands.find((command) => command.name === "lurk");
   assert(lurk?.enabled === false, "starter command preset starts disabled");
-  assert(lurk.responses.some((response) => response.includes("{user}")), "starter command preset keeps placeholders");
-  assert(preset.presets.find((item) => item.id === "lurk")?.inspection.status === "blocked", "created preset reports conflict");
+  assert(
+    lurk.responses.some((response) => response.includes("{user}")),
+    "starter command preset keeps placeholders",
+  );
+  assert(
+    preset.presets.find((item) => item.id === "lurk")?.inspection.status ===
+      "blocked",
+    "created preset reports conflict",
+  );
 
   const reserved = await post("/api/commands", {
     name: "ping",
@@ -63,7 +114,7 @@ async function runSmoke() {
     globalCooldownSeconds: 0,
     userCooldownSeconds: 0,
     aliases: [],
-    responses: ["should not save"]
+    responses: ["should not save"],
   });
   assert(reserved.ok === false, "reserved command names cannot be saved");
 
@@ -74,43 +125,66 @@ async function runSmoke() {
     globalCooldownSeconds: 0,
     userCooldownSeconds: 0,
     aliases: ["links", "socials"],
-    responses: ["{user}, join Discord at https://example.com", "Discord link for {target}: https://example.com"]
+    responses: [
+      "{user}, join Discord at https://example.com",
+      "Discord link for {target}: https://example.com",
+    ],
   });
   const discord = saved.commands.find((command) => command.name === "discord");
   assert(Boolean(discord), "custom command is saved");
   assert(discord.aliases.includes("links"), "custom command alias is saved");
-  assert(discord.responses.length === 2, "custom command stores response variants");
+  assert(
+    discord.responses.length === 2,
+    "custom command stores response variants",
+  );
 
   const preview = await post("/api/commands/preview", {
     commandId: discord.id,
     actor: "alice",
     role: "viewer",
-    rawArgs: "bob"
+    rawArgs: "bob",
   });
   assert(preview.ok === true, "custom command preview returns ok");
-  assert(preview.response.includes("alice") || preview.response.includes("bob"), "preview renders placeholders");
+  assert(
+    preview.response.includes("alice") || preview.response.includes("bob"),
+    "preview renders placeholders",
+  );
 
   const runDirect = await simulate({
     actor: "alice",
     role: "viewer",
-    command: "!discord bob"
+    command: "!discord bob",
   });
-  assert(runDirect.routerResult === "handled", "custom command direct name is handled");
+  assert(
+    runDirect.routerResult === "handled",
+    "custom command direct name is handled",
+  );
   assert(runDirect.replies.length === 1, "custom command sends a reply");
-  assert(runDirect.replies[0].includes("example.com"), "custom command reply uses saved response");
+  assert(
+    runDirect.replies[0].includes("example.com"),
+    "custom command reply uses saved response",
+  );
 
   const runAlias = await simulate({
     actor: "bob",
     role: "viewer",
-    command: "!links alice"
+    command: "!links alice",
   });
-  assert(runAlias.routerResult === "handled", "custom command alias is handled");
+  assert(
+    runAlias.routerResult === "handled",
+    "custom command alias is handled",
+  );
   assert(runAlias.replies.length === 1, "custom command alias sends a reply");
 
   const afterUses = await json("/api/commands");
-  const usedDiscord = afterUses.commands.find((command) => command.name === "discord");
+  const usedDiscord = afterUses.commands.find(
+    (command) => command.name === "discord",
+  );
   assert(usedDiscord.useCount === 2, "custom command use count increments");
-  assert(afterUses.invocations.some((entry) => entry.commandName === "discord"), "custom command usage history is recorded");
+  assert(
+    afterUses.invocations.some((entry) => entry.commandName === "discord"),
+    "custom command usage history is recorded",
+  );
 
   const modOnlySave = await expectOk("/api/commands", {
     name: "modsonly",
@@ -119,21 +193,30 @@ async function runSmoke() {
     globalCooldownSeconds: 0,
     userCooldownSeconds: 0,
     aliases: [],
-    responses: ["Mod command for {user}"]
+    responses: ["Mod command for {user}"],
   });
   const viewerDenied = await simulate({
     actor: "viewer",
     role: "viewer",
-    command: "!modsonly"
+    command: "!modsonly",
   });
-  assert(viewerDenied.routerResult === "handled", "permission-blocked custom command is consumed quietly");
-  assert(viewerDenied.replies.length === 0, "permission-blocked custom command does not reply in chat");
+  assert(
+    viewerDenied.routerResult === "handled",
+    "permission-blocked custom command is consumed quietly",
+  );
+  assert(
+    viewerDenied.replies.length === 0,
+    "permission-blocked custom command does not reply in chat",
+  );
   const modAllowed = await simulate({
     actor: "mod",
     role: "mod",
-    command: "!modsonly"
+    command: "!modsonly",
   });
-  assert(modAllowed.replies.some((reply) => reply.includes("Mod command")), "moderator can run moderator command");
+  assert(
+    modAllowed.replies.some((reply) => reply.includes("Mod command")),
+    "moderator can run moderator command",
+  );
 
   const cooldownSave = await expectOk("/api/commands", {
     name: "cool",
@@ -142,47 +225,116 @@ async function runSmoke() {
     globalCooldownSeconds: 0,
     userCooldownSeconds: 60,
     aliases: [],
-    responses: ["cooldown reply"]
+    responses: ["cooldown reply"],
   });
   const cool = cooldownSave.commands.find((command) => command.name === "cool");
-  const coolFirst = await simulate({ actor: "carol", role: "viewer", command: "!cool" });
+  const coolFirst = await simulate({
+    actor: "carol",
+    role: "viewer",
+    command: "!cool",
+  });
   assert(coolFirst.replies.length === 1, "first cooldown command use replies");
-  const coolSecond = await simulate({ actor: "carol", role: "viewer", command: "!cool" });
-  assert(coolSecond.routerResult === "handled", "cooldown command is still recognized");
-  assert(coolSecond.replies.length === 0, "user cooldown suppresses repeated reply");
-  const coolOtherUser = await simulate({ actor: "dave", role: "viewer", command: "!cool" });
-  assert(coolOtherUser.replies.length === 1, "user cooldown does not block another user");
+  const coolSecond = await simulate({
+    actor: "carol",
+    role: "viewer",
+    command: "!cool",
+  });
+  assert(
+    coolSecond.routerResult === "handled",
+    "cooldown command is still recognized",
+  );
+  assert(
+    coolSecond.replies.length === 0,
+    "user cooldown suppresses repeated reply",
+  );
+  const coolOtherUser = await simulate({
+    actor: "dave",
+    role: "viewer",
+    command: "!cool",
+  });
+  assert(
+    coolOtherUser.replies.length === 1,
+    "user cooldown does not block another user",
+  );
 
-  const disabled = await post("/api/commands/enable", { id: cool.id, enabled: false });
+  const disabled = await post("/api/commands/enable", {
+    id: cool.id,
+    enabled: false,
+  });
   assert(disabled.ok === true, "custom command can be disabled");
-  const coolDisabled = await simulate({ actor: "erin", role: "viewer", command: "!cool" });
-  assert(coolDisabled.routerResult === "unknown", "disabled custom command is ignored");
+  const coolDisabled = await simulate({
+    actor: "erin",
+    role: "viewer",
+    command: "!cool",
+  });
+  assert(
+    coolDisabled.routerResult === "unknown",
+    "disabled custom command is ignored",
+  );
 
-  const duplicate = await post("/api/commands/duplicate", { id: modOnlySave.command.id });
+  const duplicate = await post("/api/commands/duplicate", {
+    id: modOnlySave.command.id,
+  });
   assert(duplicate.ok === true, "custom command can be duplicated");
-  assert(duplicate.command.name.includes("modsonly_copy"), "duplicate command receives copy name");
-  assert(duplicate.command.enabled === false, "duplicate command starts disabled");
+  assert(
+    duplicate.command.name.includes("modsonly_copy"),
+    "duplicate command receives copy name",
+  );
+  assert(
+    duplicate.command.enabled === false,
+    "duplicate command starts disabled",
+  );
 
   const exported = await json("/api/commands/export");
   assert(exported.version === 1, "custom command export has version");
-  assert(exported.commands.some((command) => command.name === "discord"), "export includes saved command");
+  assert(
+    exported.commands.some((command) => command.name === "discord"),
+    "export includes saved command",
+  );
 
   const deleted = await post("/api/commands/delete", { id: discord.id });
   assert(deleted.ok === true, "custom command can be deleted");
-  const deletedRun = await simulate({ actor: "alice", role: "viewer", command: "!discord" });
-  assert(deletedRun.routerResult === "unknown", "deleted command no longer routes");
+  const deletedRun = await simulate({
+    actor: "alice",
+    role: "viewer",
+    command: "!discord",
+  });
+  assert(
+    deletedRun.routerResult === "unknown",
+    "deleted command no longer routes",
+  );
   const afterDelete = await json("/api/commands");
-  assert(afterDelete.invocations.some((entry) => entry.commandName === "discord"), "custom command usage history survives definition delete");
+  assert(
+    afterDelete.invocations.some((entry) => entry.commandName === "discord"),
+    "custom command usage history survives definition delete",
+  );
 
   const imported = await post("/api/commands/import", exported);
   assert(imported.ok === true, "custom command export can be imported");
-  assert(imported.commands.some((command) => command.name === "discord"), "import restores command");
+  assert(
+    imported.commands.some((command) => command.name === "discord"),
+    "import restores command",
+  );
 
   const audit = await json("/api/audit-logs");
-  assert(audit.logs.some((log) => log.action === "custom_command.create"), "custom command create audit is written");
-  assert(audit.logs.some((log) => log.action === "custom_command.preset_pack_create"), "custom command preset pack audit is written");
-  assert(audit.logs.some((log) => log.action === "custom_command.use"), "custom command use audit is written");
-  assert(audit.logs.some((log) => log.action === "custom_command.import"), "custom command import audit is written");
+  assert(
+    audit.logs.some((log) => log.action === "custom_command.create"),
+    "custom command create audit is written",
+  );
+  assert(
+    audit.logs.some(
+      (log) => log.action === "custom_command.preset_pack_create",
+    ),
+    "custom command preset pack audit is written",
+  );
+  assert(
+    audit.logs.some((log) => log.action === "custom_command.use"),
+    "custom command use audit is written",
+  );
+  assert(
+    audit.logs.some((log) => log.action === "custom_command.import"),
+    "custom command import audit is written",
+  );
 }
 
 async function simulate(body) {
@@ -211,7 +363,7 @@ async function json(path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     method: options.method ?? "GET",
     headers: options.body ? { "Content-Type": "application/json" } : undefined,
-    body: options.body ? JSON.stringify(options.body) : undefined
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
   assert(response.ok, `${path} returned ${response.status}`);
   return response.json();

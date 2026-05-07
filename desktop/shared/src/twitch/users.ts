@@ -8,11 +8,11 @@ export type TwitchUser = {
 
 export const getTwitchUserByLogin = async (
   auth: TwitchAuthOptions,
-  login: string
+  login: string,
 ): Promise<TwitchUser | undefined> => {
   const params = new URLSearchParams({ login });
   const response = await fetch(`https://api.twitch.tv/helix/users?${params}`, {
-    headers: createTwitchHeaders(auth)
+    headers: createTwitchHeaders(auth),
   });
 
   if (!response.ok) {

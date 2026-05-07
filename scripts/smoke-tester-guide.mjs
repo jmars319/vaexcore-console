@@ -24,7 +24,7 @@ const requiredGuideText = [
   "Invalid Token",
   "Wrong Bot Account",
   "SQLite Fallback",
-  "Do not put prize codes into vaexcore console"
+  "Do not put prize codes into vaexcore console",
 ];
 
 for (const text of requiredGuideText) {
@@ -32,7 +32,10 @@ for (const text of requiredGuideText) {
 }
 
 assert(readme.includes("TESTER_GUIDE.md"), "README links to tester guide");
-assert(!guide.includes("notarized build"), "tester guide does not imply notarized distribution");
+assert(
+  !guide.includes("notarized build"),
+  "tester guide does not imply notarized distribution",
+);
 
 console.log("tester guide smoke passed");
 

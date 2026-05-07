@@ -4,14 +4,14 @@ export enum PermissionLevel {
   Viewer = "viewer",
   Moderator = "moderator",
   Broadcaster = "broadcaster",
-  Admin = "admin"
+  Admin = "admin",
 }
 
 const permissionRank: Record<PermissionLevel, number> = {
   [PermissionLevel.Viewer]: 0,
   [PermissionLevel.Moderator]: 1,
   [PermissionLevel.Broadcaster]: 2,
-  [PermissionLevel.Admin]: 3
+  [PermissionLevel.Admin]: 3,
 };
 
 export const getPermissionLevel = (message: ChatMessage): PermissionLevel => {
@@ -28,5 +28,6 @@ export const getPermissionLevel = (message: ChatMessage): PermissionLevel => {
 
 export const hasPermission = (
   message: ChatMessage,
-  requiredLevel: PermissionLevel
-) => permissionRank[getPermissionLevel(message)] >= permissionRank[requiredLevel];
+  requiredLevel: PermissionLevel,
+) =>
+  permissionRank[getPermissionLevel(message)] >= permissionRank[requiredLevel];

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-bundle/
+build/
+release/
+coverage/
+*.tsbuildinfo
+desktop/macOS/assets/icon.iconset/
+package-lock.json

@@ -7,13 +7,14 @@ import {
   normalizeLogin,
   parseSafeInteger,
   sanitizeDisplayName,
-  sanitizeGiveawayTitle
+  sanitizeGiveawayTitle,
 } from "../../core/security";
-import {
-  getRecentAuditLogs,
-  writeAuditLog
-} from "../../core/auditLog";
-import type { Giveaway, GiveawayEntry, GiveawayWinner } from "./giveaways.types";
+import { getRecentAuditLogs, writeAuditLog } from "../../core/auditLog";
+import type {
+  Giveaway,
+  GiveawayEntry,
+  GiveawayWinner,
+} from "./giveaways.types";
 
 type StartGiveawayInput = {
   actor: ChatMessage;
@@ -51,21 +52,21 @@ export class GiveawaysService {
     const winnerCount = parseSafeInteger(input.winnerCount, {
       field: "Winner count",
       min: 1,
-      max: limits.winnerCountMax
+      max: limits.winnerCountMax,
     });
     const result = this.db
       .prepare(
         `
           INSERT INTO giveaways (title, keyword, status, winner_count, created_at, opened_at)
           VALUES (@title, @keyword, 'open', @winnerCount, @createdAt, @openedAt)
-        `
+        `,
       )
       .run({
         title,
         keyword,
         winnerCount,
         createdAt: now,
-        openedAt: now
+        openedAt: now,
       });
 
     const giveaway = this.getGiveawayById(Number(result.lastInsertRowid));
@@ -77,7 +78,7 @@ export class GiveawaysService {
     this.audit(input.actor, "giveaway.start", String(giveaway.id), {
       title: giveaway.title,
       keyword: giveaway.keyword,
-      winnerCount: giveaway.winner_count
+      winnerCount: giveaway.winner_count,
     });
     this.logger.info(
       {
@@ -87,9 +88,9 @@ export class GiveawaysService {
         keyword: giveaway.keyword,
         winnerCount: giveaway.winner_count,
         actor: input.actor.userLogin,
-        mode: input.actor.source
+        mode: input.actor.source,
       },
-      "Giveaway opened"
+      "Giveaway opened",
     );
 
     return giveaway;
@@ -118,14 +119,14 @@ export class GiveawaysService {
             (giveaway_id, twitch_user_id, login, display_name, entered_at)
           VALUES
             (@giveawayId, @twitchUserId, @login, @displayName, @enteredAt)
-        `
+        `,
       )
       .run({
         giveawayId: giveaway.id,
         twitchUserId: event.userId,
         login,
         displayName,
-        enteredAt: timestamp()
+        enteredAt: timestamp(),
       });
 
     const entered = result.changes === 1;
@@ -140,9 +141,9 @@ export class GiveawaysService {
           entries: entryCount,
           entrant: login,
           entrantUserId: event.userId,
-          mode: event.source
+          mode: event.source,
         },
-        "Giveaway entry count changed"
+        "Giveaway entry count changed",
       );
     } else {
       this.logger.debug(
@@ -151,9 +152,9 @@ export class GiveawaysService {
           giveawayId: giveaway.id,
           entrant: login,
           entrantUserId: event.userId,
-          mode: event.source
+          mode: event.source,
         },
-        "Giveaway duplicate entry ignored"
+        "Giveaway duplicate entry ignored",
       );
     }
 
@@ -162,7 +163,7 @@ export class GiveawaysService {
       giveaway,
       login,
       displayName,
-      entryCount
+      entryCount,
     };
   }
 
@@ -178,7 +179,7 @@ export class GiveawaysService {
     this.audit(actor, "giveaway.simulated_entry", String(giveaway.id), {
       entrantLogin: entrant.userLogin,
       entrantUserId: entrant.userId,
-      result: result.status
+      result: result.status,
     });
 
     return result;
@@ -195,7 +196,7 @@ export class GiveawaysService {
       giveaway,
       entries: this.countEntries(giveaway.id),
       activeWinners: this.countActiveWinners(giveaway.id),
-      rerolledWinners: this.countRerolledWinners(giveaway.id)
+      rerolledWinners: this.countRerolledWinners(giveaway.id),
     };
   }
 
@@ -211,7 +212,9 @@ export class GiveawaysService {
     }
 
     this.db
-      .prepare("UPDATE giveaways SET status = 'closed', closed_at = ? WHERE id = ?")
+      .prepare(
+        "UPDATE giveaways SET status = 'closed', closed_at = ? WHERE id = ?",
+      )
       .run(timestamp(), giveaway.id);
 
     const closed = this.requireGiveawayById(giveaway.id);
@@ -222,9 +225,9 @@ export class GiveawaysService {
         giveawayId: giveaway.id,
         entries: this.countEntries(giveaway.id),
         actor: actor.userLogin,
-        mode: actor.source
+        mode: actor.source,
       },
-      "Giveaway closed"
+      "Giveaway closed",
     );
 
     return closed;
@@ -233,12 +236,14 @@ export class GiveawaysService {
   draw(
     actor: ChatMessage,
     requestedCount?: number,
-    options: { allowOpen?: boolean } = {}
+    options: { allowOpen?: boolean } = {},
   ): DrawResult {
     const giveaway = this.requireActiveGiveaway();
 
     if (giveaway.status === "open" && !options.allowOpen) {
-      throw new Error("Close the giveaway before drawing winners, or use --allow-open");
+      throw new Error(
+        "Close the giveaway before drawing winners, or use --allow-open",
+      );
     }
 
     const remainingWinnerSlots =
@@ -246,7 +251,7 @@ export class GiveawaysService {
     const count = parseSafeInteger(requestedCount ?? remainingWinnerSlots, {
       field: "Winner count",
       min: 1,
-      max: limits.winnerCountMax
+      max: limits.winnerCountMax,
     });
     const drawCount = Math.min(count, Math.max(0, remainingWinnerSlots));
     const candidates = this.getDrawableEntries(giveaway.id);
@@ -261,20 +266,27 @@ export class GiveawaysService {
           drawnCount: 0,
           eligibleCount: candidates.length,
           actor: actor.userLogin,
-          mode: actor.source
+          mode: actor.source,
         },
-        "No eligible giveaway winners available"
+        "No eligible giveaway winners available",
       );
-      return { giveaway, winners: [], requestedCount: count, eligibleCount: candidates.length };
+      return {
+        giveaway,
+        winners: [],
+        requestedCount: count,
+        eligibleCount: candidates.length,
+      };
     }
 
     const selected = shuffle(candidates).slice(0, finalDrawCount);
-    const winners = selected.map((entry) => this.insertWinner(giveaway.id, entry));
+    const winners = selected.map((entry) =>
+      this.insertWinner(giveaway.id, entry),
+    );
 
     this.audit(actor, "giveaway.draw", String(giveaway.id), {
       requestedCount: count,
       drawnCount: winners.length,
-      winners: winners.map((winner) => winner.login)
+      winners: winners.map((winner) => winner.login),
     });
     this.logger.info(
       {
@@ -285,15 +297,20 @@ export class GiveawaysService {
         eligibleCount: candidates.length,
         winners: winners.map((winner) => ({
           login: winner.login,
-          twitchUserId: winner.twitch_user_id
+          twitchUserId: winner.twitch_user_id,
         })),
         actor: actor.userLogin,
-        mode: actor.source
+        mode: actor.source,
       },
-      "Giveaway winners drawn"
+      "Giveaway winners drawn",
     );
 
-    return { giveaway, winners, requestedCount: count, eligibleCount: candidates.length };
+    return {
+      giveaway,
+      winners,
+      requestedCount: count,
+      eligibleCount: candidates.length,
+    };
   }
 
   reroll(actor: ChatMessage, username: string) {
@@ -308,9 +325,9 @@ export class GiveawaysService {
           username: login,
           reason: "giveaway_open",
           actor: actor.userLogin,
-          mode: actor.source
+          mode: actor.source,
         },
-        "Giveaway reroll failed"
+        "Giveaway reroll failed",
       );
       throw new Error("Close the giveaway before rerolling winners");
     }
@@ -325,9 +342,9 @@ export class GiveawaysService {
           username: login,
           reason: "winner_not_found",
           actor: actor.userLogin,
-          mode: actor.source
+          mode: actor.source,
         },
-        "Giveaway reroll failed"
+        "Giveaway reroll failed",
       );
       throw new Error(`No active winner found for ${login}`);
     }
@@ -345,7 +362,7 @@ export class GiveawaysService {
 
     this.audit(actor, "giveaway.reroll", String(giveaway.id), {
       rerolled: winner.login,
-      replacement: replacement?.login
+      replacement: replacement?.login,
     });
     this.logger.info(
       {
@@ -353,18 +370,18 @@ export class GiveawaysService {
         giveawayId: giveaway.id,
         rerolled: {
           login: winner.login,
-          twitchUserId: winner.twitch_user_id
+          twitchUserId: winner.twitch_user_id,
         },
         replacement: replacement
           ? {
               login: replacement.login,
-              twitchUserId: replacement.twitch_user_id
+              twitchUserId: replacement.twitch_user_id,
             }
           : undefined,
         actor: actor.userLogin,
-        mode: actor.source
+        mode: actor.source,
       },
-      "Giveaway reroll"
+      "Giveaway reroll",
     );
 
     return { giveaway, rerolled: winner, replacement };
@@ -381,12 +398,14 @@ export class GiveawaysService {
 
     const now = timestamp();
     this.db
-      .prepare("UPDATE giveaway_winners SET claimed_at = COALESCE(claimed_at, ?) WHERE id = ?")
+      .prepare(
+        "UPDATE giveaway_winners SET claimed_at = COALESCE(claimed_at, ?) WHERE id = ?",
+      )
       .run(now, winner.id);
 
     const updated = this.requireWinnerById(winner.id);
     this.audit(actor, "giveaway.claim", String(giveaway.id), {
-      winner: updated.login
+      winner: updated.login,
     });
     this.logger.info(
       {
@@ -395,9 +414,9 @@ export class GiveawaysService {
         winner: updated.login,
         winnerUserId: updated.twitch_user_id,
         actor: actor.userLogin,
-        mode: actor.source
+        mode: actor.source,
       },
-      "Giveaway winner claimed"
+      "Giveaway winner claimed",
     );
 
     return { giveaway, winner: updated };
@@ -414,12 +433,14 @@ export class GiveawaysService {
 
     const now = timestamp();
     this.db
-      .prepare("UPDATE giveaway_winners SET delivered_at = COALESCE(delivered_at, ?) WHERE id = ?")
+      .prepare(
+        "UPDATE giveaway_winners SET delivered_at = COALESCE(delivered_at, ?) WHERE id = ?",
+      )
       .run(now, winner.id);
 
     const updated = this.requireWinnerById(winner.id);
     this.audit(actor, "giveaway.deliver", String(giveaway.id), {
-      winner: updated.login
+      winner: updated.login,
     });
     this.logger.info(
       {
@@ -428,9 +449,9 @@ export class GiveawaysService {
         winner: updated.login,
         winnerUserId: updated.twitch_user_id,
         actor: actor.userLogin,
-        mode: actor.source
+        mode: actor.source,
       },
-      "Giveaway winner delivered"
+      "Giveaway winner delivered",
     );
 
     return { giveaway, winner: updated };
@@ -439,19 +460,21 @@ export class GiveawaysService {
   deliverAll(actor: ChatMessage) {
     const giveaway = this.requireActiveGiveaway();
     const winners = this.getWinners(giveaway.id).filter(
-      (winner) => !winner.rerolled_at && !winner.delivered_at
+      (winner) => !winner.rerolled_at && !winner.delivered_at,
     );
     const now = timestamp();
 
     for (const winner of winners) {
       this.db
-        .prepare("UPDATE giveaway_winners SET delivered_at = COALESCE(delivered_at, ?) WHERE id = ?")
+        .prepare(
+          "UPDATE giveaway_winners SET delivered_at = COALESCE(delivered_at, ?) WHERE id = ?",
+        )
         .run(now, winner.id);
     }
 
     this.audit(actor, "giveaway.deliver_all", String(giveaway.id), {
       winners: winners.map((winner) => winner.login),
-      deliveredCount: winners.length
+      deliveredCount: winners.length,
     });
     this.logger.info(
       {
@@ -460,15 +483,17 @@ export class GiveawaysService {
         deliveredCount: winners.length,
         winners: winners.map((winner) => winner.login),
         actor: actor.userLogin,
-        mode: actor.source
+        mode: actor.source,
       },
-      "Giveaway winners delivered"
+      "Giveaway winners delivered",
     );
 
     return {
       giveaway,
-      winners: this.getWinners(giveaway.id).filter((winner) => !winner.rerolled_at),
-      deliveredCount: winners.length
+      winners: this.getWinners(giveaway.id).filter(
+        (winner) => !winner.rerolled_at,
+      ),
+      deliveredCount: winners.length,
     };
   }
 
@@ -486,8 +511,8 @@ export class GiveawaysService {
         twitchUserId: winner.twitch_user_id,
         claimed: Boolean(winner.claimed_at),
         delivered: Boolean(winner.delivered_at),
-        rerolled: Boolean(winner.rerolled_at)
-      }))
+        rerolled: Boolean(winner.rerolled_at),
+      })),
     };
 
     if (unresolvedWinners.length > 0) {
@@ -497,7 +522,9 @@ export class GiveawaysService {
     }
 
     this.db
-      .prepare("UPDATE giveaways SET status = 'ended', ended_at = ? WHERE id = ?")
+      .prepare(
+        "UPDATE giveaways SET status = 'ended', ended_at = ? WHERE id = ?",
+      )
       .run(timestamp(), giveaway.id);
 
     const ended = this.requireGiveawayById(giveaway.id);
@@ -508,9 +535,9 @@ export class GiveawaysService {
         giveawayId: giveaway.id,
         unresolvedCount: unresolvedWinners.length,
         actor: actor.userLogin,
-        mode: actor.source
+        mode: actor.source,
       },
-      "Giveaway ended"
+      "Giveaway ended",
     );
 
     return ended;
@@ -527,8 +554,8 @@ export class GiveawaysService {
         counts: {
           entries: 0,
           activeWinners: 0,
-          rerolledWinners: 0
-        }
+          rerolledWinners: 0,
+        },
       };
     }
 
@@ -539,8 +566,8 @@ export class GiveawaysService {
       counts: {
         entries: this.countEntries(giveaway.id),
         activeWinners: this.countActiveWinners(giveaway.id),
-        rerolledWinners: this.countRerolledWinners(giveaway.id)
-      }
+        rerolledWinners: this.countRerolledWinners(giveaway.id),
+      },
     };
   }
 
@@ -555,8 +582,8 @@ export class GiveawaysService {
         counts: {
           entries: 0,
           activeWinners: 0,
-          rerolledWinners: 0
-        }
+          rerolledWinners: 0,
+        },
       };
     }
 
@@ -567,8 +594,8 @@ export class GiveawaysService {
       counts: {
         entries: this.countEntries(giveaway.id),
         activeWinners: this.countActiveWinners(giveaway.id),
-        rerolledWinners: this.countRerolledWinners(giveaway.id)
-      }
+        rerolledWinners: this.countRerolledWinners(giveaway.id),
+      },
     };
   }
 
@@ -587,15 +614,15 @@ export class GiveawaysService {
   private getActiveGiveaway() {
     return this.db
       .prepare(
-        "SELECT * FROM giveaways WHERE status IN ('open', 'closed') ORDER BY id DESC LIMIT 1"
+        "SELECT * FROM giveaways WHERE status IN ('open', 'closed') ORDER BY id DESC LIMIT 1",
       )
       .get() as Giveaway | undefined;
   }
 
   private getGiveawayById(id: number) {
-    return this.db
-      .prepare("SELECT * FROM giveaways WHERE id = ?")
-      .get(id) as Giveaway | undefined;
+    return this.db.prepare("SELECT * FROM giveaways WHERE id = ?").get(id) as
+      | Giveaway
+      | undefined;
   }
 
   private getLatestGiveaway() {
@@ -638,7 +665,9 @@ export class GiveawaysService {
 
   private countEntries(giveawayId: number) {
     const row = this.db
-      .prepare("SELECT COUNT(*) AS count FROM giveaway_entries WHERE giveaway_id = ?")
+      .prepare(
+        "SELECT COUNT(*) AS count FROM giveaway_entries WHERE giveaway_id = ?",
+      )
       .get(giveawayId) as { count: number };
 
     return row.count;
@@ -647,7 +676,7 @@ export class GiveawaysService {
   private countActiveWinners(giveawayId: number) {
     const row = this.db
       .prepare(
-        "SELECT COUNT(*) AS count FROM giveaway_winners WHERE giveaway_id = ? AND rerolled_at IS NULL"
+        "SELECT COUNT(*) AS count FROM giveaway_winners WHERE giveaway_id = ? AND rerolled_at IS NULL",
       )
       .get(giveawayId) as { count: number };
 
@@ -657,7 +686,7 @@ export class GiveawaysService {
   private countRerolledWinners(giveawayId: number) {
     const row = this.db
       .prepare(
-        "SELECT COUNT(*) AS count FROM giveaway_winners WHERE giveaway_id = ? AND rerolled_at IS NOT NULL"
+        "SELECT COUNT(*) AS count FROM giveaway_winners WHERE giveaway_id = ? AND rerolled_at IS NOT NULL",
       )
       .get(giveawayId) as { count: number };
 
@@ -677,7 +706,7 @@ export class GiveawaysService {
               WHERE w.giveaway_id = e.giveaway_id
                 AND w.twitch_user_id = e.twitch_user_id
             )
-        `
+        `,
       )
       .all(giveawayId) as GiveawayEntry[];
   }
@@ -690,7 +719,7 @@ export class GiveawaysService {
           FROM giveaway_entries
           WHERE giveaway_id = ?
           ORDER BY entered_at ASC
-        `
+        `,
       )
       .all(giveawayId) as GiveawayEntry[];
   }
@@ -704,7 +733,7 @@ export class GiveawaysService {
           WHERE giveaway_id = ?
             AND rerolled_at IS NULL
             AND delivered_at IS NULL
-        `
+        `,
       )
       .all(giveawayId) as GiveawayWinner[];
   }
@@ -717,7 +746,7 @@ export class GiveawaysService {
           FROM giveaway_winners
           WHERE giveaway_id = ?
           ORDER BY id ASC
-        `
+        `,
       )
       .all(giveawayId) as GiveawayWinner[];
   }
@@ -731,14 +760,14 @@ export class GiveawaysService {
             (giveaway_id, twitch_user_id, login, display_name, drawn_at)
           VALUES
             (@giveawayId, @twitchUserId, @login, @displayName, @drawnAt)
-        `
+        `,
       )
       .run({
         giveawayId,
         twitchUserId: entry.twitch_user_id,
         login: entry.login,
         displayName: entry.display_name,
-        drawnAt: now
+        drawnAt: now,
       });
 
     return this.db
@@ -758,7 +787,7 @@ export class GiveawaysService {
             AND rerolled_at IS NULL
             AND lower(login) = ?
           LIMIT 1
-        `
+        `,
       )
       .get(giveawayId, normalized) as GiveawayWinner | undefined;
   }
@@ -767,7 +796,7 @@ export class GiveawaysService {
     actor: ChatMessage,
     action: string,
     target: string,
-    metadata: Record<string, unknown>
+    metadata: Record<string, unknown>,
   ) {
     writeAuditLog(this.db, actor, action, target, metadata);
   }

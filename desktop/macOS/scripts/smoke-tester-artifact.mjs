@@ -8,7 +8,7 @@ import {
   mkdtempSync,
   rmSync,
   readFileSync,
-  writeFileSync
+  writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -28,7 +28,9 @@ const manifestPath = join(releaseDir, `${artifactBase}.json`);
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-tester-artifact-"));
 const extractDir = join(tempDir, "extracted");
 const userDataDir = join(tempDir, "user-data");
-const scenario = process.argv.includes("--preserve-data") ? "preserve-data" : "clean-install";
+const scenario = process.argv.includes("--preserve-data")
+  ? "preserve-data"
+  : "clean-install";
 const require = createRequire(import.meta.url);
 
 let child;
@@ -39,29 +41,44 @@ if (process.platform !== "darwin") {
 
 try {
   await runSmoke();
-  console.log(scenario === "preserve-data" ? "tester update smoke passed" : "tester artifact smoke passed");
+  console.log(
+    scenario === "preserve-data"
+      ? "tester update smoke passed"
+      : "tester artifact smoke passed",
+  );
 } finally {
   await stopChild();
   rmSync(tempDir, { recursive: true, force: true });
 }
 
 async function runSmoke() {
-  assert(existsSync(zipPath), `unsigned zip exists at ${zipPath}; run npm run app:zip first`);
+  assert(
+    existsSync(zipPath),
+    `unsigned zip exists at ${zipPath}; run npm run app:zip first`,
+  );
   assert(existsSync(checksumPath), "checksum exists");
   assert(existsSync(manifestPath), "manifest exists");
 
   await assertPortAvailable(setupPort);
   await assertChecksum();
 
-  execFileSync("ditto", ["-x", "-k", zipPath, extractDir], { stdio: "inherit" });
+  execFileSync("ditto", ["-x", "-k", zipPath, extractDir], {
+    stdio: "inherit",
+  });
 
   const appPath = join(extractDir, `${productName}.app`);
   const executablePath = join(appPath, "Contents/MacOS", productName);
   assert(existsSync(executablePath), "extracted app executable exists");
 
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-  assert(manifest.releaseType === "unsigned-tester", "manifest marks unsigned tester release");
-  assert(manifest.notarized === false, "manifest marks artifact as not notarized");
+  assert(
+    manifest.releaseType === "unsigned-tester",
+    "manifest marks unsigned tester release",
+  );
+  assert(
+    manifest.notarized === false,
+    "manifest marks artifact as not notarized",
+  );
   assert(manifest.signing === "ad-hoc", "manifest marks ad-hoc signing");
 
   if (scenario === "preserve-data") {
@@ -73,7 +90,7 @@ async function runSmoke() {
 
   child = spawn(executablePath, [], {
     env,
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
   const logs = captureProcessLogs(child);
@@ -86,29 +103,73 @@ async function runSmoke() {
 
   const appJs = await text("/ui/app.js");
   const logo = await binary("/ui/logo.jpg");
-  assert(logo.contentType === "image/jpeg", "tester artifact serves logo as JPEG");
+  assert(
+    logo.contentType === "image/jpeg",
+    "tester artifact serves logo as JPEG",
+  );
   assert(logo.byteLength > 1000, "tester artifact logo is not empty");
-  assert(appJs.includes("Setup Guide"), "setup guide code is present in tester artifact");
-  assert(appJs.includes("Diagnostics"), "diagnostics UI code is present in tester artifact");
-  assert(appJs.includes("Copy support bundle"), "support bundle UI code is present in tester artifact");
-  assert(appJs.includes("About This Build"), "build/version diagnostics UI is present in tester artifact");
-  assert(appJs.includes("Manual updates should replace only vaexcore console.app"), "update-safe diagnostics note is present in tester artifact");
+  assert(
+    appJs.includes("Setup Guide"),
+    "setup guide code is present in tester artifact",
+  );
+  assert(
+    appJs.includes("Diagnostics"),
+    "diagnostics UI code is present in tester artifact",
+  );
+  assert(
+    appJs.includes("Copy support bundle"),
+    "support bundle UI code is present in tester artifact",
+  );
+  assert(
+    appJs.includes("About This Build"),
+    "build/version diagnostics UI is present in tester artifact",
+  );
+  assert(
+    appJs.includes("Manual updates should replace only vaexcore console.app"),
+    "update-safe diagnostics note is present in tester artifact",
+  );
 
   const diagnostics = await json("/api/diagnostics");
-  assert(diagnostics.app.runtime === "electron", "diagnostics reports Electron runtime");
+  assert(
+    diagnostics.app.runtime === "electron",
+    "diagnostics reports Electron runtime",
+  );
   assert(diagnostics.app.electron, "diagnostics reports Electron version");
-  assert(diagnostics.paths.configDir === userDataDir, "tester artifact uses isolated app user data");
-  assert(diagnostics.paths.databaseUrl === "file:<local sqlite path>", "diagnostics redacts database URL details");
+  assert(
+    diagnostics.paths.configDir === userDataDir,
+    "tester artifact uses isolated app user data",
+  );
+  assert(
+    diagnostics.paths.databaseUrl === "file:<local sqlite path>",
+    "diagnostics redacts database URL details",
+  );
   assert(diagnostics.database.ok === true, "tester artifact database opens");
-  assert(diagnostics.database.driver === "better-sqlite3", "tester artifact uses better-sqlite3");
+  assert(
+    diagnostics.database.driver === "better-sqlite3",
+    "tester artifact uses better-sqlite3",
+  );
   assert(diagnostics.setupUi.appJs === true, "tester artifact sees app.js");
-  assert(diagnostics.setupUi.stylesCss === true, "tester artifact sees styles.css");
+  assert(
+    diagnostics.setupUi.stylesCss === true,
+    "tester artifact sees styles.css",
+  );
   assert(diagnostics.setupUi.logoJpg === true, "tester artifact sees logo.jpg");
 
   if (scenario === "clean-install") {
-    assert(diagnostics.firstRun.cleanInstall === true, "tester artifact starts as clean install with isolated data");
-    assert(diagnostics.firstRun.nextAction === "Open Settings -> Setup Guide.", "clean install points to setup guide");
-    assert(diagnostics.readiness.blockers.some((blocker) => blocker.includes("Required Twitch config")), "diagnostics reports missing setup blockers");
+    assert(
+      diagnostics.firstRun.cleanInstall === true,
+      "tester artifact starts as clean install with isolated data",
+    );
+    assert(
+      diagnostics.firstRun.nextAction === "Open Settings -> Setup Guide.",
+      "clean install points to setup guide",
+    );
+    assert(
+      diagnostics.readiness.blockers.some((blocker) =>
+        blocker.includes("Required Twitch config"),
+      ),
+      "diagnostics reports missing setup blockers",
+    );
   } else {
     await assertExistingAppDataSurvived(diagnostics);
   }
@@ -118,31 +179,52 @@ async function runSmoke() {
   const bundle = await json("/api/support-bundle");
   assert(bundle.ok === true, "support bundle route returns ok");
   assert(bundle.bundleVersion === 1, "support bundle has version");
-  assert(bundle.diagnostics.app.runtime === "electron", "support bundle reports Electron runtime");
-  assert(bundle.diagnostics.paths.configDir === userDataDir, "support bundle keeps isolated app user data");
-  assert(Array.isArray(bundle.recovery), "support bundle includes recovery steps");
+  assert(
+    bundle.diagnostics.app.runtime === "electron",
+    "support bundle reports Electron runtime",
+  );
+  assert(
+    bundle.diagnostics.paths.configDir === userDataDir,
+    "support bundle keeps isolated app user data",
+  );
+  assert(
+    Array.isArray(bundle.recovery),
+    "support bundle includes recovery steps",
+  );
   assertSafeReport(bundle);
 }
 
 function seedExistingAppData() {
   mkdirSync(join(userDataDir, "data"), { recursive: true });
-  writeFileSync(join(userDataDir, "local.secrets.json"), `${JSON.stringify({
-    mode: "live",
-    twitch: {
-      clientId: "update-client-id",
-      clientSecret: "update-client-secret",
-      redirectUri: "http://localhost:3434/auth/twitch/callback",
-      broadcasterLogin: "vaexil",
-      broadcasterUserId: "update-broadcaster-id",
-      botLogin: "vaexcorebot",
-      botUserId: "update-bot-id",
-      accessToken: "update-access-token-123456",
-      refreshToken: "update-refresh-token-123456",
-      scopes: ["user:read:chat", "user:write:chat"],
-      tokenExpiresAt: "2099-01-01T00:00:00.000Z",
-      tokenValidatedAt: "2099-01-01T00:00:00.000Z"
-    }
-  }, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(
+    join(userDataDir, "local.secrets.json"),
+    `${JSON.stringify(
+      {
+        mode: "live",
+        twitch: {
+          clientId: "update-client-id",
+          clientSecret: "update-client-secret",
+          redirectUri: "http://localhost:3434/auth/twitch/callback",
+          broadcasterLogin: "vaexil",
+          broadcasterUserId: "update-broadcaster-id",
+          botLogin: "vaexcorebot",
+          botUserId: "update-bot-id",
+          accessToken: "update-access-token-123456",
+          refreshToken: "update-refresh-token-123456",
+          scopes: [
+            "user:read:chat",
+            "user:write:chat",
+            "channel:read:stream_key",
+          ],
+          tokenExpiresAt: "2099-01-01T00:00:00.000Z",
+          tokenValidatedAt: "2099-01-01T00:00:00.000Z",
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    { mode: 0o600 },
+  );
 
   const Database = require("better-sqlite3");
   const db = new Database(join(userDataDir, "data/vaexcore.sqlite"));
@@ -156,38 +238,85 @@ function seedExistingAppData() {
       created_at TEXT NOT NULL
     );
   `);
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO audit_logs (actor_twitch_user_id, action, target, metadata_json, created_at)
     VALUES (?, ?, ?, ?, ?)
-  `).run("tester-update-smoke", "tester_update_marker", "existing-app-data", "{}", "2099-01-01T00:00:00.000Z");
+  `,
+  ).run(
+    "tester-update-smoke",
+    "tester_update_marker",
+    "existing-app-data",
+    "{}",
+    "2099-01-01T00:00:00.000Z",
+  );
   db.close();
 }
 
 async function assertExistingAppDataSurvived(diagnostics) {
-  assert(diagnostics.firstRun.cleanInstall === false, "existing app data is not treated as a clean install");
-  assert(diagnostics.firstRun.setupComplete === true, "existing setup remains complete after update launch");
-  assert(diagnostics.readiness.blockers.length === 0, "existing setup has no readiness blockers after update launch");
-  assert(diagnostics.config.hasClientId === true, "existing Client ID is preserved");
-  assert(diagnostics.config.hasClientSecret === true, "existing Client Secret is preserved");
-  assert(diagnostics.config.hasAccessToken === true, "existing OAuth token is preserved");
-  assert(diagnostics.config.hasRefreshToken === true, "existing refresh token is preserved");
-  assert(diagnostics.config.broadcasterLogin === "vaexil", "existing broadcaster login is preserved");
-  assert(diagnostics.config.botLogin === "vaexcorebot", "existing bot login is preserved");
+  assert(
+    diagnostics.firstRun.cleanInstall === false,
+    "existing app data is not treated as a clean install",
+  );
+  assert(
+    diagnostics.firstRun.setupComplete === true,
+    "existing setup remains complete after update launch",
+  );
+  assert(
+    diagnostics.readiness.blockers.length === 0,
+    "existing setup has no readiness blockers after update launch",
+  );
+  assert(
+    diagnostics.config.hasClientId === true,
+    "existing Client ID is preserved",
+  );
+  assert(
+    diagnostics.config.hasClientSecret === true,
+    "existing Client Secret is preserved",
+  );
+  assert(
+    diagnostics.config.hasAccessToken === true,
+    "existing OAuth token is preserved",
+  );
+  assert(
+    diagnostics.config.hasRefreshToken === true,
+    "existing refresh token is preserved",
+  );
+  assert(
+    diagnostics.config.broadcasterLogin === "vaexil",
+    "existing broadcaster login is preserved",
+  );
+  assert(
+    diagnostics.config.botLogin === "vaexcorebot",
+    "existing bot login is preserved",
+  );
 
   const config = await json("/api/config");
   assert(config.hasClientId === true, "config route sees existing Client ID");
-  assert(config.hasClientSecret === true, "config route sees existing Client Secret");
-  assert(config.hasRefreshToken === true, "config route sees existing refresh token");
+  assert(
+    config.hasClientSecret === true,
+    "config route sees existing Client Secret",
+  );
+  assert(
+    config.hasRefreshToken === true,
+    "config route sees existing refresh token",
+  );
   assert(config.botLogin === "vaexcorebot", "config route preserves bot login");
 
   const audit = await json("/api/audit-logs");
-  assert(audit.logs.some((log) => log.action === "tester_update_marker"), "existing SQLite audit data survives update launch");
+  assert(
+    audit.logs.some((log) => log.action === "tester_update_marker"),
+    "existing SQLite audit data survives update launch",
+  );
 }
 
 async function assertChecksum() {
   const actualSha = await sha256File(zipPath);
   const checksum = readFileSync(checksumPath, "utf8").trim();
-  assert(checksum === `${actualSha}  ${basename(zipPath)}`, "checksum file matches zip");
+  assert(
+    checksum === `${actualSha}  ${basename(zipPath)}`,
+    "checksum file matches zip",
+  );
 }
 
 function assertPortAvailable(port) {
@@ -195,7 +324,11 @@ function assertPortAvailable(port) {
     const server = createServer();
 
     server.once("error", () => {
-      reject(new Error(`Port ${port} is already in use. Quit vaexcore console or the setup server before running tester artifact smoke.`));
+      reject(
+        new Error(
+          `Port ${port} is already in use. Quit vaexcore console or the setup server before running tester artifact smoke.`,
+        ),
+      );
     });
     server.once("listening", () => {
       server.close(resolvePort);
@@ -229,7 +362,9 @@ async function waitForHttp(path, logs) {
 
   while (Date.now() < deadline) {
     if (child?.exitCode !== null) {
-      throw new Error(`Tester app exited before setup UI was reachable.\n${logs.join("")}`);
+      throw new Error(
+        `Tester app exited before setup UI was reachable.\n${logs.join("")}`,
+      );
     }
 
     try {
@@ -245,7 +380,9 @@ async function waitForHttp(path, logs) {
     await delay(500);
   }
 
-  throw new Error(`Timed out waiting for tester app setup UI. Last error: ${lastError?.message || "unknown"}\n${logs.join("")}`);
+  throw new Error(
+    `Timed out waiting for tester app setup UI. Last error: ${lastError?.message || "unknown"}\n${logs.join("")}`,
+  );
 }
 
 async function text(path) {
@@ -260,7 +397,7 @@ async function binary(path) {
   const bytes = Buffer.from(await response.arrayBuffer());
   return {
     byteLength: bytes.byteLength,
-    contentType: response.headers.get("content-type")
+    contentType: response.headers.get("content-type"),
   };
 }
 
@@ -316,9 +453,18 @@ function assertSafeReport(report) {
   assert(!raw.includes("client_secret"), "report omits client_secret values");
   assert(!raw.includes("access_token"), "report omits access_token values");
   assert(!raw.includes("refresh_token"), "report omits refresh_token values");
-  assert(!raw.includes("update-client-secret"), "report omits seeded client secret");
-  assert(!raw.includes("update-access-token-123456"), "report omits seeded access token");
-  assert(!raw.includes("update-refresh-token-123456"), "report omits seeded refresh token");
+  assert(
+    !raw.includes("update-client-secret"),
+    "report omits seeded client secret",
+  );
+  assert(
+    !raw.includes("update-access-token-123456"),
+    "report omits seeded access token",
+  );
+  assert(
+    !raw.includes("update-refresh-token-123456"),
+    "report omits seeded refresh token",
+  );
   assert(!raw.includes("Bearer "), "report omits bearer tokens");
 }
 

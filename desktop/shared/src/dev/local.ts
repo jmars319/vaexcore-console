@@ -12,14 +12,18 @@ import { registerGiveawaysModule } from "../modules/giveaways/giveaways.module";
 import { createRuntimeStatus } from "../core/runtimeStatus";
 import { registerStatusCommands } from "../core/statusCommands";
 import { createFeatureGateStore } from "../core/featureGates";
-import { normalizeLogin, sanitizeCommandText, sanitizeDisplayName } from "../core/security";
+import {
+  normalizeLogin,
+  sanitizeCommandText,
+  sanitizeDisplayName,
+} from "../core/security";
 
 const localEnvSchema = z.object({
   COMMAND_PREFIX: z.string().min(1).default("!"),
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
-  LOCAL_DATABASE_URL: z.string().min(1).default(":memory:")
+  LOCAL_DATABASE_URL: z.string().min(1).default(":memory:"),
 });
 
 const env = localEnvSchema.parse(process.env);
@@ -38,7 +42,7 @@ const parseLocalLine = (line: string) => {
       login: "mod",
       displayName: "Mod",
       message,
-      badges: ["moderator"]
+      badges: ["moderator"],
     };
   }
 
@@ -46,9 +50,9 @@ const parseLocalLine = (line: string) => {
     return {
       userId: "local-broadcaster",
       login: "broadcaster",
-    displayName: "Broadcaster",
+      displayName: "Broadcaster",
       message,
-      badges: ["broadcaster"]
+      badges: ["broadcaster"],
     };
   }
 
@@ -57,7 +61,7 @@ const parseLocalLine = (line: string) => {
     login: normalized,
     displayName: sanitizeDisplayName(speaker, normalized),
     message,
-    badges: []
+    badges: [],
   };
 };
 
@@ -66,14 +70,15 @@ const messageQueue = new MessageQueue({
   send: async (message) => {
     console.log(`[queued outbound] ${message}`);
     return "sent";
-  }
+  },
 });
 runtimeStatus.messageQueueReady = true;
 
 const commandRouter = new CommandRouter({
   prefix: env.COMMAND_PREFIX,
   logger,
-  enqueueMessage: (message, metadata) => messageQueue.enqueue(message, metadata)
+  enqueueMessage: (message, metadata) =>
+    messageQueue.enqueue(message, metadata),
 });
 
 const db = createDbClient(env.LOCAL_DATABASE_URL);
@@ -82,17 +87,17 @@ const giveawaysService = registerGiveawaysModule({
   router: commandRouter,
   db,
   logger,
-  runtimeStatus
+  runtimeStatus,
 });
 registerStatusCommands({
   router: commandRouter,
   runtimeStatus,
-  giveawaysService
+  giveawaysService,
 });
 registerCommandsModule({
   router: commandRouter,
   db,
-  featureGates
+  featureGates,
 });
 
 messageQueue.start();
@@ -111,8 +116,12 @@ process.on("SIGINT", () => {
 });
 
 console.log("vaexcore console local command mode");
-console.log(`Type chat messages and press Enter. Current live commands: ${env.COMMAND_PREFIX}ping, ${env.COMMAND_PREFIX}enter, ${env.COMMAND_PREFIX}g*, and local custom commands`);
-console.log("Optional identity prefix: alice: !enter, mod: !gstatus, broadcaster: !gstart codes=6 keyword=enter");
+console.log(
+  `Type chat messages and press Enter. Current live commands: ${env.COMMAND_PREFIX}ping, ${env.COMMAND_PREFIX}enter, ${env.COMMAND_PREFIX}g*, and local custom commands`,
+);
+console.log(
+  "Optional identity prefix: alice: !enter, mod: !gstatus, broadcaster: !gstart codes=6 keyword=enter",
+);
 
 if (input.isTTY) {
   rl.setPrompt("> ");
@@ -138,7 +147,7 @@ for await (const text of rl) {
     isMod: parsed.badges.includes("moderator"),
     isVip: parsed.badges.includes("vip"),
     isSubscriber: parsed.badges.includes("subscriber"),
-    receivedAt: new Date()
+    receivedAt: new Date(),
   };
 
   await commandRouter.handle(message);

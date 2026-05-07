@@ -3,8 +3,11 @@ export type TwitchAuthOptions = {
   accessToken: string;
 };
 
-export const createTwitchHeaders = ({ clientId, accessToken }: TwitchAuthOptions) => ({
+export const createTwitchHeaders = ({
+  clientId,
+  accessToken,
+}: TwitchAuthOptions) => ({
   Authorization: `Bearer ${accessToken}`,
   "Client-Id": clientId,
-  "Content-Type": "application/json"
+  "Content-Type": "application/json",
 });

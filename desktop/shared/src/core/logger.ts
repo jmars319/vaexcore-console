@@ -6,7 +6,7 @@ export const createLogger = (level: pino.LevelWithSilent): Logger =>
   pino({
     level,
     base: {
-      app: "vaexcore"
+      app: "vaexcore",
     },
-    timestamp: pino.stdTimeFunctions.isoTime
+    timestamp: pino.stdTimeFunctions.isoTime,
   });

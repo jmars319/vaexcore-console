@@ -9,7 +9,7 @@ import {
   parseSafeInteger,
   redactSecretText,
   sanitizeChatMessage,
-  sanitizeText
+  sanitizeText,
 } from "../../core/security";
 import type { DbClient } from "../../db/client";
 
@@ -28,7 +28,7 @@ const moderationLimits = {
   escalationMaxWindowSeconds: 3600,
   escalationMaxHitCount: 25,
   botShieldMinScore: 30,
-  botShieldMaxScore: 100
+  botShieldMaxScore: 100,
 } as const;
 
 export type ModerationFilterType =
@@ -294,7 +294,7 @@ export class ModerationService {
       featureGates: FeatureGateStore;
       commandPrefix?: string;
       exemptCommandNames?: () => string[];
-    }
+    },
   ) {}
 
   getState() {
@@ -331,7 +331,7 @@ export class ModerationService {
           settings.capsFilterEnabled,
           settings.repeatFilterEnabled,
           settings.symbolFilterEnabled,
-          settings.botShieldEnabled
+          settings.botShieldEnabled,
         ].filter(Boolean).length,
         enforcementFilters: enabledEnforcementFilterNames(settings).length,
         botShield: settings.botShieldEnabled
@@ -343,8 +343,8 @@ export class ModerationService {
         timeoutSeconds: settings.timeoutSeconds,
         hits: hits.length,
         hitsByFilter,
-        hitsByAction
-      }
+        hitsByAction,
+      },
     };
   }
 
@@ -364,105 +364,141 @@ export class ModerationService {
     const current = this.getSettings();
     const body = input as Partial<Record<keyof ModerationSettings, unknown>>;
     const settings: ModerationSettings = {
-      blockedTermsEnabled: booleanValue(body.blockedTermsEnabled, current.blockedTermsEnabled),
-      linkFilterEnabled: booleanValue(body.linkFilterEnabled, current.linkFilterEnabled),
-      capsFilterEnabled: booleanValue(body.capsFilterEnabled, current.capsFilterEnabled),
-      repeatFilterEnabled: booleanValue(body.repeatFilterEnabled, current.repeatFilterEnabled),
-      symbolFilterEnabled: booleanValue(body.symbolFilterEnabled, current.symbolFilterEnabled),
-      botShieldEnabled: booleanValue(body.botShieldEnabled, current.botShieldEnabled),
+      blockedTermsEnabled: booleanValue(
+        body.blockedTermsEnabled,
+        current.blockedTermsEnabled,
+      ),
+      linkFilterEnabled: booleanValue(
+        body.linkFilterEnabled,
+        current.linkFilterEnabled,
+      ),
+      capsFilterEnabled: booleanValue(
+        body.capsFilterEnabled,
+        current.capsFilterEnabled,
+      ),
+      repeatFilterEnabled: booleanValue(
+        body.repeatFilterEnabled,
+        current.repeatFilterEnabled,
+      ),
+      symbolFilterEnabled: booleanValue(
+        body.symbolFilterEnabled,
+        current.symbolFilterEnabled,
+      ),
+      botShieldEnabled: booleanValue(
+        body.botShieldEnabled,
+        current.botShieldEnabled,
+      ),
       action: "warn",
       blockedTermsAction: normalizeModerationAction(
         body.blockedTermsAction ?? current.blockedTermsAction,
-        current.blockedTermsAction
+        current.blockedTermsAction,
       ),
       linkFilterAction: normalizeModerationAction(
         body.linkFilterAction ?? current.linkFilterAction,
-        current.linkFilterAction
+        current.linkFilterAction,
       ),
       capsFilterAction: normalizeModerationAction(
         body.capsFilterAction ?? current.capsFilterAction,
-        current.capsFilterAction
+        current.capsFilterAction,
       ),
       repeatFilterAction: normalizeModerationAction(
         body.repeatFilterAction ?? current.repeatFilterAction,
-        current.repeatFilterAction
+        current.repeatFilterAction,
       ),
       symbolFilterAction: normalizeModerationAction(
         body.symbolFilterAction ?? current.symbolFilterAction,
-        current.symbolFilterAction
+        current.symbolFilterAction,
       ),
       botShieldAction: normalizeModerationAction(
         body.botShieldAction ?? current.botShieldAction,
-        current.botShieldAction
+        current.botShieldAction,
       ),
       botShieldScoreThreshold: parseSafeInteger(body.botShieldScoreThreshold, {
         field: "Bot Shield score threshold",
         fallback: current.botShieldScoreThreshold,
         min: moderationLimits.botShieldMinScore,
-        max: moderationLimits.botShieldMaxScore
+        max: moderationLimits.botShieldMaxScore,
       }),
       timeoutSeconds: parseSafeInteger(body.timeoutSeconds, {
         field: "Timeout seconds",
         fallback: current.timeoutSeconds,
         min: moderationLimits.timeoutMinSeconds,
-        max: moderationLimits.timeoutMaxSeconds
+        max: moderationLimits.timeoutMaxSeconds,
       }),
-      warningMessage: normalizeWarningMessage(body.warningMessage ?? current.warningMessage),
+      warningMessage: normalizeWarningMessage(
+        body.warningMessage ?? current.warningMessage,
+      ),
       capsMinLength: parseSafeInteger(body.capsMinLength, {
         field: "Caps minimum length",
         fallback: current.capsMinLength,
         min: 5,
-        max: limits.chatMessageLength
+        max: limits.chatMessageLength,
       }),
       capsRatio: ratioValue(body.capsRatio, current.capsRatio, "Caps ratio"),
       repeatWindowSeconds: parseSafeInteger(body.repeatWindowSeconds, {
         field: "Repeat window",
         fallback: current.repeatWindowSeconds,
         min: 5,
-        max: 600
+        max: 600,
       }),
       repeatLimit: parseSafeInteger(body.repeatLimit, {
         field: "Repeat limit",
         fallback: current.repeatLimit,
         min: 2,
-        max: 20
+        max: 20,
       }),
       symbolMinLength: parseSafeInteger(body.symbolMinLength, {
         field: "Symbol minimum length",
         fallback: current.symbolMinLength,
         min: 5,
-        max: limits.chatMessageLength
+        max: limits.chatMessageLength,
       }),
-      symbolRatio: ratioValue(body.symbolRatio, current.symbolRatio, "Symbol ratio"),
-      escalationEnabled: booleanValue(body.escalationEnabled, current.escalationEnabled),
+      symbolRatio: ratioValue(
+        body.symbolRatio,
+        current.symbolRatio,
+        "Symbol ratio",
+      ),
+      escalationEnabled: booleanValue(
+        body.escalationEnabled,
+        current.escalationEnabled,
+      ),
       escalationWindowSeconds: parseSafeInteger(body.escalationWindowSeconds, {
         field: "Escalation window",
         fallback: current.escalationWindowSeconds,
         min: moderationLimits.escalationMinWindowSeconds,
-        max: moderationLimits.escalationMaxWindowSeconds
+        max: moderationLimits.escalationMaxWindowSeconds,
       }),
       escalationDeleteAfter: parseSafeInteger(body.escalationDeleteAfter, {
         field: "Escalation delete threshold",
         fallback: current.escalationDeleteAfter,
         min: 2,
-        max: moderationLimits.escalationMaxHitCount
+        max: moderationLimits.escalationMaxHitCount,
       }),
       escalationTimeoutAfter: parseSafeInteger(body.escalationTimeoutAfter, {
         field: "Escalation timeout threshold",
         fallback: current.escalationTimeoutAfter,
         min: 2,
-        max: moderationLimits.escalationMaxHitCount
+        max: moderationLimits.escalationMaxHitCount,
       }),
-      exemptBroadcaster: booleanValue(body.exemptBroadcaster, current.exemptBroadcaster),
-      exemptModerators: booleanValue(body.exemptModerators, current.exemptModerators),
+      exemptBroadcaster: booleanValue(
+        body.exemptBroadcaster,
+        current.exemptBroadcaster,
+      ),
+      exemptModerators: booleanValue(
+        body.exemptModerators,
+        current.exemptModerators,
+      ),
       exemptVips: booleanValue(body.exemptVips, current.exemptVips),
-      exemptSubscribers: booleanValue(body.exemptSubscribers, current.exemptSubscribers),
-      updatedAt: timestamp()
+      exemptSubscribers: booleanValue(
+        body.exemptSubscribers,
+        current.exemptSubscribers,
+      ),
+      updatedAt: timestamp(),
     };
 
     settings.escalationTimeoutAfter = Math.max(
       settings.escalationDeleteAfter,
-      settings.escalationTimeoutAfter
+      settings.escalationTimeoutAfter,
     );
 
     this.db
@@ -567,7 +603,7 @@ export class ModerationService {
             exempt_vips = excluded.exempt_vips,
             exempt_subscribers = excluded.exempt_subscribers,
             updated_at = excluded.updated_at
-        `
+        `,
       )
       .run({
         blockedTermsEnabled: settings.blockedTermsEnabled ? 1 : 0,
@@ -599,43 +635,54 @@ export class ModerationService {
         exemptModerators: settings.exemptModerators ? 1 : 0,
         exemptVips: settings.exemptVips ? 1 : 0,
         exemptSubscribers: settings.exemptSubscribers ? 1 : 0,
-        updatedAt: settings.updatedAt
+        updatedAt: settings.updatedAt,
       });
 
-    writeAuditLog(this.db, actor, "moderation.settings_update", "moderation:settings", {
-      filtersEnabled: enabledFilterNames(settings),
-      roleExemptions: enabledExemptionNames(settings),
-      enforcementFilters: enabledEnforcementFilterNames(settings),
-      escalationEnabled: settings.escalationEnabled,
-      escalationDeleteAfter: settings.escalationDeleteAfter,
-      escalationTimeoutAfter: settings.escalationTimeoutAfter,
-      escalationWindowSeconds: settings.escalationWindowSeconds,
-      botShieldScoreThreshold: settings.botShieldScoreThreshold,
-      timeoutSeconds: settings.timeoutSeconds
-    });
+    writeAuditLog(
+      this.db,
+      actor,
+      "moderation.settings_update",
+      "moderation:settings",
+      {
+        filtersEnabled: enabledFilterNames(settings),
+        roleExemptions: enabledExemptionNames(settings),
+        enforcementFilters: enabledEnforcementFilterNames(settings),
+        escalationEnabled: settings.escalationEnabled,
+        escalationDeleteAfter: settings.escalationDeleteAfter,
+        escalationTimeoutAfter: settings.escalationTimeoutAfter,
+        escalationWindowSeconds: settings.escalationWindowSeconds,
+        botShieldScoreThreshold: settings.botShieldScoreThreshold,
+        timeoutSeconds: settings.timeoutSeconds,
+      },
+    );
 
     return this.getState();
   }
 
   listTerms(): ModerationTerm[] {
-    return (this.db
-      .prepare(
-        `
+    return (
+      this.db
+        .prepare(
+          `
           SELECT *
           FROM moderation_blocked_terms
           ORDER BY term ASC
-        `
-      )
-      .all() as ModerationTermRow[]).map(termFromRow);
+        `,
+        )
+        .all() as ModerationTermRow[]
+    ).map(termFromRow);
   }
 
   saveTerm(input: unknown, actor: ChatMessage) {
     const body = input as { id?: number; term?: unknown; enabled?: unknown };
     const existing = body.id ? this.requireTermRow(Number(body.id)) : undefined;
     const term = normalizeBlockedTerm(body.term ?? existing?.term);
-    const enabled = body.enabled === undefined
-      ? existing ? existing.enabled === 1 : true
-      : Boolean(body.enabled);
+    const enabled =
+      body.enabled === undefined
+        ? existing
+          ? existing.enabled === 1
+          : true
+        : Boolean(body.enabled);
     const now = timestamp();
     const current = this.findTerm(term);
 
@@ -652,18 +699,28 @@ export class ModerationService {
                 enabled = @enabled,
                 updated_at = @updatedAt
             WHERE id = @id
-          `
+          `,
         )
-        .run({ id: existing.id, term, enabled: enabled ? 1 : 0, updatedAt: now });
+        .run({
+          id: existing.id,
+          term,
+          enabled: enabled ? 1 : 0,
+          updatedAt: now,
+        });
     } else {
       this.db
         .prepare(
           `
             INSERT INTO moderation_blocked_terms (term, enabled, created_at, updated_at)
             VALUES (@term, @enabled, @createdAt, @updatedAt)
-          `
+          `,
         )
-        .run({ term, enabled: enabled ? 1 : 0, createdAt: now, updatedAt: now });
+        .run({
+          term,
+          enabled: enabled ? 1 : 0,
+          createdAt: now,
+          updatedAt: now,
+        });
     }
 
     const saved = this.findTerm(term);
@@ -675,8 +732,8 @@ export class ModerationService {
       `moderation_term:${saved?.id ?? term}`,
       {
         term,
-        enabled
-      }
+        enabled,
+      },
     );
 
     return this.getState();
@@ -693,7 +750,7 @@ export class ModerationService {
           SET enabled = @enabled,
               updated_at = @updatedAt
           WHERE id = @id
-        `
+        `,
       )
       .run({ id, enabled: enabled ? 1 : 0, updatedAt: now });
 
@@ -703,8 +760,8 @@ export class ModerationService {
       enabled ? "moderation.term_enable" : "moderation.term_disable",
       `moderation_term:${id}`,
       {
-        term: row.term
-      }
+        term: row.term,
+      },
     );
 
     return this.getState();
@@ -713,33 +770,48 @@ export class ModerationService {
   deleteTerm(id: number, actor: ChatMessage) {
     const row = this.requireTermRow(id);
 
-    this.db.prepare("DELETE FROM moderation_blocked_terms WHERE id = ?").run(id);
-    writeAuditLog(this.db, actor, "moderation.term_delete", `moderation_term:${id}`, {
-      term: row.term
-    });
+    this.db
+      .prepare("DELETE FROM moderation_blocked_terms WHERE id = ?")
+      .run(id);
+    writeAuditLog(
+      this.db,
+      actor,
+      "moderation.term_delete",
+      `moderation_term:${id}`,
+      {
+        term: row.term,
+      },
+    );
 
     return this.getState();
   }
 
   listAllowedLinks(): ModerationAllowedLink[] {
-    return (this.db
-      .prepare(
-        `
+    return (
+      this.db
+        .prepare(
+          `
           SELECT *
           FROM moderation_allowed_links
           ORDER BY domain ASC
-        `
-      )
-      .all() as ModerationAllowedLinkRow[]).map(allowedLinkFromRow);
+        `,
+        )
+        .all() as ModerationAllowedLinkRow[]
+    ).map(allowedLinkFromRow);
   }
 
   saveAllowedLink(input: unknown, actor: ChatMessage) {
     const body = input as { id?: number; domain?: unknown; enabled?: unknown };
-    const existing = body.id ? this.requireAllowedLinkRow(Number(body.id)) : undefined;
+    const existing = body.id
+      ? this.requireAllowedLinkRow(Number(body.id))
+      : undefined;
     const domain = normalizeAllowedDomain(body.domain ?? existing?.domain);
-    const enabled = body.enabled === undefined
-      ? existing ? existing.enabled === 1 : true
-      : Boolean(body.enabled);
+    const enabled =
+      body.enabled === undefined
+        ? existing
+          ? existing.enabled === 1
+          : true
+        : Boolean(body.enabled);
     const now = timestamp();
     const current = this.findAllowedLink(domain);
 
@@ -756,18 +828,28 @@ export class ModerationService {
                 enabled = @enabled,
                 updated_at = @updatedAt
             WHERE id = @id
-          `
+          `,
         )
-        .run({ id: existing.id, domain, enabled: enabled ? 1 : 0, updatedAt: now });
+        .run({
+          id: existing.id,
+          domain,
+          enabled: enabled ? 1 : 0,
+          updatedAt: now,
+        });
     } else {
       this.db
         .prepare(
           `
             INSERT INTO moderation_allowed_links (domain, enabled, created_at, updated_at)
             VALUES (@domain, @enabled, @createdAt, @updatedAt)
-          `
+          `,
         )
-        .run({ domain, enabled: enabled ? 1 : 0, createdAt: now, updatedAt: now });
+        .run({
+          domain,
+          enabled: enabled ? 1 : 0,
+          createdAt: now,
+          updatedAt: now,
+        });
     }
 
     const saved = this.findAllowedLink(domain);
@@ -775,12 +857,14 @@ export class ModerationService {
     writeAuditLog(
       this.db,
       actor,
-      existing ? "moderation.allowed_link_update" : "moderation.allowed_link_create",
+      existing
+        ? "moderation.allowed_link_update"
+        : "moderation.allowed_link_create",
       `moderation_allowed_link:${saved?.id ?? domain}`,
       {
         domain,
-        enabled
-      }
+        enabled,
+      },
     );
 
     return this.getState();
@@ -797,18 +881,20 @@ export class ModerationService {
           SET enabled = @enabled,
               updated_at = @updatedAt
           WHERE id = @id
-        `
+        `,
       )
       .run({ id, enabled: enabled ? 1 : 0, updatedAt: now });
 
     writeAuditLog(
       this.db,
       actor,
-      enabled ? "moderation.allowed_link_enable" : "moderation.allowed_link_disable",
+      enabled
+        ? "moderation.allowed_link_enable"
+        : "moderation.allowed_link_disable",
       `moderation_allowed_link:${id}`,
       {
-        domain: row.domain
-      }
+        domain: row.domain,
+      },
     );
 
     return this.getState();
@@ -817,33 +903,51 @@ export class ModerationService {
   deleteAllowedLink(id: number, actor: ChatMessage) {
     const row = this.requireAllowedLinkRow(id);
 
-    this.db.prepare("DELETE FROM moderation_allowed_links WHERE id = ?").run(id);
-    writeAuditLog(this.db, actor, "moderation.allowed_link_delete", `moderation_allowed_link:${id}`, {
-      domain: row.domain
-    });
+    this.db
+      .prepare("DELETE FROM moderation_allowed_links WHERE id = ?")
+      .run(id);
+    writeAuditLog(
+      this.db,
+      actor,
+      "moderation.allowed_link_delete",
+      `moderation_allowed_link:${id}`,
+      {
+        domain: row.domain,
+      },
+    );
 
     return this.getState();
   }
 
   listBlockedLinks(): ModerationBlockedLink[] {
-    return (this.db
-      .prepare(
-        `
+    return (
+      this.db
+        .prepare(
+          `
           SELECT *
           FROM moderation_blocked_links
           ORDER BY domain ASC
-        `
-      )
-      .all() as ModerationBlockedLinkRow[]).map(blockedLinkFromRow);
+        `,
+        )
+        .all() as ModerationBlockedLinkRow[]
+    ).map(blockedLinkFromRow);
   }
 
   saveBlockedLink(input: unknown, actor: ChatMessage) {
     const body = input as { id?: number; domain?: unknown; enabled?: unknown };
-    const existing = body.id ? this.requireBlockedLinkRow(Number(body.id)) : undefined;
-    const domain = normalizeAllowedDomain(body.domain ?? existing?.domain, "Blocked domain");
-    const enabled = body.enabled === undefined
-      ? existing ? existing.enabled === 1 : true
-      : Boolean(body.enabled);
+    const existing = body.id
+      ? this.requireBlockedLinkRow(Number(body.id))
+      : undefined;
+    const domain = normalizeAllowedDomain(
+      body.domain ?? existing?.domain,
+      "Blocked domain",
+    );
+    const enabled =
+      body.enabled === undefined
+        ? existing
+          ? existing.enabled === 1
+          : true
+        : Boolean(body.enabled);
     const now = timestamp();
     const current = this.findBlockedLink(domain);
 
@@ -860,18 +964,28 @@ export class ModerationService {
                 enabled = @enabled,
                 updated_at = @updatedAt
             WHERE id = @id
-          `
+          `,
         )
-        .run({ id: existing.id, domain, enabled: enabled ? 1 : 0, updatedAt: now });
+        .run({
+          id: existing.id,
+          domain,
+          enabled: enabled ? 1 : 0,
+          updatedAt: now,
+        });
     } else {
       this.db
         .prepare(
           `
             INSERT INTO moderation_blocked_links (domain, enabled, created_at, updated_at)
             VALUES (@domain, @enabled, @createdAt, @updatedAt)
-          `
+          `,
         )
-        .run({ domain, enabled: enabled ? 1 : 0, createdAt: now, updatedAt: now });
+        .run({
+          domain,
+          enabled: enabled ? 1 : 0,
+          createdAt: now,
+          updatedAt: now,
+        });
     }
 
     const saved = this.findBlockedLink(domain);
@@ -879,12 +993,14 @@ export class ModerationService {
     writeAuditLog(
       this.db,
       actor,
-      existing ? "moderation.blocked_link_update" : "moderation.blocked_link_create",
+      existing
+        ? "moderation.blocked_link_update"
+        : "moderation.blocked_link_create",
       `moderation_blocked_link:${saved?.id ?? domain}`,
       {
         domain,
-        enabled
-      }
+        enabled,
+      },
     );
 
     return this.getState();
@@ -901,18 +1017,20 @@ export class ModerationService {
           SET enabled = @enabled,
               updated_at = @updatedAt
           WHERE id = @id
-        `
+        `,
       )
       .run({ id, enabled: enabled ? 1 : 0, updatedAt: now });
 
     writeAuditLog(
       this.db,
       actor,
-      enabled ? "moderation.blocked_link_enable" : "moderation.blocked_link_disable",
+      enabled
+        ? "moderation.blocked_link_enable"
+        : "moderation.blocked_link_disable",
       `moderation_blocked_link:${id}`,
       {
-        domain: row.domain
-      }
+        domain: row.domain,
+      },
     );
 
     return this.getState();
@@ -921,10 +1039,18 @@ export class ModerationService {
   deleteBlockedLink(id: number, actor: ChatMessage) {
     const row = this.requireBlockedLinkRow(id);
 
-    this.db.prepare("DELETE FROM moderation_blocked_links WHERE id = ?").run(id);
-    writeAuditLog(this.db, actor, "moderation.blocked_link_delete", `moderation_blocked_link:${id}`, {
-      domain: row.domain
-    });
+    this.db
+      .prepare("DELETE FROM moderation_blocked_links WHERE id = ?")
+      .run(id);
+    writeAuditLog(
+      this.db,
+      actor,
+      "moderation.blocked_link_delete",
+      `moderation_blocked_link:${id}`,
+      {
+        domain: row.domain,
+      },
+    );
 
     return this.getState();
   }
@@ -934,19 +1060,21 @@ export class ModerationService {
       field: "Moderation link permit limit",
       fallback: 25,
       min: 1,
-      max: moderationLimits.linkPermitLimit
+      max: moderationLimits.linkPermitLimit,
     });
 
-    return (this.db
-      .prepare(
-        `
+    return (
+      this.db
+        .prepare(
+          `
           SELECT *
           FROM moderation_link_permits
           ORDER BY created_at DESC, id DESC
           LIMIT ?
-        `
-      )
-      .all(safeLimit) as ModerationLinkPermitRow[]).map(linkPermitFromRow);
+        `,
+        )
+        .all(safeLimit) as ModerationLinkPermitRow[]
+    ).map(linkPermitFromRow);
   }
 
   grantLinkPermit(input: unknown, actor: ChatMessage) {
@@ -956,7 +1084,7 @@ export class ModerationService {
       field: "Permit minutes",
       fallback: 5,
       min: 1,
-      max: 120
+      max: 120,
     });
     const now = new Date();
     const createdAt = now.toISOString();
@@ -978,20 +1106,27 @@ export class ModerationService {
             @createdAt,
             @createdBy
           )
-        `
+        `,
       )
       .run({
         userLogin,
         expiresAt,
         createdAt,
-        createdBy: actor.userLogin
+        createdBy: actor.userLogin,
       });
 
-    writeAuditLog(this.db, actor, "moderation.link_permit_create", `moderation_link_permit:${userLogin}`, {
-      userLogin,
-      minutes,
-      expiresAt
-    }, { createdAt });
+    writeAuditLog(
+      this.db,
+      actor,
+      "moderation.link_permit_create",
+      `moderation_link_permit:${userLogin}`,
+      {
+        userLogin,
+        minutes,
+        expiresAt,
+      },
+      { createdAt },
+    );
 
     return this.getState();
   }
@@ -1001,26 +1136,31 @@ export class ModerationService {
       field: "Moderation hit limit",
       fallback: 50,
       min: 1,
-      max: moderationLimits.hitLimit
+      max: moderationLimits.hitLimit,
     });
 
-    return (this.db
-      .prepare(
-        `
+    return (
+      this.db
+        .prepare(
+          `
           SELECT *
           FROM moderation_hits
           ORDER BY created_at DESC, id DESC
           LIMIT ?
-        `
-      )
-      .all(safeLimit) as ModerationHitRow[]).map(hitFromRow);
+        `,
+        )
+        .all(safeLimit) as ModerationHitRow[]
+    ).map(hitFromRow);
   }
 
   evaluate(
     message: ChatMessage,
-    options: { record?: boolean; consumePermits?: boolean } = {}
+    options: { record?: boolean; consumePermits?: boolean } = {},
   ): ModerationEvaluation {
-    const gate = this.options.featureGates.describeAccess("moderation_filters", message.source);
+    const gate = this.options.featureGates.describeAccess(
+      "moderation_filters",
+      message.source,
+    );
 
     if (!gate.allowed) {
       return { ok: true, skipped: true, reason: gate.reason };
@@ -1028,23 +1168,27 @@ export class ModerationService {
 
     if (this.isExemptCommand(message.text)) {
       this.trackChatMemory(message);
-      return { ok: true, skipped: true, reason: "Protected command or giveaway entry is exempt." };
+      return {
+        ok: true,
+        skipped: true,
+        reason: "Protected command or giveaway entry is exempt.",
+      };
     }
 
     const settings = this.getSettings();
 
     if (this.isExemptRole(message, settings)) {
       this.trackChatMemory(message);
-      return { ok: true, skipped: true, reason: "Trusted chat role is exempt from moderation filters." };
+      return {
+        ok: true,
+        skipped: true,
+        reason: "Trusted chat role is exempt from moderation filters.",
+      };
     }
 
     const chatterContext = this.getChatterContext(message, settings);
-    const { matches, allowedLinks, consumedPermit, botShield } = this.findMatches(
-      message,
-      settings,
-      options,
-      chatterContext
-    );
+    const { matches, allowedLinks, consumedPermit, botShield } =
+      this.findMatches(message, settings, options, chatterContext);
 
     this.trackChatMemory(message);
 
@@ -1053,15 +1197,17 @@ export class ModerationService {
         ok: true,
         allowedLinks: allowedLinks.length ? allowedLinks : undefined,
         botShield,
-        consumedPermit
+        consumedPermit,
       };
     }
 
     const filterActions = matches.map((match) => ({
       filterType: match.type,
-      action: match.action
+      action: match.action,
     }));
-    const baseAction = strongestAction(filterActions.map((match) => match.action));
+    const baseAction = strongestAction(
+      filterActions.map((match) => match.action),
+    );
     const escalation = this.resolveEscalation(message, settings, baseAction);
     const action = escalation.action;
     const detailParts = matches.map((match) => match.detail);
@@ -1077,12 +1223,22 @@ export class ModerationService {
 
     const detail = sanitizeText(detailParts.join("; "), {
       field: "Moderation detail",
-      maxLength: moderationLimits.detailLength
+      maxLength: moderationLimits.detailLength,
     });
-    const warningMessage = renderWarning(settings.warningMessage, message, detail);
+    const warningMessage = renderWarning(
+      settings.warningMessage,
+      message,
+      detail,
+    );
 
     if (options.record !== false) {
-      this.recordHit(message, matches.map((match) => match.type), action, detail, warningMessage);
+      this.recordHit(
+        message,
+        matches.map((match) => match.type),
+        action,
+        detail,
+        warningMessage,
+      );
     }
 
     return {
@@ -1097,34 +1253,35 @@ export class ModerationService {
         matches: matches.map((match) => ({
           filterType: match.type,
           action: match.action,
-          detail: match.detail
+          detail: match.detail,
         })),
         escalation: escalation.applied
           ? {
               hitsInWindow: escalation.hitsInWindow,
               windowSeconds: settings.escalationWindowSeconds,
               action,
-              reason: escalation.reason
+              reason: escalation.reason,
             }
           : undefined,
         detail,
         warningMessage,
         silent,
-        timeoutSeconds: action === "timeout" ? settings.timeoutSeconds : undefined
-      }
+        timeoutSeconds:
+          action === "timeout" ? settings.timeoutSeconds : undefined,
+      },
     };
   }
 
   planEnforcement(
     message: ChatMessage,
     hit: NonNullable<ModerationEvaluation["hit"]>,
-    capabilities: ModerationEnforcementCapabilities
+    capabilities: ModerationEnforcementCapabilities,
   ): ModerationEnforcementPlan {
     if (hit.action === "warn") {
       return {
         status: "skipped",
         action: "warn",
-        reason: "Filter action is warn only."
+        reason: "Filter action is warn only.",
       };
     }
 
@@ -1132,7 +1289,7 @@ export class ModerationService {
       return {
         status: "blocked",
         action: hit.action,
-        reason: "Enforcement only runs for live Twitch chat messages."
+        reason: "Enforcement only runs for live Twitch chat messages.",
       };
     }
 
@@ -1140,7 +1297,8 @@ export class ModerationService {
       return {
         status: "blocked",
         action: hit.action,
-        reason: "Broadcaster and moderator messages are never deleted or timed out by filters."
+        reason:
+          "Broadcaster and moderator messages are never deleted or timed out by filters.",
       };
     }
 
@@ -1149,7 +1307,7 @@ export class ModerationService {
         return {
           status: "blocked",
           action: "delete",
-          reason: "Twitch message ID was missing."
+          reason: "Twitch message ID was missing.",
         };
       }
 
@@ -1157,14 +1315,16 @@ export class ModerationService {
         return {
           status: "blocked",
           action: "delete",
-          reason: capabilities.deleteUnavailableReason ?? "Delete scope is unavailable."
+          reason:
+            capabilities.deleteUnavailableReason ??
+            "Delete scope is unavailable.",
         };
       }
 
       return {
         status: "ready",
         action: "delete",
-        reason: "Delete scope and message ID are available."
+        reason: "Delete scope and message ID are available.",
       };
     }
 
@@ -1173,7 +1333,7 @@ export class ModerationService {
         status: "blocked",
         action: "timeout",
         reason: "Twitch user ID was missing.",
-        durationSeconds: hit.timeoutSeconds
+        durationSeconds: hit.timeoutSeconds,
       };
     }
 
@@ -1181,8 +1341,10 @@ export class ModerationService {
       return {
         status: "blocked",
         action: "timeout",
-        reason: capabilities.timeoutUnavailableReason ?? "Timeout scope is unavailable.",
-        durationSeconds: hit.timeoutSeconds
+        reason:
+          capabilities.timeoutUnavailableReason ??
+          "Timeout scope is unavailable.",
+        durationSeconds: hit.timeoutSeconds,
       };
     }
 
@@ -1190,34 +1352,44 @@ export class ModerationService {
       status: "ready",
       action: "timeout",
       reason: "Timeout scope and user ID are available.",
-      durationSeconds: hit.timeoutSeconds
+      durationSeconds: hit.timeoutSeconds,
     };
   }
 
   recordEnforcement(
     message: ChatMessage,
     hit: NonNullable<ModerationEvaluation["hit"]>,
-    outcome: ModerationEnforcementOutcome
+    outcome: ModerationEnforcementOutcome,
   ) {
     const now = timestamp();
-    writeAuditLog(this.db, message, `moderation.${outcome.action}_${outcome.status}`, `moderation:${outcome.action}`, {
-      filterTypes: hit.filterTypes,
-      action: outcome.action,
-      status: outcome.status,
-      reason: sanitizeText(outcome.reason, {
-        field: "Moderation enforcement reason",
-        maxLength: moderationLimits.detailLength
-      }),
-      userLogin: message.userLogin,
-      messageId: message.id ?? "",
-      durationSeconds: outcome.durationSeconds,
-      statusCode: outcome.statusCode,
-      detail: hit.detail,
-      messagePreview: messagePreview(message.text)
-    }, { createdAt: now });
+    writeAuditLog(
+      this.db,
+      message,
+      `moderation.${outcome.action}_${outcome.status}`,
+      `moderation:${outcome.action}`,
+      {
+        filterTypes: hit.filterTypes,
+        action: outcome.action,
+        status: outcome.status,
+        reason: sanitizeText(outcome.reason, {
+          field: "Moderation enforcement reason",
+          maxLength: moderationLimits.detailLength,
+        }),
+        userLogin: message.userLogin,
+        messageId: message.id ?? "",
+        durationSeconds: outcome.durationSeconds,
+        statusCode: outcome.statusCode,
+        detail: hit.detail,
+        messagePreview: messagePreview(message.text),
+      },
+      { createdAt: now },
+    );
   }
 
-  shouldWarn(message: ChatMessage, hit: NonNullable<ModerationEvaluation["hit"]>) {
+  shouldWarn(
+    message: ChatMessage,
+    hit: NonNullable<ModerationEvaluation["hit"]>,
+  ) {
     if (hit.silent) {
       return false;
     }
@@ -1238,7 +1410,7 @@ export class ModerationService {
     message: ChatMessage,
     settings: ModerationSettings,
     options: { consumePermits?: boolean },
-    chatterContext: ChatterContext
+    chatterContext: ChatterContext,
   ) {
     const text = message.text.trim();
     const matches: Array<{
@@ -1259,13 +1431,16 @@ export class ModerationService {
         matches.push({
           type: "blocked_term",
           action: settings.blockedTermsAction,
-          detail: `blocked phrase: ${term.term} (${term.mode})`
+          detail: `blocked phrase: ${term.term} (${term.mode})`,
         });
       }
     }
 
     if (settings.linkFilterEnabled) {
-      const linkResult = this.inspectLinks(message, options.consumePermits !== false);
+      const linkResult = this.inspectLinks(
+        message,
+        options.consumePermits !== false,
+      );
       allowedLinks.push(...linkResult.allowed);
       consumedPermit = linkResult.consumedPermit;
 
@@ -1275,48 +1450,67 @@ export class ModerationService {
           action: settings.linkFilterAction,
           detail: linkResult.explicitBlocked.length
             ? `blocked domain: ${linkResult.explicitBlocked.join(", ")}`
-            : `link detected: ${linkResult.blocked.join(", ")}`
+            : `link detected: ${linkResult.blocked.join(", ")}`,
         });
       }
     }
 
     if (settings.capsFilterEnabled && isExcessiveCaps(text, settings)) {
-      matches.push({ type: "caps", action: settings.capsFilterAction, detail: "excessive caps" });
+      matches.push({
+        type: "caps",
+        action: settings.capsFilterAction,
+        detail: "excessive caps",
+      });
     }
 
-    if (settings.repeatFilterEnabled && this.isRepeatedMessage(message, settings)) {
-      matches.push({ type: "repeat", action: settings.repeatFilterAction, detail: "repeated message" });
+    if (
+      settings.repeatFilterEnabled &&
+      this.isRepeatedMessage(message, settings)
+    ) {
+      matches.push({
+        type: "repeat",
+        action: settings.repeatFilterAction,
+        detail: "repeated message",
+      });
     }
 
     if (settings.symbolFilterEnabled && isExcessiveSymbols(text, settings)) {
-      matches.push({ type: "symbols", action: settings.symbolFilterAction, detail: "excessive symbols" });
+      matches.push({
+        type: "symbols",
+        action: settings.symbolFilterAction,
+        detail: "excessive symbols",
+      });
     }
 
     if (settings.botShieldEnabled) {
       const botShieldScore = scoreBotShieldMessage(message, {
         allowedDomains: this.enabledAllowedLinks().map((entry) => entry.domain),
         blockedDomains: this.enabledBlockedLinks().map((entry) => entry.domain),
-        chatterContext
+        chatterContext,
       });
       botShield = {
         score: botShieldScore.score,
         threshold: settings.botShieldScoreThreshold,
         reasons: botShieldScore.reasons,
         firstTimeChatter: chatterContext.firstTimeChatter,
-        silent: false
+        silent: false,
       };
 
       if (botShield.score >= settings.botShieldScoreThreshold) {
         const botShieldMatch = {
           type: "bot_shield" as const,
           action: settings.botShieldAction,
-          detail: botShieldDetail(botShield)
+          detail: botShieldDetail(botShield),
         };
-        botShield.silent = isSilentBotShieldHit([botShieldMatch], settings.botShieldAction, false);
+        botShield.silent = isSilentBotShieldHit(
+          [botShieldMatch],
+          settings.botShieldAction,
+          false,
+        );
         matches.push({
           type: "bot_shield",
           action: settings.botShieldAction,
-          detail: botShieldDetail(botShield)
+          detail: botShieldDetail(botShield),
         });
       }
     }
@@ -1341,7 +1535,7 @@ export class ModerationService {
     filterTypes: ModerationFilterType[],
     action: ModerationAction,
     detail: string,
-    warningMessage: string
+    warningMessage: string,
   ) {
     const now = timestamp();
     const preview = messagePreview(message.text);
@@ -1366,7 +1560,7 @@ export class ModerationService {
             @detail,
             @createdAt
           )
-        `
+        `,
       )
       .run({
         filterType: filterTypes.join(","),
@@ -1375,42 +1569,49 @@ export class ModerationService {
         userLogin: message.userLogin,
         messagePreview: preview,
         detail,
-        createdAt: now
+        createdAt: now,
       });
 
-    writeAuditLog(this.db, message, "moderation.hit", `moderation:${filterTypes.join(",")}`, {
-      filterTypes,
-      action,
-      userLogin: message.userLogin,
-      detail,
-      messagePreview: preview,
-      warningPreview: messagePreview(warningMessage)
-    }, { createdAt: now });
+    writeAuditLog(
+      this.db,
+      message,
+      "moderation.hit",
+      `moderation:${filterTypes.join(",")}`,
+      {
+        filterTypes,
+        action,
+        userLogin: message.userLogin,
+        detail,
+        messagePreview: preview,
+        warningPreview: messagePreview(warningMessage),
+      },
+      { createdAt: now },
+    );
   }
 
   private resolveEscalation(
     message: ChatMessage,
     settings: ModerationSettings,
-    baseAction: ModerationAction
+    baseAction: ModerationAction,
   ) {
     if (!settings.escalationEnabled) {
       return {
         action: baseAction,
         applied: false,
         hitsInWindow: 0,
-        reason: ""
+        reason: "",
       };
     }
 
-    const hitsInWindow = this.countRecentHitsForUser(
-      message,
-      settings.escalationWindowSeconds
-    ) + 1;
-    const escalationAction = hitsInWindow >= settings.escalationTimeoutAfter
-      ? "timeout"
-      : hitsInWindow >= settings.escalationDeleteAfter
-        ? "delete"
-        : undefined;
+    const hitsInWindow =
+      this.countRecentHitsForUser(message, settings.escalationWindowSeconds) +
+      1;
+    const escalationAction =
+      hitsInWindow >= settings.escalationTimeoutAfter
+        ? "timeout"
+        : hitsInWindow >= settings.escalationDeleteAfter
+          ? "delete"
+          : undefined;
     const action = escalationAction
       ? strongestAction([baseAction, escalationAction])
       : baseAction;
@@ -1422,7 +1623,7 @@ export class ModerationService {
       hitsInWindow,
       reason: applied
         ? `escalated to ${action}: ${hitsInWindow} hits in ${settings.escalationWindowSeconds}s`
-        : ""
+        : "",
     };
   }
 
@@ -1435,14 +1636,17 @@ export class ModerationService {
           FROM moderation_hits
           WHERE user_key = ?
             AND created_at >= ?
-        `
+        `,
       )
       .get(userKey(message), cutoff) as { count?: number } | undefined;
 
     return Number(row?.count ?? 0);
   }
 
-  private isRepeatedMessage(message: ChatMessage, settings: ModerationSettings) {
+  private isRepeatedMessage(
+    message: ChatMessage,
+    settings: ModerationSettings,
+  ) {
     const normalizedText = normalizeRepeatText(message.text);
 
     if (!normalizedText) {
@@ -1451,39 +1655,52 @@ export class ModerationService {
 
     const now = Date.now();
     const cutoff = now - settings.repeatWindowSeconds * 1000;
-    const entries = (this.recentByUser.get(userKey(message)) ?? [])
-      .filter((entry) => entry.at >= cutoff);
-    const repeats = entries.filter((entry) => entry.normalizedText === normalizedText).length;
+    const entries = (this.recentByUser.get(userKey(message)) ?? []).filter(
+      (entry) => entry.at >= cutoff,
+    );
+    const repeats = entries.filter(
+      (entry) => entry.normalizedText === normalizedText,
+    ).length;
 
     return repeats + 1 >= settings.repeatLimit;
   }
 
-  private getChatterContext(message: ChatMessage, settings: ModerationSettings): ChatterContext {
+  private getChatterContext(
+    message: ChatMessage,
+    settings: ModerationSettings,
+  ): ChatterContext {
     const normalizedText = normalizeRepeatText(message.text);
     const now = Date.now();
     const key = userKey(message);
-    const userEntries = (this.recentByUser.get(key) ?? [])
-      .filter((entry) => entry.at >= now - settings.repeatWindowSeconds * 1000);
+    const userEntries = (this.recentByUser.get(key) ?? []).filter(
+      (entry) => entry.at >= now - settings.repeatWindowSeconds * 1000,
+    );
     const sameUserRepeatCount = normalizedText
-      ? userEntries.filter((entry) => entry.normalizedText === normalizedText).length
+      ? userEntries.filter((entry) => entry.normalizedText === normalizedText)
+          .length
       : 0;
-    const rapidUserMessageCount = userEntries
-      .filter((entry) => entry.at >= now - 10_000).length;
+    const rapidUserMessageCount = userEntries.filter(
+      (entry) => entry.at >= now - 10_000,
+    ).length;
     const globalCopyPasteUserCount = normalizedText
-      ? unique(this.recentGlobal
-        .filter((entry) =>
-          entry.userKey !== key &&
-          entry.normalizedText === normalizedText &&
-          entry.at >= now - 120_000
-        )
-        .map((entry) => entry.userKey)).length
+      ? unique(
+          this.recentGlobal
+            .filter(
+              (entry) =>
+                entry.userKey !== key &&
+                entry.normalizedText === normalizedText &&
+                entry.at >= now - 120_000,
+            )
+            .map((entry) => entry.userKey),
+        ).length
       : 0;
 
     return {
-      firstTimeChatter: message.badges.includes("first-msg") || !this.seenUserKeys.has(key),
+      firstTimeChatter:
+        message.badges.includes("first-msg") || !this.seenUserKeys.has(key),
       sameUserRepeatCount,
       rapidUserMessageCount,
-      globalCopyPasteUserCount
+      globalCopyPasteUserCount,
     };
   }
 
@@ -1498,13 +1715,18 @@ export class ModerationService {
     const entry = {
       normalizedText,
       userKey: userKey(message),
-      at: Date.now()
+      at: Date.now(),
     };
     const entries = this.recentByUser.get(userKey(message)) ?? [];
     entries.push(entry);
-    this.recentByUser.set(userKey(message), entries.slice(-moderationLimits.repeatMemoryMax));
+    this.recentByUser.set(
+      userKey(message),
+      entries.slice(-moderationLimits.repeatMemoryMax),
+    );
     this.recentGlobal.push(entry);
-    this.recentGlobal = this.recentGlobal.slice(-moderationLimits.globalRepeatMemoryMax);
+    this.recentGlobal = this.recentGlobal.slice(
+      -moderationLimits.globalRepeatMemoryMax,
+    );
   }
 
   private inspectLinks(message: ChatMessage, consumePermit: boolean) {
@@ -1515,22 +1737,27 @@ export class ModerationService {
         allowed: [],
         blocked: [],
         explicitBlocked: [],
-        consumedPermit: undefined
+        consumedPermit: undefined,
       };
     }
 
     const allowedEntries = this.enabledAllowedLinks();
     const blockedEntries = this.enabledBlockedLinks();
     const explicitBlocked = domains.filter((domain) =>
-      blockedEntries.some((entry) => domainMatchesAllowed(domain, entry.domain))
+      blockedEntries.some((entry) =>
+        domainMatchesAllowed(domain, entry.domain),
+      ),
     );
-    const allowed = domains.filter((domain) =>
-      !explicitBlocked.includes(domain) &&
-      allowedEntries.some((entry) => domainMatchesAllowed(domain, entry.domain))
+    const allowed = domains.filter(
+      (domain) =>
+        !explicitBlocked.includes(domain) &&
+        allowedEntries.some((entry) =>
+          domainMatchesAllowed(domain, entry.domain),
+        ),
     );
-    const untrusted = domains.filter((domain) =>
-      !allowed.includes(domain) &&
-      !explicitBlocked.includes(domain)
+    const untrusted = domains.filter(
+      (domain) =>
+        !allowed.includes(domain) && !explicitBlocked.includes(domain),
     );
     const stillBlocked = unique([...explicitBlocked, ...untrusted]);
 
@@ -1539,7 +1766,7 @@ export class ModerationService {
         allowed,
         blocked: [],
         explicitBlocked: [],
-        consumedPermit: undefined
+        consumedPermit: undefined,
       };
     }
 
@@ -1550,14 +1777,14 @@ export class ModerationService {
         allowed,
         blocked: stillBlocked,
         explicitBlocked,
-        consumedPermit: undefined
+        consumedPermit: undefined,
       };
     }
 
     let consumedPermit: ModerationEvaluation["consumedPermit"] | undefined = {
       id: permit.id,
       userLogin: permit.user_login,
-      expiresAt: permit.expires_at
+      expiresAt: permit.expires_at,
     };
 
     if (consumePermit) {
@@ -1568,7 +1795,7 @@ export class ModerationService {
       allowed,
       blocked: [],
       explicitBlocked: [],
-      consumedPermit
+      consumedPermit,
     };
   }
 
@@ -1584,12 +1811,15 @@ export class ModerationService {
             AND expires_at > ?
           ORDER BY expires_at DESC, id DESC
           LIMIT 1
-        `
+        `,
       )
       .get(login, timestamp()) as ModerationLinkPermitRow | undefined;
   }
 
-  private consumeLinkPermit(permit: ModerationLinkPermitRow, message: ChatMessage) {
+  private consumeLinkPermit(
+    permit: ModerationLinkPermitRow,
+    message: ChatMessage,
+  ) {
     const usedAt = timestamp();
 
     this.db
@@ -1599,19 +1829,26 @@ export class ModerationService {
           SET used_at = @usedAt
           WHERE id = @id
             AND used_at = ''
-        `
+        `,
       )
       .run({ id: permit.id, usedAt });
 
-    writeAuditLog(this.db, message, "moderation.link_permit_consume", `moderation_link_permit:${permit.id}`, {
-      userLogin: permit.user_login,
-      messagePreview: messagePreview(message.text)
-    }, { createdAt: usedAt });
+    writeAuditLog(
+      this.db,
+      message,
+      "moderation.link_permit_consume",
+      `moderation_link_permit:${permit.id}`,
+      {
+        userLogin: permit.user_login,
+        messagePreview: messagePreview(message.text),
+      },
+      { createdAt: usedAt },
+    );
 
     return {
       id: permit.id,
       userLogin: permit.user_login,
-      expiresAt: permit.expires_at
+      expiresAt: permit.expires_at,
     };
   }
 
@@ -1647,7 +1884,9 @@ export class ModerationService {
 
     const exempt = new Set([
       ...getProtectedCommandNames(),
-      ...(this.options.exemptCommandNames?.() ?? []).map((item) => item.toLowerCase())
+      ...(this.options.exemptCommandNames?.() ?? []).map((item) =>
+        item.toLowerCase(),
+      ),
     ]);
 
     return exempt.has(command);
@@ -1745,7 +1984,7 @@ const defaultSettings = (): ModerationSettings => ({
   exemptModerators: true,
   exemptVips: false,
   exemptSubscribers: false,
-  updatedAt: ""
+  updatedAt: "",
 });
 
 const settingsFromRow = (row: ModerationSettingsRow): ModerationSettings => ({
@@ -1762,7 +2001,9 @@ const settingsFromRow = (row: ModerationSettingsRow): ModerationSettings => ({
   repeatFilterAction: normalizeStoredModerationAction(row.repeat_filter_action),
   symbolFilterAction: normalizeStoredModerationAction(row.symbol_filter_action),
   botShieldAction: normalizeStoredModerationAction(row.bot_shield_action),
-  botShieldScoreThreshold: clampBotShieldScoreThreshold(row.bot_shield_score_threshold),
+  botShieldScoreThreshold: clampBotShieldScoreThreshold(
+    row.bot_shield_score_threshold,
+  ),
   timeoutSeconds: clampTimeoutSeconds(row.timeout_seconds),
   warningMessage: row.warning_message,
   capsMinLength: row.caps_min_length,
@@ -1772,17 +2013,22 @@ const settingsFromRow = (row: ModerationSettingsRow): ModerationSettings => ({
   symbolMinLength: row.symbol_min_length,
   symbolRatio: row.symbol_ratio,
   escalationEnabled: row.escalation_enabled === 1,
-  escalationWindowSeconds: clampEscalationWindowSeconds(row.escalation_window_seconds),
-  escalationDeleteAfter: clampEscalationHitCount(row.escalation_delete_after, 2),
+  escalationWindowSeconds: clampEscalationWindowSeconds(
+    row.escalation_window_seconds,
+  ),
+  escalationDeleteAfter: clampEscalationHitCount(
+    row.escalation_delete_after,
+    2,
+  ),
   escalationTimeoutAfter: Math.max(
     clampEscalationHitCount(row.escalation_delete_after, 2),
-    clampEscalationHitCount(row.escalation_timeout_after, 3)
+    clampEscalationHitCount(row.escalation_timeout_after, 3),
   ),
   exemptBroadcaster: row.exempt_broadcaster === 1,
   exemptModerators: row.exempt_moderators === 1,
   exemptVips: row.exempt_vips === 1,
   exemptSubscribers: row.exempt_subscribers === 1,
-  updatedAt: row.updated_at
+  updatedAt: row.updated_at,
 });
 
 const termFromRow = (row: ModerationTermRow): ModerationTerm => ({
@@ -1790,7 +2036,7 @@ const termFromRow = (row: ModerationTermRow): ModerationTerm => ({
   term: row.term,
   enabled: row.enabled === 1,
   createdAt: row.created_at,
-  updatedAt: row.updated_at
+  updatedAt: row.updated_at,
 });
 
 const hitFromRow = (row: ModerationHitRow): ModerationHit => ({
@@ -1801,40 +2047,46 @@ const hitFromRow = (row: ModerationHitRow): ModerationHit => ({
   userLogin: row.user_login,
   messagePreview: row.message_preview,
   detail: row.detail,
-  createdAt: row.created_at
+  createdAt: row.created_at,
 });
 
-const allowedLinkFromRow = (row: ModerationAllowedLinkRow): ModerationAllowedLink => ({
+const allowedLinkFromRow = (
+  row: ModerationAllowedLinkRow,
+): ModerationAllowedLink => ({
   id: row.id,
   domain: row.domain,
   enabled: row.enabled === 1,
   createdAt: row.created_at,
-  updatedAt: row.updated_at
+  updatedAt: row.updated_at,
 });
 
-const blockedLinkFromRow = (row: ModerationBlockedLinkRow): ModerationBlockedLink => ({
+const blockedLinkFromRow = (
+  row: ModerationBlockedLinkRow,
+): ModerationBlockedLink => ({
   id: row.id,
   domain: row.domain,
   enabled: row.enabled === 1,
   createdAt: row.created_at,
-  updatedAt: row.updated_at
+  updatedAt: row.updated_at,
 });
 
-const linkPermitFromRow = (row: ModerationLinkPermitRow): ModerationLinkPermit => ({
+const linkPermitFromRow = (
+  row: ModerationLinkPermitRow,
+): ModerationLinkPermit => ({
   id: row.id,
   userLogin: row.user_login,
   expiresAt: row.expires_at,
   usedAt: row.used_at,
   createdAt: row.created_at,
   createdBy: row.created_by,
-  active: !row.used_at && new Date(row.expires_at).getTime() > Date.now()
+  active: !row.used_at && new Date(row.expires_at).getTime() > Date.now(),
 });
 
 const normalizeBlockedTerm = (value: unknown) => {
   const term = sanitizeText(value, {
     field: "Blocked phrase",
     maxLength: moderationLimits.termLength,
-    required: true
+    required: true,
   }).toLowerCase();
   assertNoSecretLikeContent(term, "Blocked phrase");
   return term;
@@ -1844,14 +2096,22 @@ const normalizeAllowedDomain = (value: unknown, field = "Allowed domain") => {
   let domain = sanitizeText(value, {
     field,
     maxLength: moderationLimits.domainLength,
-    required: true
+    required: true,
   }).toLowerCase();
 
   assertNoSecretLikeContent(domain, field);
-  domain = domain.replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0] ?? "";
+  domain =
+    domain
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .split(/[/?#]/)[0] ?? "";
   domain = domain.replace(/:\d+$/, "").trim();
 
-  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(domain)) {
+  if (
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(
+      domain,
+    )
+  ) {
     throw new Error(`${field} must be a valid domain, such as example.com.`);
   }
 
@@ -1867,14 +2127,24 @@ const normalizeWarningMessage = (value: unknown) => {
 const booleanValue = (value: unknown, fallback: boolean) =>
   value === undefined ? fallback : Boolean(value);
 
-const moderationActions = new Set<ModerationAction>(["warn", "delete", "timeout"]);
+const moderationActions = new Set<ModerationAction>([
+  "warn",
+  "delete",
+  "timeout",
+]);
 
-const normalizeModerationAction = (value: unknown, fallback: ModerationAction) => {
+const normalizeModerationAction = (
+  value: unknown,
+  fallback: ModerationAction,
+) => {
   if (value === undefined || value === null || value === "") {
     return fallback;
   }
 
-  if (typeof value === "string" && moderationActions.has(value as ModerationAction)) {
+  if (
+    typeof value === "string" &&
+    moderationActions.has(value as ModerationAction)
+  ) {
     return value as ModerationAction;
   }
 
@@ -1893,7 +2163,7 @@ const clampTimeoutSeconds = (value: unknown) => {
 
   return Math.min(
     moderationLimits.timeoutMaxSeconds,
-    Math.max(moderationLimits.timeoutMinSeconds, Math.trunc(parsed))
+    Math.max(moderationLimits.timeoutMinSeconds, Math.trunc(parsed)),
   );
 };
 
@@ -1906,7 +2176,7 @@ const clampEscalationWindowSeconds = (value: unknown) => {
 
   return Math.min(
     moderationLimits.escalationMaxWindowSeconds,
-    Math.max(moderationLimits.escalationMinWindowSeconds, Math.trunc(parsed))
+    Math.max(moderationLimits.escalationMinWindowSeconds, Math.trunc(parsed)),
   );
 };
 
@@ -1919,7 +2189,7 @@ const clampEscalationHitCount = (value: unknown, fallback: number) => {
 
   return Math.min(
     moderationLimits.escalationMaxHitCount,
-    Math.max(2, Math.trunc(parsed))
+    Math.max(2, Math.trunc(parsed)),
   );
 };
 
@@ -1932,7 +2202,7 @@ const clampBotShieldScoreThreshold = (value: unknown) => {
 
   return Math.min(
     moderationLimits.botShieldMaxScore,
-    Math.max(moderationLimits.botShieldMinScore, Math.trunc(parsed))
+    Math.max(moderationLimits.botShieldMinScore, Math.trunc(parsed)),
   );
 };
 
@@ -1950,46 +2220,52 @@ const ratioValue = (value: unknown, fallback: number, field: string) => {
   return parsed;
 };
 
-const enabledFilterNames = (settings: ModerationSettings) => [
-  settings.blockedTermsEnabled ? "blocked_terms" : undefined,
-  settings.linkFilterEnabled ? "links" : undefined,
-  settings.capsFilterEnabled ? "caps" : undefined,
-  settings.repeatFilterEnabled ? "repeat" : undefined,
-  settings.symbolFilterEnabled ? "symbols" : undefined,
-  settings.botShieldEnabled ? "bot_shield" : undefined
-].filter(Boolean);
+const enabledFilterNames = (settings: ModerationSettings) =>
+  [
+    settings.blockedTermsEnabled ? "blocked_terms" : undefined,
+    settings.linkFilterEnabled ? "links" : undefined,
+    settings.capsFilterEnabled ? "caps" : undefined,
+    settings.repeatFilterEnabled ? "repeat" : undefined,
+    settings.symbolFilterEnabled ? "symbols" : undefined,
+    settings.botShieldEnabled ? "bot_shield" : undefined,
+  ].filter(Boolean);
 
-const enabledExemptionNames = (settings: ModerationSettings) => [
-  settings.exemptBroadcaster ? "broadcaster" : undefined,
-  settings.exemptModerators ? "moderators" : undefined,
-  settings.exemptVips ? "vips" : undefined,
-  settings.exemptSubscribers ? "subscribers" : undefined
-].filter(Boolean);
+const enabledExemptionNames = (settings: ModerationSettings) =>
+  [
+    settings.exemptBroadcaster ? "broadcaster" : undefined,
+    settings.exemptModerators ? "moderators" : undefined,
+    settings.exemptVips ? "vips" : undefined,
+    settings.exemptSubscribers ? "subscribers" : undefined,
+  ].filter(Boolean);
 
-const enabledEnforcementFilterNames = (settings: ModerationSettings) => [
-  settings.blockedTermsEnabled && settings.blockedTermsAction !== "warn"
-    ? `blocked_terms:${settings.blockedTermsAction}`
-    : undefined,
-  settings.linkFilterEnabled && settings.linkFilterAction !== "warn"
-    ? `links:${settings.linkFilterAction}`
-    : undefined,
-  settings.capsFilterEnabled && settings.capsFilterAction !== "warn"
-    ? `caps:${settings.capsFilterAction}`
-    : undefined,
-  settings.repeatFilterEnabled && settings.repeatFilterAction !== "warn"
-    ? `repeat:${settings.repeatFilterAction}`
-    : undefined,
-  settings.symbolFilterEnabled && settings.symbolFilterAction !== "warn"
-    ? `symbols:${settings.symbolFilterAction}`
-    : undefined,
-  settings.botShieldEnabled && settings.botShieldAction !== "warn"
-    ? `bot_shield:${settings.botShieldAction}`
-    : undefined
-].filter(Boolean);
+const enabledEnforcementFilterNames = (settings: ModerationSettings) =>
+  [
+    settings.blockedTermsEnabled && settings.blockedTermsAction !== "warn"
+      ? `blocked_terms:${settings.blockedTermsAction}`
+      : undefined,
+    settings.linkFilterEnabled && settings.linkFilterAction !== "warn"
+      ? `links:${settings.linkFilterAction}`
+      : undefined,
+    settings.capsFilterEnabled && settings.capsFilterAction !== "warn"
+      ? `caps:${settings.capsFilterAction}`
+      : undefined,
+    settings.repeatFilterEnabled && settings.repeatFilterAction !== "warn"
+      ? `repeat:${settings.repeatFilterAction}`
+      : undefined,
+    settings.symbolFilterEnabled && settings.symbolFilterAction !== "warn"
+      ? `symbols:${settings.symbolFilterAction}`
+      : undefined,
+    settings.botShieldEnabled && settings.botShieldAction !== "warn"
+      ? `bot_shield:${settings.botShieldAction}`
+      : undefined,
+  ].filter(Boolean);
 
 const summarizeHitsByFilter = (hits: ModerationHit[]) =>
   hits.reduce<Record<string, number>>((summary, hit) => {
-    for (const filterType of hit.filterType.split(",").map((item) => item.trim()).filter(Boolean)) {
+    for (const filterType of hit.filterType
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)) {
       summary[filterType] = (summary[filterType] ?? 0) + 1;
     }
     return summary;
@@ -2004,19 +2280,20 @@ const summarizeHitsByAction = (hits: ModerationHit[]) =>
 const actionRank: Record<ModerationAction, number> = {
   warn: 0,
   delete: 1,
-  timeout: 2
+  timeout: 2,
 };
 
 const strongestAction = (actions: ModerationAction[]): ModerationAction =>
   actions.reduce<ModerationAction>(
-    (strongest, action) => actionRank[action] > actionRank[strongest] ? action : strongest,
-    "warn"
+    (strongest, action) =>
+      actionRank[action] > actionRank[strongest] ? action : strongest,
+    "warn",
   );
 
 const isSilentBotShieldHit = (
   matches: Array<{ type: ModerationFilterType }>,
   action: ModerationAction,
-  escalationApplied: boolean
+  escalationApplied: boolean,
 ) =>
   action === "delete" &&
   !escalationApplied &&
@@ -2025,7 +2302,7 @@ const isSilentBotShieldHit = (
 
 const findLinkDomains = (text: string) => {
   const matches = text.matchAll(
-    /\b(?:https?:\/\/)?(?:www\.)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)(?:\/[^\s]*)?/gi
+    /\b(?:https?:\/\/)?(?:www\.)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)(?:\/[^\s]*)?/gi,
   );
 
   return [...matches]
@@ -2050,13 +2327,17 @@ const botShieldHighConfidencePatterns = [
   /\bwant\s+to\s+(?:become|get)\s+famous\b/i,
   /\b(?:buy|cheap|free|get|boost|increase)\s+(?:twitch\s+)?(?:followers?|viewers?|views?|subs?)\b/i,
   /\b(?:followers?|viewers?|views?|subs?)\s+(?:for|at|from)\s+(?:cheap|free|sale|low\s+price)\b/i,
-  /\bgrow\s+your\s+channel\b/i
+  /\bgrow\s+your\s+channel\b/i,
 ];
 
-const botShieldPromoObjectPattern = /\b(?:followers?|viewers?|views?|subs?|chatters?)\b/i;
-const botShieldPromoActionPattern = /\b(?:buy|cheap|free|boost|increase|promot(?:e|ion)|famous|viral|grow)\b/i;
-const botShieldOffPlatformPattern = /\b(?:telegram|whatsapp|discord|dm\s+me)\b/i;
-const botShieldRaidFriendlyPattern = /\b(?:raid|raiders?|raiding|from\s+\w{3,25}|welcome\s+in|hype|lets?\s+go|ggs?|pog)\b/i;
+const botShieldPromoObjectPattern =
+  /\b(?:followers?|viewers?|views?|subs?|chatters?)\b/i;
+const botShieldPromoActionPattern =
+  /\b(?:buy|cheap|free|boost|increase|promot(?:e|ion)|famous|viral|grow)\b/i;
+const botShieldOffPlatformPattern =
+  /\b(?:telegram|whatsapp|discord|dm\s+me)\b/i;
+const botShieldRaidFriendlyPattern =
+  /\b(?:raid|raiders?|raiding|from\s+\w{3,25}|welcome\s+in|hype|lets?\s+go|ggs?|pog)\b/i;
 const botShieldShortenerDomains = new Set([
   "bit.ly",
   "buff.ly",
@@ -2069,7 +2350,7 @@ const botShieldShortenerDomains = new Set([
   "rebrand.ly",
   "shorturl.at",
   "t.co",
-  "tinyurl.com"
+  "tinyurl.com",
 ]);
 
 const scoreBotShieldMessage = (
@@ -2078,30 +2359,36 @@ const scoreBotShieldMessage = (
     allowedDomains: string[];
     blockedDomains: string[];
     chatterContext: ChatterContext;
-  }
+  },
 ): BotShieldScore => {
   const text = message.text.trim();
   const lower = text.toLowerCase();
   const domains = unique(findLinkDomains(text));
   const blockedDomains = domains.filter((domain) =>
-    options.blockedDomains.some((entry) => domainMatchesAllowed(domain, entry))
+    options.blockedDomains.some((entry) => domainMatchesAllowed(domain, entry)),
   );
-  const allowedDomains = domains.filter((domain) =>
-    !blockedDomains.includes(domain) &&
-    options.allowedDomains.some((entry) => domainMatchesAllowed(domain, entry))
+  const allowedDomains = domains.filter(
+    (domain) =>
+      !blockedDomains.includes(domain) &&
+      options.allowedDomains.some((entry) =>
+        domainMatchesAllowed(domain, entry),
+      ),
   );
-  const untrustedDomains = domains.filter((domain) =>
-    !allowedDomains.includes(domain) &&
-    !blockedDomains.includes(domain)
+  const untrustedDomains = domains.filter(
+    (domain) =>
+      !allowedDomains.includes(domain) && !blockedDomains.includes(domain),
   );
   const riskyDomains = unique([...blockedDomains, ...untrustedDomains]);
-  const highConfidenceMatches = botShieldHighConfidencePatterns
-    .filter((pattern) => pattern.test(lower)).length;
-  const hasPromoPair = botShieldPromoObjectPattern.test(lower) && botShieldPromoActionPattern.test(lower);
+  const highConfidenceMatches = botShieldHighConfidencePatterns.filter(
+    (pattern) => pattern.test(lower),
+  ).length;
+  const hasPromoPair =
+    botShieldPromoObjectPattern.test(lower) &&
+    botShieldPromoActionPattern.test(lower);
   const raidFriendly = isRaidFriendlyMessage(text, {
     domains,
     highConfidenceMatches,
-    hasPromoPair
+    hasPromoPair,
   });
   let score = 0;
   const reasons: string[] = raidFriendly ? ["raid-friendly chatter"] : [];
@@ -2133,7 +2420,10 @@ const scoreBotShieldMessage = (
   }
 
   if (highConfidenceMatches > 0) {
-    add(highConfidenceMatches > 1 ? 65 : 55, "known follower/viewer spam wording");
+    add(
+      highConfidenceMatches > 1 ? 65 : 55,
+      "known follower/viewer spam wording",
+    );
   } else if (hasPromoPair) {
     add(35, "follower/viewer promotion wording");
   }
@@ -2152,7 +2442,10 @@ const scoreBotShieldMessage = (
 
   if (options.chatterContext.sameUserRepeatCount >= 2) {
     add(70, "rate-limited repeated message");
-  } else if (options.chatterContext.sameUserRepeatCount === 1 && !raidFriendly) {
+  } else if (
+    options.chatterContext.sameUserRepeatCount === 1 &&
+    !raidFriendly
+  ) {
     add(35, "rapid repeated message");
   }
 
@@ -2166,13 +2459,11 @@ const scoreBotShieldMessage = (
 
   if (
     options.chatterContext.firstTimeChatter &&
-    (
-      riskyDomains.length ||
+    (riskyDomains.length ||
       highConfidenceMatches > 0 ||
       hasPromoPair ||
       options.chatterContext.sameUserRepeatCount > 0 ||
-      options.chatterContext.globalCopyPasteUserCount >= 2
-    )
+      options.chatterContext.globalCopyPasteUserCount >= 2)
   ) {
     add(10, "first-time chatter with risk signals");
   }
@@ -2183,21 +2474,27 @@ const scoreBotShieldMessage = (
 
   return {
     score: Math.min(moderationLimits.botShieldMaxScore, score),
-    reasons
+    reasons,
   };
 };
 
-const botShieldDetail = (score: NonNullable<ModerationEvaluation["botShield"]>) =>
+const botShieldDetail = (
+  score: NonNullable<ModerationEvaluation["botShield"]>,
+) =>
   `bot shield score ${score.score}/${score.threshold}: ${score.reasons.join(", ") || "heuristic match"}`;
 
 const shortDomainList = (domains: string[]) =>
   unique(domains).slice(0, 3).join(", ");
 
 const isShortenerDomain = (domain: string) =>
-  [...botShieldShortenerDomains].some((entry) => domainMatchesAllowed(domain, entry));
+  [...botShieldShortenerDomains].some((entry) =>
+    domainMatchesAllowed(domain, entry),
+  );
 
 const isLikelyPromoDomain = (domain: string) =>
-  /(?:buy|cheap|follow|followers|fame|promo|boost|viral|viewbot|viewers)/i.test(domain.replace(/[.-]/g, " "));
+  /(?:buy|cheap|follow|followers|fame|promo|boost|viral|viewbot|viewers)/i.test(
+    domain.replace(/[.-]/g, " "),
+  );
 
 const isRaidFriendlyMessage = (
   text: string,
@@ -2205,7 +2502,7 @@ const isRaidFriendlyMessage = (
     domains: string[];
     highConfidenceMatches: number;
     hasPromoPair: boolean;
-  }
+  },
 ) =>
   context.domains.length === 0 &&
   context.highConfidenceMatches === 0 &&
@@ -2235,10 +2532,12 @@ const matchBlockedTerm = (text: string, term: string) => {
   }
 
   const wildcard = normalized.includes("*");
-  const escaped = escapeRegex(normalized)
-    .replace(/\\\*/g, "[\\p{L}\\p{N}_-]*");
+  const escaped = escapeRegex(normalized).replace(/\\\*/g, "[\\p{L}\\p{N}_-]*");
   const flexibleSpaces = escaped.replace(/\s+/g, "\\s+");
-  const regex = new RegExp(`(^|[^\\p{L}\\p{N}_])${flexibleSpaces}(?=$|[^\\p{L}\\p{N}_])`, "iu");
+  const regex = new RegExp(
+    `(^|[^\\p{L}\\p{N}_])${flexibleSpaces}(?=$|[^\\p{L}\\p{N}_])`,
+    "iu",
+  );
 
   if (!regex.test(text)) {
     return undefined;
@@ -2246,7 +2545,11 @@ const matchBlockedTerm = (text: string, term: string) => {
 
   return {
     term: normalized,
-    mode: wildcard ? "wildcard" : normalized.includes(" ") ? "phrase" : "whole-word"
+    mode: wildcard
+      ? "wildcard"
+      : normalized.includes(" ")
+        ? "phrase"
+        : "whole-word",
   };
 };
 
@@ -2260,7 +2563,9 @@ const isExcessiveCaps = (text: string, settings: ModerationSettings) => {
     return false;
   }
 
-  const uppercase = letters.filter((char) => char === char.toUpperCase()).length;
+  const uppercase = letters.filter(
+    (char) => char === char.toUpperCase(),
+  ).length;
   return uppercase / letters.length >= settings.capsRatio;
 };
 
@@ -2271,19 +2576,32 @@ const isExcessiveSymbols = (text: string, settings: ModerationSettings) => {
     return false;
   }
 
-  const symbolCount = [...visible].filter((char) => /[^\p{L}\p{N}_]/u.test(char)).length;
-  return symbolCount / visible.length >= settings.symbolRatio || /([^\p{L}\p{N}\s_])\1{7,}/u.test(text);
+  const symbolCount = [...visible].filter((char) =>
+    /[^\p{L}\p{N}_]/u.test(char),
+  ).length;
+  return (
+    symbolCount / visible.length >= settings.symbolRatio ||
+    /([^\p{L}\p{N}\s_])\1{7,}/u.test(text)
+  );
 };
 
 const normalizeRepeatText = (text: string) =>
-  text.trim().replace(/\s+/g, " ").toLowerCase().slice(0, limits.chatMessageLength);
+  text
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .slice(0, limits.chatMessageLength);
 
-const renderWarning = (template: string, message: ChatMessage, reason: string) =>
+const renderWarning = (
+  template: string,
+  message: ChatMessage,
+  reason: string,
+) =>
   sanitizeChatMessage(
     template
       .replace(/\{user\}/g, message.userDisplayName || message.userLogin)
       .replace(/\{login\}/g, message.userLogin)
-      .replace(/\{reason\}/g, reason)
+      .replace(/\{reason\}/g, reason),
   );
 
 const messagePreview = (message: string) =>

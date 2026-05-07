@@ -20,7 +20,7 @@ const isWindows = process.platform === "win32";
 const vaexcoreSuiteApps = [
   "vaexcore studio",
   "vaexcore pulse",
-  "vaexcore console"
+  "vaexcore console",
 ];
 
 app.setName(productName);
@@ -36,24 +36,24 @@ const buildApplicationMenu = () => {
           accelerator: "CommandOrControl+,",
           click: () => {
             void createSettingsWindow();
-          }
+          },
         },
         {
           label: "Launch vaexcore Suite",
-          click: () => launchVaexcoreSuite()
+          click: () => launchVaexcoreSuite(),
         },
         { type: "separator" },
         {
           label: "Close Window (App Keeps Running)",
           accelerator: "CommandOrControl+W",
-          click: () => closeMainWindow()
+          click: () => closeMainWindow(),
         },
         {
           label: "Quit App (Stops Local Server)",
           accelerator: "CommandOrControl+Q",
-          click: () => app.quit()
-        }
-      ]
+          click: () => app.quit(),
+        },
+      ],
     },
     {
       label: "Edit",
@@ -64,8 +64,8 @@ const buildApplicationMenu = () => {
         { role: "cut" },
         { role: "copy" },
         { role: "paste" },
-        { role: "selectAll" }
-      ]
+        { role: "selectAll" },
+      ],
     },
     {
       label: "View",
@@ -77,16 +77,13 @@ const buildApplicationMenu = () => {
         { role: "zoomIn" },
         { role: "zoomOut" },
         { type: "separator" },
-        { role: "togglefullscreen" }
-      ]
+        { role: "togglefullscreen" },
+      ],
     },
     {
       label: "Window",
-      submenu: [
-        { role: "minimize" },
-        { role: "zoom" }
-      ]
-    }
+      submenu: [{ role: "minimize" }, { role: "zoom" }],
+    },
   ];
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -105,7 +102,7 @@ const launchVaexcoreSuite = () => {
     if (!child) {
       dialog.showErrorBox(
         "Unable to Launch vaexcore Suite",
-        "Suite launching is supported on macOS and Windows desktop builds."
+        "Suite launching is supported on macOS and Windows desktop builds.",
       );
       continue;
     }
@@ -113,7 +110,7 @@ const launchVaexcoreSuite = () => {
     child.on("error", (error) => {
       dialog.showErrorBox(
         "Unable to Launch vaexcore Suite",
-        `Could not launch ${appName}: ${error.message}`
+        `Could not launch ${appName}: ${error.message}`,
       );
     });
     child.unref();
@@ -136,7 +133,7 @@ const launchWindowsApp = (appName) => {
   return spawn("cmd", ["/C", "start", "", appName], {
     detached: true,
     stdio: "ignore",
-    windowsHide: true
+    windowsHide: true,
   });
 };
 
@@ -147,13 +144,20 @@ const resolveWindowsAppPath = (appName) => {
 
   const exeName = `${appName}.exe`;
   const candidates = [
-    appName === productName && basename(process.execPath).toLowerCase() === exeName.toLowerCase()
+    appName === productName &&
+    basename(process.execPath).toLowerCase() === exeName.toLowerCase()
       ? process.execPath
       : undefined,
     join(app.getPath("localAppData"), "Programs", appName, exeName),
-    process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "Programs", appName, exeName) : undefined,
-    process.env.ProgramFiles ? join(process.env.ProgramFiles, appName, exeName) : undefined,
-    process.env["ProgramFiles(x86)"] ? join(process.env["ProgramFiles(x86)"], appName, exeName) : undefined
+    process.env.LOCALAPPDATA
+      ? join(process.env.LOCALAPPDATA, "Programs", appName, exeName)
+      : undefined,
+    process.env.ProgramFiles
+      ? join(process.env.ProgramFiles, appName, exeName)
+      : undefined,
+    process.env["ProgramFiles(x86)"]
+      ? join(process.env["ProgramFiles(x86)"], appName, exeName)
+      : undefined,
   ].filter(Boolean);
 
   return candidates.find((candidate) => existsSync(candidate));
@@ -186,8 +190,8 @@ const createSettingsWindow = async (fragment = "") => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true
-    }
+      sandbox: true,
+    },
   });
 
   settingsWindow.on("closed", () => {
@@ -212,8 +216,8 @@ const createWindow = async (url) => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true
-    }
+      sandbox: true,
+    },
   });
 
   mainWindow.on("closed", () => {
@@ -245,7 +249,10 @@ const configureWindowOpenHandler = (window) => {
 const isSettingsUrl = (targetUrl) => {
   try {
     const parsed = new URL(targetUrl);
-    return parsed.origin === setupUrl && parsed.searchParams.get("window") === "settings";
+    return (
+      parsed.origin === setupUrl &&
+      parsed.searchParams.get("window") === "settings"
+    );
   } catch {
     return false;
   }
@@ -257,13 +264,15 @@ const startApp = async () => {
   process.env.VAEXCORE_CONFIG_DIR = userData;
   process.env.DATABASE_URL = `file:${join(userData, "data/vaexcore.sqlite")}`;
 
-  const moduleUrl = pathToFileURL(join(app.getAppPath(), "dist-bundle/setup-server.js")).href;
+  const moduleUrl = pathToFileURL(
+    join(app.getAppPath(), "dist-bundle/setup-server.js"),
+  ).href;
   const setup = await import(moduleUrl);
   try {
     setupServer = await setup.startSetupServer({ port: setupPort });
     activeSetupUrl = setupServer.url;
   } catch (error) {
-    if (isAddressInUse(error) && await isConsoleServerRunning()) {
+    if (isAddressInUse(error) && (await isConsoleServerRunning())) {
       activeSetupUrl = setupUrl;
     } else {
       showStartupError(error);
@@ -288,11 +297,12 @@ const resolveUserDataPath = () => {
 
 const resolveWindowIconPath = () => {
   const appPath = app.getAppPath();
-  const candidates = process.platform === "win32"
-    ? ["desktop/windows/assets/icon.ico", "desktop/shared/assets/logo.jpg"]
-    : process.platform === "darwin"
-      ? ["desktop/macOS/assets/icon.icns", "desktop/shared/assets/logo.jpg"]
-      : ["desktop/shared/assets/logo.jpg"];
+  const candidates =
+    process.platform === "win32"
+      ? ["desktop/windows/assets/icon.ico", "desktop/shared/assets/logo.jpg"]
+      : process.platform === "darwin"
+        ? ["desktop/macOS/assets/icon.icns", "desktop/shared/assets/logo.jpg"]
+        : ["desktop/shared/assets/logo.jpg"];
 
   return candidates
     .map((candidate) => join(appPath, candidate))
@@ -313,32 +323,33 @@ const isConsoleServerRunning = async () => {
   }
 };
 
-const getJson = (url) => new Promise((resolve, reject) => {
-  const request = get(url, { timeout: 1500 }, (response) => {
-    let raw = "";
-    response.setEncoding("utf8");
-    response.on("data", (chunk) => {
-      raw += chunk;
-    });
-    response.on("end", () => {
-      if (response.statusCode !== 200) {
-        reject(new Error(`Unexpected status ${response.statusCode}`));
-        return;
-      }
+const getJson = (url) =>
+  new Promise((resolve, reject) => {
+    const request = get(url, { timeout: 1500 }, (response) => {
+      let raw = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        raw += chunk;
+      });
+      response.on("end", () => {
+        if (response.statusCode !== 200) {
+          reject(new Error(`Unexpected status ${response.statusCode}`));
+          return;
+        }
 
-      try {
-        resolve(JSON.parse(raw));
-      } catch (error) {
-        reject(error);
-      }
+        try {
+          resolve(JSON.parse(raw));
+        } catch (error) {
+          reject(error);
+        }
+      });
     });
-  });
 
-  request.on("timeout", () => {
-    request.destroy(new Error("Timed out probing setup server."));
+    request.on("timeout", () => {
+      request.destroy(new Error("Timed out probing setup server."));
+    });
+    request.on("error", reject);
   });
-  request.on("error", reject);
-});
 
 const showStartupError = (error) => {
   const message = isAddressInUse(error)

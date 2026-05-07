@@ -7,7 +7,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  writeFileSync
+  writeFileSync,
 } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
@@ -31,13 +31,21 @@ rmSync(zipPath, { force: true });
 rmSync(checksumPath, { force: true });
 rmSync(manifestPath, { force: true });
 
-execFileSync("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath], {
-  stdio: "inherit"
-});
+execFileSync(
+  "codesign",
+  ["--verify", "--deep", "--strict", "--verbose=2", appPath],
+  {
+    stdio: "inherit",
+  },
+);
 
-execFileSync("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", appPath, zipPath], {
-  stdio: "inherit"
-});
+execFileSync(
+  "ditto",
+  ["-c", "-k", "--sequesterRsrc", "--keepParent", appPath, zipPath],
+  {
+    stdio: "inherit",
+  },
+);
 
 const sha256 = await sha256File(zipPath);
 const gitCommit = getGitCommit();
@@ -45,21 +53,25 @@ const gitCommit = getGitCommit();
 writeFileSync(checksumPath, `${sha256}  ${basename(zipPath)}\n`);
 writeFileSync(
   manifestPath,
-  `${JSON.stringify({
-    productName,
-    version,
-    gitCommit,
-    createdAt: new Date().toISOString(),
-    releaseType: "unsigned-tester",
-    platform: "darwin",
-    arch: process.arch,
-    notarized: false,
-    signing: "ad-hoc",
-    gatekeeper: "Unidentified developer warning is expected for testers.",
-    app: relativeReleasePath(appPath),
-    zip: relativeReleasePath(zipPath),
-    sha256
-  }, null, 2)}\n`
+  `${JSON.stringify(
+    {
+      productName,
+      version,
+      gitCommit,
+      createdAt: new Date().toISOString(),
+      releaseType: "unsigned-tester",
+      platform: "darwin",
+      arch: process.arch,
+      notarized: false,
+      signing: "ad-hoc",
+      gatekeeper: "Unidentified developer warning is expected for testers.",
+      app: relativeReleasePath(appPath),
+      zip: relativeReleasePath(zipPath),
+      sha256,
+    },
+    null,
+    2,
+  )}\n`,
 );
 
 console.log(`unsigned macOS zip: ${relativeReleasePath(zipPath)}`);
@@ -69,7 +81,9 @@ function findSinglePackagedApp(dir) {
   const apps = findPackagedApps(dir);
 
   if (apps.length !== 1) {
-    throw new Error(`Expected one packaged ${productName}.app under release/, found ${apps.length}. Run npm run app:build first.`);
+    throw new Error(
+      `Expected one packaged ${productName}.app under release/, found ${apps.length}. Run npm run app:build first.`,
+    );
   }
 
   return apps[0];
@@ -110,7 +124,7 @@ function sha256File(path) {
 function getGitCommit() {
   try {
     return execFileSync("git", ["rev-parse", "HEAD"], {
-      encoding: "utf8"
+      encoding: "utf8",
     }).trim();
   } catch {
     return "unknown";

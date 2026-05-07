@@ -32,29 +32,32 @@ export const featureGateDefinitions: FeatureGateDefinition[] = [
   {
     key: "custom_commands",
     label: "Custom commands",
-    description: "User-defined chat commands, aliases, cooldowns, and response variants.",
-    defaultMode: "live"
+    description:
+      "User-defined chat commands, aliases, cooldowns, and response variants.",
+    defaultMode: "live",
   },
   {
     key: "timers",
     label: "Timers",
     description: "Scheduled or repeating outbound chat messages.",
-    defaultMode: "off"
+    defaultMode: "off",
   },
   {
     key: "moderation_filters",
     label: "Moderation filters",
-    description: "Scoped chat filters for blocked phrases, links, caps, repeats, and symbols.",
-    defaultMode: "off"
-  }
+    description:
+      "Scoped chat filters for blocked phrases, links, caps, repeats, and symbols.",
+    defaultMode: "off",
+  },
 ];
 
 const featureDefinitionsByKey = new Map(
-  featureGateDefinitions.map((definition) => [definition.key, definition])
+  featureGateDefinitions.map((definition) => [definition.key, definition]),
 );
 const featureModes = new Set<FeatureGateMode>(["off", "test", "live"]);
 
-export const createFeatureGateStore = (db: DbClient) => new FeatureGateStore(db);
+export const createFeatureGateStore = (db: DbClient) =>
+  new FeatureGateStore(db);
 
 export class FeatureGateStore {
   constructor(private readonly db: DbClient) {}
@@ -72,21 +75,25 @@ export class FeatureGateStore {
         updatedAt: row?.updated_at ?? "",
         updatedBy: row?.updated_by ?? "",
         liveAllowed: mode === "live",
-        testAllowed: mode === "live" || mode === "test"
+        testAllowed: mode === "live" || mode === "test",
       };
     });
   }
 
   get(key: FeatureKey) {
     const definition = requireFeatureDefinition(key);
-    return this.list().find((gate) => gate.key === definition.key) ?? {
-      ...definition,
-      mode: definition.defaultMode,
-      updatedAt: "",
-      updatedBy: "",
-      liveAllowed: definition.defaultMode === "live",
-      testAllowed: definition.defaultMode === "live" || definition.defaultMode === "test"
-    };
+    return (
+      this.list().find((gate) => gate.key === definition.key) ?? {
+        ...definition,
+        mode: definition.defaultMode,
+        updatedAt: "",
+        updatedBy: "",
+        liveAllowed: definition.defaultMode === "live",
+        testAllowed:
+          definition.defaultMode === "live" ||
+          definition.defaultMode === "test",
+      }
+    );
   }
 
   getMode(key: FeatureKey) {
@@ -117,21 +124,28 @@ export class FeatureGateStore {
             mode = excluded.mode,
             updated_at = excluded.updated_at,
             updated_by = excluded.updated_by
-        `
+        `,
       )
       .run({
         featureKey: definition.key,
         mode: nextMode,
         updatedAt: now,
-        updatedBy: actor.userLogin
+        updatedBy: actor.userLogin,
       });
 
-    writeAuditLog(this.db, actor, "feature_gate.update", `feature:${definition.key}`, {
-      featureKey: definition.key,
-      label: definition.label,
-      previousMode: previous.mode,
-      mode: nextMode
-    }, { createdAt: now });
+    writeAuditLog(
+      this.db,
+      actor,
+      "feature_gate.update",
+      `feature:${definition.key}`,
+      {
+        featureKey: definition.key,
+        label: definition.label,
+        previousMode: previous.mode,
+        mode: nextMode,
+      },
+      { createdAt: now },
+    );
 
     return this.get(definition.key);
   }
@@ -157,7 +171,7 @@ export class FeatureGateStore {
         ? `${gate.label} is available in ${gate.mode} mode.`
         : gate.mode === "off"
           ? `${gate.label} is off. Enable test mode for local testing or live mode for Twitch chat.`
-          : `${gate.label} is in test mode and will only respond to local simulations.`
+          : `${gate.label} is in test mode and will only respond to local simulations.`,
     };
   }
 
@@ -179,8 +193,13 @@ export const normalizeFeatureGateMode = (value: unknown): FeatureGateMode => {
 };
 
 export const requireFeatureDefinition = (key: unknown) => {
-  if (typeof key === "string" && featureDefinitionsByKey.has(key as FeatureKey)) {
-    return featureDefinitionsByKey.get(key as FeatureKey) as FeatureGateDefinition;
+  if (
+    typeof key === "string" &&
+    featureDefinitionsByKey.has(key as FeatureKey)
+  ) {
+    return featureDefinitionsByKey.get(
+      key as FeatureKey,
+    ) as FeatureGateDefinition;
   }
 
   throw new Error("Unknown feature gate.");

@@ -15,12 +15,15 @@ delete env.ELECTRON_RUN_AS_NODE;
 
 const result = spawnSync(
   process.execPath,
-  [electronCli, ...(process.argv.slice(2).length ? process.argv.slice(2) : ["."])],
+  [
+    electronCli,
+    ...(process.argv.slice(2).length ? process.argv.slice(2) : ["."]),
+  ],
   {
     cwd: root,
     env,
-    stdio: "inherit"
-  }
+    stdio: "inherit",
+  },
 );
 
 if (result.error) {

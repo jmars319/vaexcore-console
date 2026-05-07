@@ -3,12 +3,12 @@ import { normalizeLogin } from "../core/security";
 import {
   readLocalSecrets,
   writeLocalSecrets,
-  type LocalSecrets
+  type LocalSecrets,
 } from "../config/localSecrets";
 import {
   type TokenValidation,
   TwitchTokenValidationError,
-  validateToken
+  validateToken,
 } from "./validate";
 
 const twitchTokenEndpoint = "https://id.twitch.tv/oauth2/token";
@@ -31,7 +31,7 @@ export type StoredTwitchTokenValidation = {
 export class TwitchTokenRefreshError extends Error {
   constructor(
     readonly status: number,
-    readonly twitchMessage: string
+    readonly twitchMessage: string,
   ) {
     super(formatTwitchTokenRefreshMessage(status, twitchMessage));
     this.name = "TwitchTokenRefreshError";
@@ -47,7 +47,7 @@ type StoredTwitchTokenOptions = {
 };
 
 export const validateStoredTwitchToken = async (
-  options: StoredTwitchTokenOptions = {}
+  options: StoredTwitchTokenOptions = {},
 ): Promise<StoredTwitchTokenValidation> => {
   const secrets = options.secrets ?? readLocalSecrets();
   const twitch = secrets.twitch;
@@ -66,13 +66,13 @@ export const validateStoredTwitchToken = async (
 
     return refreshStoredTwitchToken({
       ...options,
-      secrets
+      secrets,
     });
   }
 };
 
 export const refreshStoredTwitchToken = async (
-  options: StoredTwitchTokenOptions = {}
+  options: StoredTwitchTokenOptions = {},
 ): Promise<StoredTwitchTokenValidation> => {
   const secrets = options.secrets ?? readLocalSecrets();
   const twitch = secrets.twitch;
@@ -80,21 +80,21 @@ export const refreshStoredTwitchToken = async (
 
   if (!clientId || !twitch.clientSecret || !twitch.refreshToken) {
     throw new Error(
-      "Twitch OAuth refresh is unavailable. Reconnect Twitch to create a fresh access token and refresh token."
+      "Twitch OAuth refresh is unavailable. Reconnect Twitch to create a fresh access token and refresh token.",
     );
   }
 
   const tokens = await refreshTwitchAccessToken({
     clientId,
     clientSecret: twitch.clientSecret,
-    refreshToken: twitch.refreshToken
+    refreshToken: twitch.refreshToken,
   });
   const token = await validateToken(tokens.access_token);
   assertRefreshedTokenMatchesConfiguration(token, {
     clientId,
     botUserId: options.expectedBotUserId ?? twitch.botUserId,
     botLogin: options.expectedBotLogin ?? twitch.botLogin,
-    secrets
+    secrets,
   });
 
   const refreshedAt = new Date().toISOString();
@@ -110,8 +110,8 @@ export const refreshStoredTwitchToken = async (
       tokenExpiresAt: getTokenExpiresAt(tokens.expires_in),
       tokenValidatedAt: refreshedAt,
       botLogin: tokenLogin,
-      botUserId: token.user_id
-    }
+      botUserId: token.user_id,
+    },
   };
 
   writeLocalSecrets(nextSecrets);
@@ -119,16 +119,16 @@ export const refreshStoredTwitchToken = async (
     {
       botLogin: tokenLogin,
       botUserId: token.user_id,
-      tokenExpiresAt: nextSecrets.twitch.tokenExpiresAt
+      tokenExpiresAt: nextSecrets.twitch.tokenExpiresAt,
     },
-    "Twitch OAuth token refreshed"
+    "Twitch OAuth token refreshed",
   );
 
   return {
     secrets: nextSecrets,
     twitch: nextSecrets.twitch,
     token,
-    refreshed: true
+    refreshed: true,
   };
 };
 
@@ -141,23 +141,28 @@ export const refreshTwitchAccessToken = async (input: {
     client_id: input.clientId,
     client_secret: input.clientSecret,
     grant_type: "refresh_token",
-    refresh_token: input.refreshToken
+    refresh_token: input.refreshToken,
   });
   const response = await fetch(twitchTokenEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params
+    body: params,
   });
 
   if (!response.ok) {
     const body = await response.text();
-    throw new TwitchTokenRefreshError(response.status, parseTwitchTokenErrorMessage(body));
+    throw new TwitchTokenRefreshError(
+      response.status,
+      parseTwitchTokenErrorMessage(body),
+    );
   }
 
   const tokens = (await response.json()) as Partial<TwitchOAuthTokenResponse>;
 
   if (!tokens.access_token || !tokens.expires_in) {
-    throw new Error("Twitch token refresh response did not include a usable access token.");
+    throw new Error(
+      "Twitch token refresh response did not include a usable access token.",
+    );
   }
 
   return {
@@ -165,7 +170,7 @@ export const refreshTwitchAccessToken = async (input: {
     refresh_token: tokens.refresh_token,
     expires_in: tokens.expires_in,
     scope: tokens.scope ?? [],
-    token_type: tokens.token_type ?? "bearer"
+    token_type: tokens.token_type ?? "bearer",
   } satisfies TwitchOAuthTokenResponse;
 };
 
@@ -175,14 +180,20 @@ export const getTokenExpiresAt = (expiresInSeconds: number) =>
 const parseTwitchTokenErrorMessage = (body: string) => {
   try {
     const parsed = JSON.parse(body) as { message?: unknown; error?: unknown };
-    const message = typeof parsed.message === "string" ? parsed.message : parsed.error;
-    return typeof message === "string" && message.trim() ? message.trim() : body;
+    const message =
+      typeof parsed.message === "string" ? parsed.message : parsed.error;
+    return typeof message === "string" && message.trim()
+      ? message.trim()
+      : body;
   } catch {
     return body;
   }
 };
 
-const formatTwitchTokenRefreshMessage = (status: number, twitchMessage: string) => {
+const formatTwitchTokenRefreshMessage = (
+  status: number,
+  twitchMessage: string,
+) => {
   if (status === 403 && /invalid client secret/i.test(twitchMessage)) {
     return "Twitch token refresh failed: Twitch rejected the saved Client Secret. Generate or copy a fresh Client Secret in the Twitch Developer Console, save settings, then reconnect Twitch as the Bot Login account.";
   }
@@ -204,7 +215,7 @@ export const isInvalidTwitchAccessTokenError = (error: unknown) => {
   }
 
   return /Twitch token validation failed:\s*401|invalid access token|status"?\s*:?\s*401/i.test(
-    error.message
+    error.message,
   );
 };
 
@@ -215,19 +226,19 @@ const assertRefreshedTokenMatchesConfiguration = (
     botUserId?: string;
     botLogin?: string;
     secrets: LocalSecrets;
-  }
+  },
 ) => {
   if (token.client_id !== options.clientId) {
     clearStoredAuthorization(options.secrets);
     throw new Error(
-      "Refreshed OAuth token belongs to a different Twitch app. Reconnect Twitch with the saved Client ID and Client Secret."
+      "Refreshed OAuth token belongs to a different Twitch app. Reconnect Twitch with the saved Client ID and Client Secret.",
     );
   }
 
   if (options.botUserId && token.user_id !== options.botUserId) {
     clearStoredAuthorization(options.secrets);
     throw new Error(
-      `Refreshed OAuth token belongs to ${token.login}, but the configured bot user ID is ${options.botUserId}. Reconnect Twitch while logged into the Bot Login account.`
+      `Refreshed OAuth token belongs to ${token.login}, but the configured bot user ID is ${options.botUserId}. Reconnect Twitch while logged into the Bot Login account.`,
     );
   }
 
@@ -239,7 +250,7 @@ const assertRefreshedTokenMatchesConfiguration = (
   if (expectedBotLogin && tokenLogin !== expectedBotLogin) {
     clearStoredAuthorization(options.secrets);
     throw new Error(
-      `Refreshed OAuth token belongs to ${tokenLogin}, but Bot Login is ${expectedBotLogin}. Reconnect Twitch while logged into the Bot Login account.`
+      `Refreshed OAuth token belongs to ${tokenLogin}, but Bot Login is ${expectedBotLogin}. Reconnect Twitch while logged into the Bot Login account.`,
     );
   }
 };
@@ -254,7 +265,7 @@ const clearStoredAuthorization = (secrets: LocalSecrets) => {
       scopes: [],
       tokenExpiresAt: undefined,
       tokenValidatedAt: undefined,
-      botUserId: undefined
-    }
+      botUserId: undefined,
+    },
   });
 };

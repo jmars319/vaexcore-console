@@ -7,12 +7,12 @@ import {
   normalizeKeyword,
   normalizeLogin,
   parseSafeInteger,
-  sanitizeGiveawayTitle
+  sanitizeGiveawayTitle,
 } from "../../core/security";
 import type { GiveawaysService } from "./giveaways.service";
 import {
   defaultGiveawayMessageRenderer,
-  type GiveawayMessageRenderer
+  type GiveawayMessageRenderer,
 } from "./giveaways.messages";
 
 type RegisterGiveawayCommandsOptions = {
@@ -26,11 +26,11 @@ export const registerGiveawayCommands = ({
   router,
   service,
   runtimeStatus,
-  messages = defaultGiveawayMessageRenderer
+  messages = defaultGiveawayMessageRenderer,
 }: RegisterGiveawayCommandsOptions) => {
   router.register("ghelp", PermissionLevel.Moderator, ({ reply }) => {
     reply(
-      'Giveaway: !gstart codes=6 keyword=enter title="..." | viewers enter with !keyword | !gclose | !gdraw 6 | !greroll user | !gclaim user | !gdeliver user | !gend'
+      'Giveaway: !gstart codes=6 keyword=enter title="..." | viewers enter with !keyword | !gclose | !gdraw 6 | !greroll user | !gclaim user | !gdeliver user | !gend',
     );
   });
 
@@ -41,7 +41,11 @@ export const registerGiveawayCommands = ({
   router.registerFallback(({ message, name, reply }) => {
     const status = service.status();
 
-    if (!status || status.giveaway.status !== "open" || name !== status.giveaway.keyword) {
+    if (
+      !status ||
+      status.giveaway.status !== "open" ||
+      name !== status.giveaway.keyword
+    ) {
       return false;
     }
 
@@ -49,33 +53,43 @@ export const registerGiveawayCommands = ({
     return true;
   });
 
-  router.register("gstart", PermissionLevel.Moderator, ({ message, rawArgs, reply }) => {
-    if (
-      runtimeStatus?.mode === "live" &&
-      (!runtimeStatus.eventSubConnected || !runtimeStatus.chatSubscriptionActive)
-    ) {
-      reply("Bot not ready");
-      return;
-    }
+  router.register(
+    "gstart",
+    PermissionLevel.Moderator,
+    ({ message, rawArgs, reply }) => {
+      if (
+        runtimeStatus?.mode === "live" &&
+        (!runtimeStatus.eventSubConnected ||
+          !runtimeStatus.chatSubscriptionActive)
+      ) {
+        reply("Bot not ready");
+        return;
+      }
 
-    const options = parseOptions(rawArgs);
-    const winnerCount = parsePositiveInteger(options.codes);
-    const keyword = options.keyword ? normalizeKeyword(options.keyword) : undefined;
+      const options = parseOptions(rawArgs);
+      const winnerCount = parsePositiveInteger(options.codes);
+      const keyword = options.keyword
+        ? normalizeKeyword(options.keyword)
+        : undefined;
 
-    if (!winnerCount || !keyword) {
-      reply('Usage: !gstart codes=6 keyword=enter title="IOI code giveaway"');
-      return;
-    }
+      if (!winnerCount || !keyword) {
+        reply('Usage: !gstart codes=6 keyword=enter title="IOI code giveaway"');
+        return;
+      }
 
-    const giveaway = service.start({
-      actor: message,
-      winnerCount,
-      keyword,
-      title: sanitizeGiveawayTitle(options.title, "Untitled giveaway")
-    });
+      const giveaway = service.start({
+        actor: message,
+        winnerCount,
+        keyword,
+        title: sanitizeGiveawayTitle(options.title, "Untitled giveaway"),
+      });
 
-    reply(messages.start(giveaway), giveawayMessageMetadata("start", giveaway.id, "critical"));
-  });
+      reply(
+        messages.start(giveaway),
+        giveawayMessageMetadata("start", giveaway.id, "critical"),
+      );
+    },
+  );
 
   router.register("gstatus", PermissionLevel.Moderator, ({ reply }) => {
     const status = service.status();
@@ -86,7 +100,7 @@ export const registerGiveawayCommands = ({
     }
 
     reply(
-      `G#${status.giveaway.id} ${status.giveaway.status}: ${status.entries} entries, ${status.activeWinners}/${status.giveaway.winner_count} winners.`
+      `G#${status.giveaway.id} ${status.giveaway.status}: ${status.entries} entries, ${status.activeWinners}/${status.giveaway.winner_count} winners.`,
     );
   });
 
@@ -94,61 +108,91 @@ export const registerGiveawayCommands = ({
     const giveaway = service.close(message);
     reply(
       messages.close(giveaway, service.countEntriesForGiveaway(giveaway.id)),
-      giveawayMessageMetadata("close", giveaway.id, "critical")
+      giveawayMessageMetadata("close", giveaway.id, "critical"),
     );
   });
 
-  router.register("gdraw", PermissionLevel.Moderator, ({ message, args, reply }) => {
-    const allowOpen = args.includes("--allow-open");
-    const countArg = args.find((arg) => !arg.startsWith("--"));
-    const requestedCount = countArg ? parsePositiveInteger(countArg) : undefined;
-    const result = service.draw(message, requestedCount, { allowOpen });
+  router.register(
+    "gdraw",
+    PermissionLevel.Moderator,
+    ({ message, args, reply }) => {
+      const allowOpen = args.includes("--allow-open");
+      const countArg = args.find((arg) => !arg.startsWith("--"));
+      const requestedCount = countArg
+        ? parsePositiveInteger(countArg)
+        : undefined;
+      const result = service.draw(message, requestedCount, { allowOpen });
 
-    reply(messages.draw(result), giveawayMessageMetadata("draw", result.giveaway.id, "critical"));
-  });
+      reply(
+        messages.draw(result),
+        giveawayMessageMetadata("draw", result.giveaway.id, "critical"),
+      );
+    },
+  );
 
-  router.register("greroll", PermissionLevel.Moderator, ({ message, args, reply }) => {
-    const username = args[0] ? normalizeLogin(args[0]) : undefined;
+  router.register(
+    "greroll",
+    PermissionLevel.Moderator,
+    ({ message, args, reply }) => {
+      const username = args[0] ? normalizeLogin(args[0]) : undefined;
 
-    if (!username) {
-      reply("Usage: !greroll username");
-      return;
-    }
+      if (!username) {
+        reply("Usage: !greroll username");
+        return;
+      }
 
-    const result = service.reroll(message, username);
+      const result = service.reroll(message, username);
 
-    reply(messages.reroll(result), giveawayMessageMetadata("reroll", result.giveaway.id, "important"));
-  });
+      reply(
+        messages.reroll(result),
+        giveawayMessageMetadata("reroll", result.giveaway.id, "important"),
+      );
+    },
+  );
 
-  router.register("gclaim", PermissionLevel.Moderator, ({ message, args, reply }) => {
-    const username = args[0] ? normalizeLogin(args[0]) : undefined;
+  router.register(
+    "gclaim",
+    PermissionLevel.Moderator,
+    ({ message, args, reply }) => {
+      const username = args[0] ? normalizeLogin(args[0]) : undefined;
 
-    if (!username) {
-      reply("Usage: !gclaim username");
-      return;
-    }
+      if (!username) {
+        reply("Usage: !gclaim username");
+        return;
+      }
 
-    const result = service.claim(message, username);
-    reply(`${result.winner.display_name} marked claimed.`, giveawayMessageMetadata("claim", result.giveaway.id));
-  });
+      const result = service.claim(message, username);
+      reply(
+        `${result.winner.display_name} marked claimed.`,
+        giveawayMessageMetadata("claim", result.giveaway.id),
+      );
+    },
+  );
 
-  router.register("gdeliver", PermissionLevel.Moderator, ({ message, args, reply }) => {
-    const username = args[0] ? normalizeLogin(args[0]) : undefined;
+  router.register(
+    "gdeliver",
+    PermissionLevel.Moderator,
+    ({ message, args, reply }) => {
+      const username = args[0] ? normalizeLogin(args[0]) : undefined;
 
-    if (!username) {
-      reply("Usage: !gdeliver username");
-      return;
-    }
+      if (!username) {
+        reply("Usage: !gdeliver username");
+        return;
+      }
 
-    const result = service.deliver(message, username);
-    reply(`${result.winner.display_name} marked delivered.`, giveawayMessageMetadata("deliver", result.giveaway.id));
-  });
+      const result = service.deliver(message, username);
+      reply(
+        `${result.winner.display_name} marked delivered.`,
+        giveawayMessageMetadata("deliver", result.giveaway.id),
+      );
+    },
+  );
 
   router.register("gend", PermissionLevel.Moderator, ({ message, reply }) => {
     const giveaway = service.end(message);
     reply(
       messages.end(giveaway, service.getWinnersForGiveaway(giveaway.id)),
-      giveawayMessageMetadata("end", giveaway.id, "critical")
+      giveawayMessageMetadata("end", giveaway.id, "critical"),
     );
   });
 };
@@ -167,32 +211,38 @@ const handleEntryCommand = (input: {
   const result = input.service.enter(input.message, input.keyword);
 
   if (result.status === "entered") {
-    input.reply(input.messages.entry({
-      giveaway: result.giveaway,
-      displayName: result.displayName,
-      entryCount: result.entryCount
-    }), giveawayMessageMetadata("entry", result.giveaway.id));
+    input.reply(
+      input.messages.entry({
+        giveaway: result.giveaway,
+        displayName: result.displayName,
+        entryCount: result.entryCount,
+      }),
+      giveawayMessageMetadata("entry", result.giveaway.id),
+    );
     return;
   }
 
   if (result.status === "duplicate") {
-    input.reply(input.messages.duplicateEntry({
-      giveaway: result.giveaway,
-      displayName: result.displayName,
-      entryCount: result.entryCount
-    }), giveawayMessageMetadata("duplicate-entry", result.giveaway.id));
+    input.reply(
+      input.messages.duplicateEntry({
+        giveaway: result.giveaway,
+        displayName: result.displayName,
+        entryCount: result.entryCount,
+      }),
+      giveawayMessageMetadata("duplicate-entry", result.giveaway.id),
+    );
   }
 };
 
 const giveawayMessageMetadata = (
   action: string,
   giveawayId: number,
-  importance: MessageQueueMetadata["importance"] = "normal"
+  importance: MessageQueueMetadata["importance"] = "normal",
 ): MessageQueueMetadata => ({
   category: "giveaway",
   action,
   importance,
-  giveawayId
+  giveawayId,
 });
 
 const parsePositiveInteger = (value: string | undefined) => {
@@ -203,7 +253,7 @@ const parsePositiveInteger = (value: string | undefined) => {
   return parseSafeInteger(value, {
     field: "Winner count",
     min: 1,
-    max: limits.winnerCountMax
+    max: limits.winnerCountMax,
   });
 };
 

@@ -25,16 +25,19 @@ const localSecretsSchema = z.object({
       refreshToken: z.string().optional(),
       scopes: z.array(z.string()).default([]),
       tokenExpiresAt: z.string().optional(),
-      tokenValidatedAt: z.string().optional()
+      tokenValidatedAt: z.string().optional(),
     })
-    .default({})
+    .default({}),
 });
 
 export type LocalSecrets = z.infer<typeof localSecretsSchema>;
 
 export const readLocalSecrets = (): LocalSecrets => {
   if (!existsSync(secretsPath)) {
-    return { mode: "live", twitch: { redirectUri: defaultRedirectUri, scopes: [] } };
+    return {
+      mode: "live",
+      twitch: { redirectUri: defaultRedirectUri, scopes: [] },
+    };
   }
 
   const raw = readFileSync(secretsPath, "utf8");
@@ -43,9 +46,13 @@ export const readLocalSecrets = (): LocalSecrets => {
 
 export const writeLocalSecrets = (secrets: LocalSecrets) => {
   mkdirSync(dirname(secretsPath), { recursive: true });
-  writeFileSync(secretsPath, `${JSON.stringify(normalizeSecrets(secrets), null, 2)}\n`, {
-    mode: 0o600
-  });
+  writeFileSync(
+    secretsPath,
+    `${JSON.stringify(normalizeSecrets(secrets), null, 2)}\n`,
+    {
+      mode: 0o600,
+    },
+  );
 };
 
 export const getLocalSecretsPath = () => secretsPath;
@@ -57,26 +64,30 @@ const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
   twitch: {
     ...secrets.twitch,
     clientId: sanitizeOptional(secrets.twitch.clientId, "Client ID", 120),
-    clientSecret: sanitizeOptional(secrets.twitch.clientSecret, "Client secret", 200),
+    clientSecret: sanitizeOptional(
+      secrets.twitch.clientSecret,
+      "Client secret",
+      200,
+    ),
     redirectUri: secrets.twitch.redirectUri || defaultRedirectUri,
     broadcasterLogin: secrets.twitch.broadcasterLogin
       ? normalizeLogin(secrets.twitch.broadcasterLogin, "Broadcaster login")
       : undefined,
     botLogin: secrets.twitch.botLogin
       ? normalizeLogin(secrets.twitch.botLogin, "Bot login")
-      : undefined
-  }
+      : undefined,
+  },
 });
 
 const sanitizeOptional = (
   value: string | undefined,
   field: string,
-  maxLength: number
+  maxLength: number,
 ) =>
   value
     ? sanitizeText(value, {
         field,
         maxLength,
-        required: true
+        required: true,
       })
     : undefined;

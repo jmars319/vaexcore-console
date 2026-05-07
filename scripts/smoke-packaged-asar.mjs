@@ -19,7 +19,7 @@ const resourcesDir =
 const asarPath = join(resourcesDir, "app.asar");
 const betterSqliteDir = join(
   resourcesDir,
-  "app.asar.unpacked/node_modules/better-sqlite3"
+  "app.asar.unpacked/node_modules/better-sqlite3",
 );
 
 assertPath(asarPath, "packaged app.asar");

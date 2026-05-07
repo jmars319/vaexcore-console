@@ -1,7 +1,4 @@
-import {
-  CONSOLE_APP,
-  SUITE_DISCOVERY_SCHEMA_VERSION
-} from "../suiteProtocol";
+import { CONSOLE_APP, SUITE_DISCOVERY_SCHEMA_VERSION } from "../suiteProtocol";
 
 export type SuiteDiscoveryDocument = {
   schemaVersion?: number;
@@ -43,9 +40,13 @@ export type SuiteLocalRuntimeDependency = {
   detail: string;
 };
 
-export const validateSuiteDiscoveryDocument = (document: SuiteDiscoveryDocument) => {
+export const validateSuiteDiscoveryDocument = (
+  document: SuiteDiscoveryDocument,
+) => {
   if (document.schemaVersion !== SUITE_DISCOVERY_SCHEMA_VERSION) {
-    throw new Error(`Suite discovery schemaVersion must be ${SUITE_DISCOVERY_SCHEMA_VERSION}.`);
+    throw new Error(
+      `Suite discovery schemaVersion must be ${SUITE_DISCOVERY_SCHEMA_VERSION}.`,
+    );
   }
   if (document.appId !== CONSOLE_APP.id) {
     throw new Error(`Suite discovery appId must be ${CONSOLE_APP.id}.`);
@@ -54,10 +55,14 @@ export const validateSuiteDiscoveryDocument = (document: SuiteDiscoveryDocument)
     throw new Error(`Suite discovery appName must be ${CONSOLE_APP.name}.`);
   }
   if (document.bundleIdentifier !== CONSOLE_APP.bundleId) {
-    throw new Error(`Suite discovery bundleIdentifier must be ${CONSOLE_APP.bundleId}.`);
+    throw new Error(
+      `Suite discovery bundleIdentifier must be ${CONSOLE_APP.bundleId}.`,
+    );
   }
   if (document.launchName !== CONSOLE_APP.launchName) {
-    throw new Error(`Suite discovery launchName must be ${CONSOLE_APP.launchName}.`);
+    throw new Error(
+      `Suite discovery launchName must be ${CONSOLE_APP.launchName}.`,
+    );
   }
   if (!document.version || document.version.trim() === "") {
     throw new Error("Suite discovery version is required.");
@@ -71,23 +76,30 @@ export const validateSuiteDiscoveryDocument = (document: SuiteDiscoveryDocument)
   if (!document.updatedAt || Number.isNaN(Date.parse(document.updatedAt))) {
     throw new Error("Suite discovery updatedAt must be a valid timestamp.");
   }
-  if (!Array.isArray(document.capabilities) || document.capabilities.length === 0) {
+  if (
+    !Array.isArray(document.capabilities) ||
+    document.capabilities.length === 0
+  ) {
     throw new Error("Suite discovery capabilities must not be empty.");
   }
   for (const [field, value] of Object.entries({
     apiUrl: document.apiUrl,
     wsUrl: document.wsUrl,
-    healthUrl: document.healthUrl
+    healthUrl: document.healthUrl,
   })) {
     if (value && !isLocalRuntimeUrl(value)) {
       throw new Error(`Suite discovery ${field} must be a localhost URL.`);
     }
   }
-  if (document.localRuntime?.contractVersion !== SUITE_DISCOVERY_SCHEMA_VERSION) {
+  if (
+    document.localRuntime?.contractVersion !== SUITE_DISCOVERY_SCHEMA_VERSION
+  ) {
     throw new Error("Suite discovery localRuntime.contractVersion mismatch.");
   }
   if (!document.localRuntime?.dependencies?.length) {
-    throw new Error("Suite discovery localRuntime.dependencies must not be empty.");
+    throw new Error(
+      "Suite discovery localRuntime.dependencies must not be empty.",
+    );
   }
 };
 

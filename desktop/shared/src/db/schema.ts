@@ -267,37 +267,134 @@ export const initializeSchema = (db: DbClient) => {
       ON moderation_link_permits(user_login, expires_at, used_at);
   `);
 
-  ensureColumn(db, "outbound_messages", "failure_category", "TEXT NOT NULL DEFAULT 'none'");
+  ensureColumn(
+    db,
+    "outbound_messages",
+    "failure_category",
+    "TEXT NOT NULL DEFAULT 'none'",
+  );
   ensureColumn(db, "outbound_messages", "retry_after_ms", "INTEGER");
   ensureColumn(db, "outbound_messages", "next_attempt_at", "TEXT");
   ensureColumn(db, "timers", "min_chat_messages", "INTEGER NOT NULL DEFAULT 0");
-  ensureColumn(db, "timers", "chat_messages_since_last_fire", "INTEGER NOT NULL DEFAULT 0");
-  ensureColumn(db, "moderation_settings", "exempt_broadcaster", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn(db, "moderation_settings", "exempt_moderators", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn(db, "moderation_settings", "exempt_vips", "INTEGER NOT NULL DEFAULT 0");
-  ensureColumn(db, "moderation_settings", "exempt_subscribers", "INTEGER NOT NULL DEFAULT 0");
-  ensureColumn(db, "moderation_settings", "blocked_terms_action", "TEXT NOT NULL DEFAULT 'warn' CHECK (blocked_terms_action IN ('warn', 'delete', 'timeout'))");
-  ensureColumn(db, "moderation_settings", "link_filter_action", "TEXT NOT NULL DEFAULT 'warn' CHECK (link_filter_action IN ('warn', 'delete', 'timeout'))");
-  ensureColumn(db, "moderation_settings", "caps_filter_action", "TEXT NOT NULL DEFAULT 'warn' CHECK (caps_filter_action IN ('warn', 'delete', 'timeout'))");
-  ensureColumn(db, "moderation_settings", "repeat_filter_action", "TEXT NOT NULL DEFAULT 'warn' CHECK (repeat_filter_action IN ('warn', 'delete', 'timeout'))");
-  ensureColumn(db, "moderation_settings", "symbol_filter_action", "TEXT NOT NULL DEFAULT 'warn' CHECK (symbol_filter_action IN ('warn', 'delete', 'timeout'))");
-  ensureColumn(db, "moderation_settings", "bot_shield_enabled", "INTEGER NOT NULL DEFAULT 0");
-  ensureColumn(db, "moderation_settings", "bot_shield_action", "TEXT NOT NULL DEFAULT 'delete' CHECK (bot_shield_action IN ('warn', 'delete', 'timeout'))");
-  ensureColumn(db, "moderation_settings", "bot_shield_score_threshold", "INTEGER NOT NULL DEFAULT 70");
-  ensureColumn(db, "moderation_settings", "timeout_seconds", "INTEGER NOT NULL DEFAULT 60");
-  ensureColumn(db, "moderation_settings", "escalation_enabled", "INTEGER NOT NULL DEFAULT 0");
-  ensureColumn(db, "moderation_settings", "escalation_window_seconds", "INTEGER NOT NULL DEFAULT 300");
-  ensureColumn(db, "moderation_settings", "escalation_delete_after", "INTEGER NOT NULL DEFAULT 2");
-  ensureColumn(db, "moderation_settings", "escalation_timeout_after", "INTEGER NOT NULL DEFAULT 3");
+  ensureColumn(
+    db,
+    "timers",
+    "chat_messages_since_last_fire",
+    "INTEGER NOT NULL DEFAULT 0",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "exempt_broadcaster",
+    "INTEGER NOT NULL DEFAULT 1",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "exempt_moderators",
+    "INTEGER NOT NULL DEFAULT 1",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "exempt_vips",
+    "INTEGER NOT NULL DEFAULT 0",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "exempt_subscribers",
+    "INTEGER NOT NULL DEFAULT 0",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "blocked_terms_action",
+    "TEXT NOT NULL DEFAULT 'warn' CHECK (blocked_terms_action IN ('warn', 'delete', 'timeout'))",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "link_filter_action",
+    "TEXT NOT NULL DEFAULT 'warn' CHECK (link_filter_action IN ('warn', 'delete', 'timeout'))",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "caps_filter_action",
+    "TEXT NOT NULL DEFAULT 'warn' CHECK (caps_filter_action IN ('warn', 'delete', 'timeout'))",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "repeat_filter_action",
+    "TEXT NOT NULL DEFAULT 'warn' CHECK (repeat_filter_action IN ('warn', 'delete', 'timeout'))",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "symbol_filter_action",
+    "TEXT NOT NULL DEFAULT 'warn' CHECK (symbol_filter_action IN ('warn', 'delete', 'timeout'))",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "bot_shield_enabled",
+    "INTEGER NOT NULL DEFAULT 0",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "bot_shield_action",
+    "TEXT NOT NULL DEFAULT 'delete' CHECK (bot_shield_action IN ('warn', 'delete', 'timeout'))",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "bot_shield_score_threshold",
+    "INTEGER NOT NULL DEFAULT 70",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "timeout_seconds",
+    "INTEGER NOT NULL DEFAULT 60",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "escalation_enabled",
+    "INTEGER NOT NULL DEFAULT 0",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "escalation_window_seconds",
+    "INTEGER NOT NULL DEFAULT 300",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "escalation_delete_after",
+    "INTEGER NOT NULL DEFAULT 2",
+  );
+  ensureColumn(
+    db,
+    "moderation_settings",
+    "escalation_timeout_after",
+    "INTEGER NOT NULL DEFAULT 3",
+  );
 };
 
 const ensureColumn = (
   db: DbClient,
   table: string,
   column: string,
-  definition: string
+  definition: string,
 ) => {
-  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as {
+    name: string;
+  }[];
 
   if (!columns.some((entry) => entry.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);

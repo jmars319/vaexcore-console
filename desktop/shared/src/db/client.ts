@@ -65,7 +65,10 @@ const enablePragmas = (db: DbClient) => {
 
 const canFallbackToNodeSqlite = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
-  return message.includes("NODE_MODULE_VERSION") || message.includes("better_sqlite3.node");
+  return (
+    message.includes("NODE_MODULE_VERSION") ||
+    message.includes("better_sqlite3.node")
+  );
 };
 
 export const resolveDatabasePath = (databaseUrl: string) => {

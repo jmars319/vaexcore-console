@@ -1,10 +1,7 @@
 import { PermissionLevel } from "../core/permissions";
 import type { CommandRouter } from "../core/commandRouter";
 import type { Logger } from "../core/logger";
-import {
-  loadStudioIntegrationConfig,
-  StudioClient
-} from "./client";
+import { loadStudioIntegrationConfig, StudioClient } from "./client";
 import { sanitizeText } from "../core/security";
 import { studioConsoleMarkerMetadata } from "./markerMetadata";
 
@@ -15,14 +12,16 @@ type RegisterStudioCommandsOptions = {
 
 export const registerStudioCommands = ({
   router,
-  logger
+  logger,
 }: RegisterStudioCommandsOptions) => {
   const config = loadStudioIntegrationConfig();
   const client = new StudioClient(config);
 
   router.register("vcstudio", PermissionLevel.Moderator, async ({ reply }) => {
     if (!config.enabled) {
-      reply("Studio integration is off. Set VAEXCORE_STUDIO_INTEGRATION=true to enable it.");
+      reply(
+        "Studio integration is off. Set VAEXCORE_STUDIO_INTEGRATION=true to enable it.",
+      );
       return;
     }
 
@@ -35,43 +34,43 @@ export const registerStudioCommands = ({
     }
   });
 
-  router.register("vcmark", PermissionLevel.Moderator, async ({
-    message,
-    rawArgs,
-    reply
-  }) => {
-    if (!config.enabled) {
-      reply("Studio marker integration is off.");
-      return;
-    }
+  router.register(
+    "vcmark",
+    PermissionLevel.Moderator,
+    async ({ message, rawArgs, reply }) => {
+      if (!config.enabled) {
+        reply("Studio marker integration is off.");
+        return;
+      }
 
-    const label = markerLabel(rawArgs, message.userDisplayName);
+      const label = markerLabel(rawArgs, message.userDisplayName);
 
-    try {
-      await client.createMarker({
-        label,
-        source_app: "vaexcore-console",
-        source_event_id: markerSourceEventId(message),
-        metadata: studioConsoleMarkerMetadata(
-          "console.chat.marker",
-          {
-            command: "vcmark",
-            chatSource: message.source,
-            userLogin: message.userLogin,
-            userDisplayName: message.userDisplayName,
-            receivedAt: message.receivedAt.toISOString()
-          },
-          {
-            workflow: "manual-chat-marker"
-          }
-        )
-      });
-      reply(`Studio marker created: ${label}`);
-    } catch (error) {
-      logger.warn({ error, label }, "Studio marker creation failed");
-      reply("Studio marker could not be created.");
-    }
-  });
+      try {
+        await client.createMarker({
+          label,
+          source_app: "vaexcore-console",
+          source_event_id: markerSourceEventId(message),
+          metadata: studioConsoleMarkerMetadata(
+            "console.chat.marker",
+            {
+              command: "vcmark",
+              chatSource: message.source,
+              userLogin: message.userLogin,
+              userDisplayName: message.userDisplayName,
+              receivedAt: message.receivedAt.toISOString(),
+            },
+            {
+              workflow: "manual-chat-marker",
+            },
+          ),
+        });
+        reply(`Studio marker created: ${label}`);
+      } catch (error) {
+        logger.warn({ error, label }, "Studio marker creation failed");
+        reply("Studio marker could not be created.");
+      }
+    },
+  );
 };
 
 const markerSourceEventId = (message: {
@@ -89,6 +88,6 @@ const markerLabel = (rawArgs: string, displayName: string) => {
   return sanitizeText(rawArgs || fallback, {
     field: "Studio marker label",
     maxLength: 120,
-    required: true
+    required: true,
   });
 };

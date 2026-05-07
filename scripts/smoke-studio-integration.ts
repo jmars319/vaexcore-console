@@ -20,7 +20,7 @@ const mockFetch: typeof fetch = async (input, init) => {
       version: "0.1.0",
       ok: true,
       auth_required: true,
-      dev_auth_bypass: false
+      dev_auth_bypass: false,
     });
   }
 
@@ -37,7 +37,7 @@ const mockFetch: typeof fetch = async (input, init) => {
       start_seconds: null,
       end_seconds: null,
       metadata: markerBody.metadata ?? {},
-      created_at: "2026-05-02T12:00:00Z"
+      created_at: "2026-05-02T12:00:00Z",
     });
   }
 
@@ -50,7 +50,7 @@ try {
   const client = new StudioClient({
     enabled: true,
     apiUrl: "http://studio.local",
-    token: "studio-token"
+    token: "studio-token",
   });
 
   const health = await client.health();
@@ -67,11 +67,11 @@ try {
       source: {
         appId: "vaexcore-console",
         appName: "vaexcore console",
-        workflow: "manual-chat-marker"
+        workflow: "manual-chat-marker",
       },
       userLogin: "caster",
-      createdAt: "2026-05-02T12:00:00Z"
-    }
+      createdAt: "2026-05-02T12:00:00Z",
+    },
   });
 
   assert.deepEqual(seenPaths, ["/health", "/marker/create"]);
@@ -86,7 +86,7 @@ try {
   assert.deepEqual(metadata.source, {
     appId: "vaexcore-console",
     appName: "vaexcore console",
-    workflow: "manual-chat-marker"
+    workflow: "manual-chat-marker",
   });
   assert.equal(metadata.createdAt, "2026-05-02T12:00:00Z");
   assert.deepEqual(metadata, {
@@ -97,10 +97,10 @@ try {
     source: {
       appId: "vaexcore-console",
       appName: "vaexcore console",
-      workflow: "manual-chat-marker"
+      workflow: "manual-chat-marker",
     },
     userLogin: "caster",
-    createdAt: "2026-05-02T12:00:00Z"
+    createdAt: "2026-05-02T12:00:00Z",
   });
 } finally {
   globalThis.fetch = originalFetch;
@@ -113,11 +113,11 @@ function studioResponse(data: unknown) {
     JSON.stringify({
       ok: true,
       data,
-      error: null
+      error: null,
     }),
     {
       status: 200,
-      headers: { "content-type": "application/json" }
-    }
+      headers: { "content-type": "application/json" },
+    },
   );
 }

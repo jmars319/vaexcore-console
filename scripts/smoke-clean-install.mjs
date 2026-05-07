@@ -29,39 +29,90 @@ async function runSmoke() {
   assert(shell.includes("/ui/app.js"), "setup shell loads static UI");
 
   const config = await json("/api/config");
-  assert(config.redirectUri === "http://localhost:3434/auth/twitch/callback", "clean install uses default redirect");
-  assert(config.hasClientId === false, "clean install starts without client ID");
+  assert(
+    config.redirectUri === "http://localhost:3434/auth/twitch/callback",
+    "clean install uses default redirect",
+  );
+  assert(
+    config.hasClientId === false,
+    "clean install starts without client ID",
+  );
   assert(config.hasAccessToken === false, "clean install starts disconnected");
   assertSafePayload(config);
 
   const launch = await waitForLaunchPreparation();
-  assert(launch.status === "setup_required", "clean install launch preparation asks for one-time setup");
-  assert(launch.nextAction.includes("Setup Guide"), "launch preparation points clean installs to setup guide");
+  assert(
+    launch.status === "setup_required",
+    "clean install launch preparation asks for one-time setup",
+  );
+  assert(
+    launch.nextAction.includes("Setup Guide"),
+    "launch preparation points clean installs to setup guide",
+  );
   assertSafePayload(launch);
 
   const diagnostics = await json("/api/diagnostics");
-  assert(diagnostics.ok === false, "clean install diagnostics report setup blockers");
-  assert(diagnostics.launchPreparation.status === "setup_required", "diagnostics includes setup-required launch preparation");
-  assert(diagnostics.firstRun.cleanInstall === true, "diagnostics detects clean install");
-  assert(diagnostics.firstRun.nextAction.includes("Setup Guide"), "first-run next action points to setup guide");
-  assert(diagnostics.firstRun.recoverySteps.length >= 3, "first-run recovery steps are present");
-  assert(diagnostics.database.ok === true, "clean install database initializes");
-  assert(diagnostics.setupUi.appJs === true, "clean install diagnostics sees UI assets");
-  assert(diagnostics.setupUi.logoJpg === true, "clean install diagnostics sees logo asset");
+  assert(
+    diagnostics.ok === false,
+    "clean install diagnostics report setup blockers",
+  );
+  assert(
+    diagnostics.launchPreparation.status === "setup_required",
+    "diagnostics includes setup-required launch preparation",
+  );
+  assert(
+    diagnostics.firstRun.cleanInstall === true,
+    "diagnostics detects clean install",
+  );
+  assert(
+    diagnostics.firstRun.nextAction.includes("Setup Guide"),
+    "first-run next action points to setup guide",
+  );
+  assert(
+    diagnostics.firstRun.recoverySteps.length >= 3,
+    "first-run recovery steps are present",
+  );
+  assert(
+    diagnostics.database.ok === true,
+    "clean install database initializes",
+  );
+  assert(
+    diagnostics.setupUi.appJs === true,
+    "clean install diagnostics sees UI assets",
+  );
+  assert(
+    diagnostics.setupUi.logoJpg === true,
+    "clean install diagnostics sees logo asset",
+  );
   assertSafePayload(diagnostics);
 
   const blockedStart = await json("/api/bot/start", { method: "POST" });
   assert(blockedStart.ok === false, "bot start is blocked on clean install");
-  assert(blockedStart.nextAction || blockedStart.error, "blocked bot start explains next action");
-  assert(Array.isArray(blockedStart.checks), "blocked bot start returns readiness checks");
-  assert(blockedStart.diagnostics.firstRun.cleanInstall === true, "blocked bot start includes diagnostics");
+  assert(
+    blockedStart.nextAction || blockedStart.error,
+    "blocked bot start explains next action",
+  );
+  assert(
+    Array.isArray(blockedStart.checks),
+    "blocked bot start returns readiness checks",
+  );
+  assert(
+    blockedStart.diagnostics.firstRun.cleanInstall === true,
+    "blocked bot start includes diagnostics",
+  );
   assertSafePayload(blockedStart);
 
   const bundle = await json("/api/support-bundle");
   assert(bundle.ok === true, "support bundle route returns ok");
   assert(bundle.bundleVersion === 1, "support bundle has version");
-  assert(bundle.diagnostics.firstRun.cleanInstall === true, "support bundle includes diagnostics");
-  assert(Array.isArray(bundle.recent.botLogs), "support bundle includes bot logs array");
+  assert(
+    bundle.diagnostics.firstRun.cleanInstall === true,
+    "support bundle includes diagnostics",
+  );
+  assert(
+    Array.isArray(bundle.recent.botLogs),
+    "support bundle includes bot logs array",
+  );
   assertSafePayload(bundle);
 }
 
@@ -89,7 +140,7 @@ async function text(path) {
 
 async function json(path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
-    method: options.method ?? "GET"
+    method: options.method ?? "GET",
   });
   assert(response.ok, `${path} returned ${response.status}`);
   return response.json();
@@ -97,9 +148,18 @@ async function json(path, options = {}) {
 
 function assertSafePayload(payload) {
   const raw = JSON.stringify(payload);
-  assert(!raw.includes("client_secret="), "payload does not expose client_secret parameter");
-  assert(!raw.includes("access_token="), "payload does not expose access_token parameter");
-  assert(!raw.includes("refresh_token="), "payload does not expose refresh_token parameter");
+  assert(
+    !raw.includes("client_secret="),
+    "payload does not expose client_secret parameter",
+  );
+  assert(
+    !raw.includes("access_token="),
+    "payload does not expose access_token parameter",
+  );
+  assert(
+    !raw.includes("refresh_token="),
+    "payload does not expose refresh_token parameter",
+  );
   assert(!raw.includes("Bearer "), "payload does not expose bearer tokens");
 }
 

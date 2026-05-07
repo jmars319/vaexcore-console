@@ -36,10 +36,10 @@ writeLocalSecretsFixture({
     botUserId: "bot-id",
     accessToken: "diagnostics-access-token",
     refreshToken: "diagnostics-refresh-token",
-    scopes: ["user:read:chat", "user:write:chat"],
+    scopes: ["user:read:chat", "user:write:chat", "channel:read:stream_key"],
     tokenExpiresAt: "2099-01-01T00:00:00.000Z",
-    tokenValidatedAt: "2099-01-01T00:00:00.000Z"
-  }
+    tokenValidatedAt: "2099-01-01T00:00:00.000Z",
+  },
 });
 
 const { startSetupServer } = await import(
@@ -63,38 +63,96 @@ async function runSmoke() {
   assert(shell.includes("/ui/app.js"), "setup shell loads static UI");
 
   const launch = await waitForLaunchPreparation();
-  assert(launch.setupReady === true, "launch preparation validates existing setup");
-  assert(launch.status === "attention", "launch preparation runs preflight and reports bot-start attention");
-  assert(launch.validation?.ok === true, "launch preparation includes validation result");
-  assert(launch.preflight?.checks?.some((check) => check.name === "Bot runtime"), "launch preparation includes preflight checks");
+  assert(
+    launch.setupReady === true,
+    "launch preparation validates existing setup",
+  );
+  assert(
+    launch.status === "attention",
+    "launch preparation runs preflight and reports bot-start attention",
+  );
+  assert(
+    launch.validation?.ok === true,
+    "launch preparation includes validation result",
+  );
+  assert(
+    launch.preflight?.checks?.some((check) => check.name === "Bot runtime"),
+    "launch preparation includes preflight checks",
+  );
 
   const diagnostics = await json("/api/diagnostics");
-  assert(diagnostics.ok === true, "diagnostics returns ok when core blockers are clear");
-  assert(diagnostics.launchPreparation.setupReady === true, "diagnostics includes launch preparation state");
+  assert(
+    diagnostics.ok === true,
+    "diagnostics returns ok when core blockers are clear",
+  );
+  assert(
+    diagnostics.launchPreparation.setupReady === true,
+    "diagnostics includes launch preparation state",
+  );
   assert(diagnostics.app.version, "diagnostics includes app version");
   assert(diagnostics.app.runtime, "diagnostics includes runtime kind");
-  assert(diagnostics.paths.configDir === tempDir, "diagnostics includes config path");
-  assert(diagnostics.paths.databaseUrl === "file:<local sqlite path>", "diagnostics redacts database URL details");
-  assert(diagnostics.paths.databasePath.endsWith("vaexcore.sqlite"), "diagnostics includes database path");
+  assert(
+    diagnostics.paths.configDir === tempDir,
+    "diagnostics includes config path",
+  );
+  assert(
+    diagnostics.paths.databaseUrl === "file:<local sqlite path>",
+    "diagnostics redacts database URL details",
+  );
+  assert(
+    diagnostics.paths.databasePath.endsWith("vaexcore.sqlite"),
+    "diagnostics includes database path",
+  );
   assert(diagnostics.database.ok === true, "diagnostics probes database");
-  assert(diagnostics.database.driver === "better-sqlite3", "diagnostics reports better-sqlite3 driver");
+  assert(
+    diagnostics.database.driver === "better-sqlite3",
+    "diagnostics reports better-sqlite3 driver",
+  );
   assert(diagnostics.setupUi.appJs === true, "diagnostics sees app.js");
   assert(diagnostics.setupUi.stylesCss === true, "diagnostics sees styles.css");
   assert(diagnostics.setupUi.logoJpg === true, "diagnostics sees logo.jpg");
-  assert(diagnostics.config.hasRefreshToken === true, "diagnostics reports refresh availability");
+  assert(
+    diagnostics.config.hasRefreshToken === true,
+    "diagnostics reports refresh availability",
+  );
   assert(Array.isArray(diagnostics.checks), "diagnostics returns checks");
-  assert(diagnostics.checks.some((check) => check.name === "OAuth refresh" && check.ok), "diagnostics checks OAuth refresh");
-  assert(diagnostics.readiness.warnings.some((warning) => warning.includes("Bot runtime")), "diagnostics warns when bot is stopped");
-  assert(diagnostics.firstRun.cleanInstall === false, "diagnostics does not mark configured app as clean install");
-  assert(diagnostics.firstRun.setupComplete === true, "diagnostics reports setup complete");
+  assert(
+    diagnostics.checks.some(
+      (check) => check.name === "OAuth refresh" && check.ok,
+    ),
+    "diagnostics checks OAuth refresh",
+  );
+  assert(
+    diagnostics.readiness.warnings.some((warning) =>
+      warning.includes("Bot runtime"),
+    ),
+    "diagnostics warns when bot is stopped",
+  );
+  assert(
+    diagnostics.firstRun.cleanInstall === false,
+    "diagnostics does not mark configured app as clean install",
+  );
+  assert(
+    diagnostics.firstRun.setupComplete === true,
+    "diagnostics reports setup complete",
+  );
   assertSafeDiagnostics(diagnostics);
 
   const bundle = await json("/api/support-bundle");
   assert(bundle.ok === true, "support bundle route returns ok");
   assert(bundle.bundleVersion === 1, "support bundle has version");
-  assert(bundle.diagnostics.config.hasRefreshToken === true, "support bundle includes safe diagnostics");
-  assert(Array.isArray(bundle.recent.outbound), "support bundle includes outbound history");
-  assert(Array.isArray(bundle.recent.audit), "support bundle includes audit history");
+  assert(
+    bundle.diagnostics.config.hasRefreshToken === true,
+    "support bundle includes safe diagnostics",
+  );
+  assert(
+    Array.isArray(bundle.recent.outbound),
+    "support bundle includes outbound history",
+  );
+  assert(
+    Array.isArray(bundle.recent.audit),
+    "support bundle includes audit history",
+  );
   assertSafeDiagnostics(bundle);
 }
 
@@ -124,9 +182,9 @@ function mockValidate(init) {
   return jsonResponse({
     client_id: "diagnostics-client-id",
     login: "vaexcorebot",
-    scopes: ["user:read:chat", "user:write:chat"],
+    scopes: ["user:read:chat", "user:write:chat", "channel:read:stream_key"],
     user_id: "bot-id",
-    expires_in: 14400
+    expires_in: 14400,
   });
 }
 
@@ -139,11 +197,15 @@ function mockUsers(url, init) {
   const login = parsed.searchParams.get("login");
 
   if (login === "vaexcorebot") {
-    return jsonResponse({ data: [{ id: "bot-id", login, display_name: "vaexcorebot" }] });
+    return jsonResponse({
+      data: [{ id: "bot-id", login, display_name: "vaexcorebot" }],
+    });
   }
 
   if (login === "vaexil") {
-    return jsonResponse({ data: [{ id: "broadcaster-id", login, display_name: "Vaexil" }] });
+    return jsonResponse({
+      data: [{ id: "broadcaster-id", login, display_name: "Vaexil" }],
+    });
   }
 
   return jsonResponse({ data: [] });
@@ -157,7 +219,7 @@ function authToken(init) {
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" }
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -174,9 +236,13 @@ async function json(path) {
 }
 
 function writeLocalSecretsFixture(secrets) {
-  writeFileSync(join(tempDir, "local.secrets.json"), `${JSON.stringify(secrets, null, 2)}\n`, {
-    mode: 0o600
-  });
+  writeFileSync(
+    join(tempDir, "local.secrets.json"),
+    `${JSON.stringify(secrets, null, 2)}\n`,
+    {
+      mode: 0o600,
+    },
+  );
 }
 
 function assertSafeDiagnostics(report) {
@@ -185,9 +251,18 @@ function assertSafeDiagnostics(report) {
   assert(!("clientSecret" in config), "safe config omits clientSecret");
   assert(!("accessToken" in config), "safe config omits accessToken");
   assert(!("refreshToken" in config), "safe config omits refreshToken");
-  assert(!raw.includes("diagnostics-client-secret"), "diagnostics does not expose client secret");
-  assert(!raw.includes("diagnostics-access-token"), "diagnostics does not expose access token");
-  assert(!raw.includes("diagnostics-refresh-token"), "diagnostics does not expose refresh token");
+  assert(
+    !raw.includes("diagnostics-client-secret"),
+    "diagnostics does not expose client secret",
+  );
+  assert(
+    !raw.includes("diagnostics-access-token"),
+    "diagnostics does not expose access token",
+  );
+  assert(
+    !raw.includes("diagnostics-refresh-token"),
+    "diagnostics does not expose refresh token",
+  );
 }
 
 function assert(condition, message) {

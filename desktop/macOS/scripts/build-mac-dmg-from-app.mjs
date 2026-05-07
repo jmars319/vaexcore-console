@@ -8,7 +8,9 @@ const electronBuilderBin = resolve("node_modules/.bin/electron-builder");
 const apps = findPackagedApps(resolve("release"));
 
 if (apps.length !== 1) {
-  throw new Error(`Expected one packaged ${productName}.app, found ${apps.length}.`);
+  throw new Error(
+    `Expected one packaged ${productName}.app, found ${apps.length}.`,
+  );
 }
 
 const env = { ...process.env };
@@ -16,7 +18,7 @@ delete env.ELECTRON_RUN_AS_NODE;
 
 execFileSync(electronBuilderBin, ["--mac", "dmg", "--prepackaged", apps[0]], {
   env,
-  stdio: "inherit"
+  stdio: "inherit",
 });
 
 function findPackagedApps(dir) {

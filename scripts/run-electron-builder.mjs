@@ -4,7 +4,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const electronBuilderCli = resolve(root, "node_modules/electron-builder/cli.js");
+const electronBuilderCli = resolve(
+  root,
+  "node_modules/electron-builder/cli.js",
+);
 
 if (!existsSync(electronBuilderCli)) {
   throw new Error("electron-builder CLI was not found. Run npm install first.");
@@ -19,8 +22,8 @@ const result = spawnSync(
   {
     cwd: root,
     env,
-    stdio: "inherit"
-  }
+    stdio: "inherit",
+  },
 );
 
 if (result.error) {

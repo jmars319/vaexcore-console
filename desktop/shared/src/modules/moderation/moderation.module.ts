@@ -11,5 +11,5 @@ export type {
   ModerationHit,
   ModerationLinkPermit,
   ModerationSettings,
-  ModerationTerm
+  ModerationTerm,
 } from "./moderation.service";

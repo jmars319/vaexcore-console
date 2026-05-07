@@ -32,14 +32,14 @@ const steps = [
   ["Unsigned release artifact smoke", ["npm", "run", "smoke:unsigned-release"]],
   ["Tester artifact dry run", ["npm", "run", "smoke:tester-artifact"]],
   ["Tester update preservation", ["npm", "run", "smoke:tester-update"]],
-  ["Tester handoff", ["npm", "run", "release:handoff"]]
+  ["Tester handoff", ["npm", "run", "release:handoff"]],
 ];
 
 for (const [label, command] of steps) {
   console.log(`\n==> ${label}`);
   const result = spawnSync(command[0], command.slice(1), {
     stdio: "inherit",
-    env: { ...process.env }
+    env: { ...process.env },
   });
 
   if (result.status !== 0) {

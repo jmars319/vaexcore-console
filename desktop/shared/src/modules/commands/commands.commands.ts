@@ -8,7 +8,7 @@ type RegisterCustomCommandsOptions = {
 
 export const registerCustomCommands = ({
   router,
-  service
+  service,
 }: RegisterCustomCommandsOptions) => {
   router.registerFallback((context) => service.handle(context));
 };

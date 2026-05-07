@@ -38,21 +38,21 @@ export class TwitchModerationClient {
       return Promise.resolve({
         ok: false,
         failureCategory: "twitch_rejected",
-        reason: "Twitch message ID is required; refusing to clear chat."
+        reason: "Twitch message ID is required; refusing to clear chat.",
       } satisfies TwitchModerationResult);
     }
 
     const params = new URLSearchParams({
       broadcaster_id: this.options.broadcasterId,
       moderator_id: this.options.moderatorId,
-      message_id: messageId
+      message_id: messageId,
     });
 
     return this.request({
       method: "DELETE",
       url: `https://api.twitch.tv/helix/moderation/chat?${params}`,
       logAction: "delete chat message",
-      errorContext: "moderation_delete"
+      errorContext: "moderation_delete",
     });
   }
 
@@ -65,13 +65,13 @@ export class TwitchModerationClient {
       return Promise.resolve({
         ok: false,
         failureCategory: "twitch_rejected",
-        reason: "Twitch user ID is required for timeout."
+        reason: "Twitch user ID is required for timeout.",
       } satisfies TwitchModerationResult);
     }
 
     const params = new URLSearchParams({
       broadcaster_id: this.options.broadcasterId,
-      moderator_id: this.options.moderatorId
+      moderator_id: this.options.moderatorId,
     });
 
     return this.request({
@@ -83,9 +83,9 @@ export class TwitchModerationClient {
         data: {
           user_id: input.userId,
           duration: input.durationSeconds,
-          reason: input.reason
-        }
-      }
+          reason: input.reason,
+        },
+      },
     });
   }
 
@@ -97,33 +97,51 @@ export class TwitchModerationClient {
     body?: unknown;
   }): Promise<TwitchModerationResult> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 10_000);
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.options.timeoutMs ?? 10_000,
+    );
 
     try {
-      this.options.logger.info({ action: input.logAction }, "Twitch moderation API attempt");
+      this.options.logger.info(
+        { action: input.logAction },
+        "Twitch moderation API attempt",
+      );
       const accessToken = await this.options.accessTokenProvider();
       const response = await fetch(input.url, {
         method: input.method,
         signal: controller.signal,
         headers: createTwitchHeaders({
           clientId: this.options.clientId,
-          accessToken
+          accessToken,
         }),
-        body: input.body ? JSON.stringify(input.body) : undefined
+        body: input.body ? JSON.stringify(input.body) : undefined,
       });
 
       if (response.ok) {
-        this.options.logger.info({ action: input.logAction }, "Twitch moderation API succeeded");
+        this.options.logger.info(
+          { action: input.logAction },
+          "Twitch moderation API succeeded",
+        );
         return { ok: true };
       }
 
       const body = await response.text();
-      const error = await explainTwitchHttpError(response, input.errorContext, body);
+      const error = await explainTwitchHttpError(
+        response,
+        input.errorContext,
+        body,
+      );
       const category = classifyStatus(response.status);
 
       this.options.logger.warn(
-        { action: input.logAction, status: response.status, failureCategory: category, error },
-        "Twitch moderation API failed"
+        {
+          action: input.logAction,
+          status: response.status,
+          failureCategory: category,
+          error,
+        },
+        "Twitch moderation API failed",
       );
 
       return {
@@ -131,22 +149,23 @@ export class TwitchModerationClient {
         status: response.status,
         failureCategory: category,
         reason: error.message,
-        retryAfterMs: getRetryAfterMs(response)
+        retryAfterMs: getRetryAfterMs(response),
       };
     } catch (error) {
-      const category = error instanceof Error && error.name === "AbortError"
-        ? "timeout"
-        : "network";
+      const category =
+        error instanceof Error && error.name === "AbortError"
+          ? "timeout"
+          : "network";
       const reason = error instanceof Error ? error.message : String(error);
       this.options.logger.warn(
         { action: input.logAction, failureCategory: category, error },
-        "Twitch moderation API request failed"
+        "Twitch moderation API request failed",
       );
 
       return {
         ok: false,
         failureCategory: category,
-        reason
+        reason,
       };
     } finally {
       clearTimeout(timeout);

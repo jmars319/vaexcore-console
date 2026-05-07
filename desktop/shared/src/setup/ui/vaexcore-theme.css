@@ -41,9 +41,27 @@
     linear-gradient(180deg, rgba(143, 92, 255, 0.08), transparent 34%),
     var(--vxc-ink-950);
   --vxc-grid:
-    linear-gradient(90deg, transparent 0 96%, rgba(57, 217, 255, 0.06) 96% 100%),
-    linear-gradient(180deg, transparent 0 96%, rgba(255, 59, 244, 0.052) 96% 100%);
+    linear-gradient(
+      90deg,
+      transparent 0 96%,
+      rgba(57, 217, 255, 0.06) 96% 100%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 0 96%,
+      rgba(255, 59, 244, 0.052) 96% 100%
+    );
   --vxc-rail:
-    linear-gradient(135deg, transparent 0 44%, rgba(57, 217, 255, 0.16) 44% 45%, transparent 45%),
-    linear-gradient(225deg, transparent 0 48%, rgba(255, 59, 244, 0.13) 48% 49%, transparent 49%);
+    linear-gradient(
+      135deg,
+      transparent 0 44%,
+      rgba(57, 217, 255, 0.16) 44% 45%,
+      transparent 45%
+    ),
+    linear-gradient(
+      225deg,
+      transparent 0 48%,
+      rgba(255, 59, 244, 0.13) 48% 49%,
+      transparent 49%
+    );
 }

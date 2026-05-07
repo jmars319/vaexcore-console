@@ -12,77 +12,80 @@ export const protectedCommandDefinitions: ProtectedCommandDefinition[] = [
   {
     name: "ping",
     owner: "core",
-    description: "Confirms the outbound chat queue and Twitch Send Chat Message path."
+    description:
+      "Confirms the outbound chat queue and Twitch Send Chat Message path.",
   },
   {
     name: "vcstatus",
     owner: "status",
-    description: "Reports vaexcore console runtime, EventSub, queue, and giveaway status."
+    description:
+      "Reports vaexcore console runtime, EventSub, queue, and giveaway status.",
   },
   {
     name: "vcstudio",
     owner: "studio",
-    description: "Checks whether vaexcore console can reach vaexcore studio."
+    description: "Checks whether vaexcore console can reach vaexcore studio.",
   },
   {
     name: "vcmark",
     owner: "studio",
-    description: "Creates a marker in vaexcore studio for the current stream recording."
+    description:
+      "Creates a marker in vaexcore studio for the current stream recording.",
   },
   {
     name: "enter",
     owner: "giveaway",
-    description: "Default giveaway entry command."
+    description: "Default giveaway entry command.",
   },
   {
     name: "ghelp",
     owner: "giveaway",
-    description: "Lists giveaway operator chat commands."
+    description: "Lists giveaway operator chat commands.",
   },
   {
     name: "gstart",
     owner: "giveaway",
-    description: "Starts a giveaway."
+    description: "Starts a giveaway.",
   },
   {
     name: "gstatus",
     owner: "giveaway",
-    description: "Reports active giveaway state."
+    description: "Reports active giveaway state.",
   },
   {
     name: "gclose",
     owner: "giveaway",
-    description: "Closes giveaway entries."
+    description: "Closes giveaway entries.",
   },
   {
     name: "gdraw",
     owner: "giveaway",
-    description: "Draws giveaway winners."
+    description: "Draws giveaway winners.",
   },
   {
     name: "greroll",
     owner: "giveaway",
-    description: "Rerolls an active giveaway winner."
+    description: "Rerolls an active giveaway winner.",
   },
   {
     name: "gclaim",
     owner: "giveaway",
-    description: "Marks a giveaway winner as claimed."
+    description: "Marks a giveaway winner as claimed.",
   },
   {
     name: "gdeliver",
     owner: "giveaway",
-    description: "Marks a giveaway winner as delivered."
+    description: "Marks a giveaway winner as delivered.",
   },
   {
     name: "gend",
     owner: "giveaway",
-    description: "Ends the active giveaway."
-  }
+    description: "Ends the active giveaway.",
+  },
 ];
 
 const protectedCommandNameSet = new Set(
-  protectedCommandDefinitions.map((definition) => definition.name)
+  protectedCommandDefinitions.map((definition) => definition.name),
 );
 
 export const getProtectedCommandNames = () =>
@@ -99,7 +102,10 @@ export const isProtectedCommandName = (value: unknown) => {
   }
 };
 
-export const assertNotProtectedCommandName = (value: unknown, field = "Command name") => {
+export const assertNotProtectedCommandName = (
+  value: unknown,
+  field = "Command name",
+) => {
   const name = normalizeCommandName(value, field);
 
   if (protectedCommandNameSet.has(name)) {

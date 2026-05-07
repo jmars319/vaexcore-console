@@ -11,7 +11,7 @@ export const limits = {
   customCommandCooldownMaxSeconds: 86_400,
   auditMetadataLength: 2000,
   winnerCountMax: 100,
-  requestBodyBytes: 64 * 1024
+  requestBodyBytes: 64 * 1024,
 } as const;
 
 const twitchLoginPattern = /^[a-z0-9_]{1,25}$/;
@@ -24,7 +24,7 @@ const secretTextPatterns = [
   /Bearer\s+[A-Za-z0-9._~+/=-]+/gi,
   /oauth:[A-Za-z0-9._~+/=-]+/gi,
   /\b(client_secret|clientSecret|access_token|accessToken|refresh_token|refreshToken|authorization)\b["']?\s*[:=]\s*["']?[^"'\s,}&]+/gi,
-  /\bTWITCH_(USER_ACCESS_TOKEN|REFRESH_TOKEN|CLIENT_SECRET)\b/gi
+  /\bTWITCH_(USER_ACCESS_TOKEN|REFRESH_TOKEN|CLIENT_SECRET)\b/gi,
 ];
 
 export class SafeInputError extends Error {
@@ -41,7 +41,7 @@ export const sanitizeText = (
     maxLength: number;
     allowNewlines?: boolean;
     required?: boolean;
-  }
+  },
 ) => {
   if (typeof value !== "string") {
     if (options.required) {
@@ -68,7 +68,7 @@ export const sanitizeText = (
 
   if (text.length > options.maxLength) {
     throw new SafeInputError(
-      `${options.field} must be ${options.maxLength} characters or less.`
+      `${options.field} must be ${options.maxLength} characters or less.`,
     );
   }
 
@@ -79,21 +79,24 @@ export const sanitizeCommandText = (value: unknown) =>
   sanitizeText(value, {
     field: "Command text",
     maxLength: limits.commandLength,
-    required: true
+    required: true,
   });
 
 export const sanitizeChatMessage = (value: unknown) =>
   sanitizeText(value, {
     field: "Chat message",
     maxLength: limits.chatMessageLength,
-    required: true
+    required: true,
   });
 
-export const sanitizeGiveawayTitle = (value: unknown, fallback = "IOI code giveaway") => {
+export const sanitizeGiveawayTitle = (
+  value: unknown,
+  fallback = "IOI code giveaway",
+) => {
   const title = sanitizeText(value ?? fallback, {
     field: "Giveaway title",
     maxLength: limits.giveawayTitleLength,
-    required: true
+    required: true,
   });
 
   return title || fallback;
@@ -103,29 +106,36 @@ export const normalizeKeyword = (value: unknown, fallback = "enter") => {
   const keyword = sanitizeText(value ?? fallback, {
     field: "Keyword",
     maxLength: limits.keywordLength,
-    required: true
+    required: true,
   })
     .replace(/^!/, "")
     .toLowerCase();
 
   if (!keywordPattern.test(keyword)) {
-    throw new SafeInputError("Keyword must use only letters, numbers, or underscores.");
+    throw new SafeInputError(
+      "Keyword must use only letters, numbers, or underscores.",
+    );
   }
 
   return keyword;
 };
 
-export const normalizeCommandName = (value: unknown, field = "Command name") => {
+export const normalizeCommandName = (
+  value: unknown,
+  field = "Command name",
+) => {
   const name = sanitizeText(value, {
     field,
     maxLength: limits.commandNameLength,
-    required: true
+    required: true,
   })
     .replace(/^!/, "")
     .toLowerCase();
 
   if (!commandNamePattern.test(name)) {
-    throw new SafeInputError(`${field} must use only letters, numbers, or underscores.`);
+    throw new SafeInputError(
+      `${field} must use only letters, numbers, or underscores.`,
+    );
   }
 
   return name;
@@ -135,7 +145,7 @@ export const normalizeLogin = (value: unknown, field = "Username") => {
   const login = sanitizeText(value, {
     field,
     maxLength: limits.loginLength,
-    required: true
+    required: true,
   })
     .replace(/^@/, "")
     .toLowerCase();
@@ -150,14 +160,14 @@ export const normalizeLogin = (value: unknown, field = "Username") => {
 export const sanitizeDisplayName = (value: unknown, fallback: string) =>
   sanitizeText(value ?? fallback, {
     field: "Display name",
-    maxLength: limits.displayNameLength
+    maxLength: limits.displayNameLength,
   }) || fallback;
 
 export const parseSafeInteger = (
   value: unknown,
   options: { field: string; fallback?: number; min?: number; max?: number } = {
-    field: "Number"
-  }
+    field: "Number",
+  },
 ) => {
   if (value === undefined || value === null || value === "") {
     if (options.fallback !== undefined) {
@@ -178,7 +188,9 @@ export const parseSafeInteger = (
   const max = options.max ?? limits.winnerCountMax;
 
   if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
-    throw new SafeInputError(`${options.field} must be between ${min} and ${max}.`);
+    throw new SafeInputError(
+      `${options.field} must be between ${min} and ${max}.`,
+    );
   }
 
   return parsed;
@@ -193,8 +205,8 @@ export const redactSecrets = (value: unknown): unknown => {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, item]) => [
         key,
-        secretKeys.test(key) ? "[redacted]" : redactSecrets(item)
-      ])
+        secretKeys.test(key) ? "[redacted]" : redactSecrets(item),
+      ]),
     );
   }
 
@@ -232,7 +244,9 @@ export const containsSecretLikeContent = (value: string) =>
 
 export const assertNoSecretLikeContent = (value: string, field: string) => {
   if (containsSecretLikeContent(value)) {
-    throw new SafeInputError(`${field} appears to contain a token, secret, OAuth value, or authorization header.`);
+    throw new SafeInputError(
+      `${field} appears to contain a token, secret, OAuth value, or authorization header.`,
+    );
   }
 };
 
@@ -245,11 +259,14 @@ export const safeJsonStringify = (metadata: Record<string, unknown>) => {
 
   return JSON.stringify({
     truncated: true,
-    keys: Object.keys(metadata).slice(0, 20)
+    keys: Object.keys(metadata).slice(0, 20),
   });
 };
 
-export const safeErrorMessage = (error: unknown, fallback = "Request failed") => {
+export const safeErrorMessage = (
+  error: unknown,
+  fallback = "Request failed",
+) => {
   if (error instanceof SafeInputError) {
     return error.message;
   }

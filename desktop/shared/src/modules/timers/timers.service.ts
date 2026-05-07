@@ -5,7 +5,7 @@ import {
   limits,
   parseSafeInteger,
   sanitizeChatMessage,
-  sanitizeText
+  sanitizeText,
 } from "../../core/security";
 import type { DbClient } from "../../db/client";
 
@@ -15,7 +15,7 @@ export const timerLimits = {
   maxIntervalMinutes: 24 * 60,
   maxChatMessages: 500,
   maxDuePerTick: 5,
-  blockedRetryMs: 60_000
+  blockedRetryMs: 60_000,
 } as const;
 
 export type TimerLastStatus = "never" | "queued" | "blocked" | "failed";
@@ -69,33 +69,40 @@ export class TimersService {
   constructor(private readonly db: DbClient) {}
 
   listTimers(): TimerDefinition[] {
-    return (this.db
-      .prepare(
-        `
+    return (
+      this.db
+        .prepare(
+          `
           SELECT *
           FROM timers
           ORDER BY name ASC
-        `
-      )
-      .all() as TimerRow[]).map(timerFromRow);
+        `,
+        )
+        .all() as TimerRow[]
+    ).map(timerFromRow);
   }
 
   saveTimer(input: TimerSaveInput, actor: ChatMessage) {
-    const existing = input.id ? this.requireTimerRow(Number(input.id)) : undefined;
+    const existing = input.id
+      ? this.requireTimerRow(Number(input.id))
+      : undefined;
     const existingTimer = existing ? timerFromRow(existing) : undefined;
     const name = normalizeTimerName(input.name ?? existingTimer?.name);
-    const message = normalizeTimerMessage(input.message ?? existingTimer?.message);
+    const message = normalizeTimerMessage(
+      input.message ?? existingTimer?.message,
+    );
     const intervalMinutes = normalizeTimerInterval(
       input.intervalMinutes,
-      existingTimer?.intervalMinutes ?? timerLimits.minIntervalMinutes
+      existingTimer?.intervalMinutes ?? timerLimits.minIntervalMinutes,
     );
     const minChatMessages = normalizeTimerMinChatMessages(
       input.minChatMessages,
-      existingTimer?.minChatMessages ?? 0
+      existingTimer?.minChatMessages ?? 0,
     );
-    const enabled = input.enabled === undefined
-      ? existingTimer?.enabled ?? false
-      : Boolean(input.enabled);
+    const enabled =
+      input.enabled === undefined
+        ? (existingTimer?.enabled ?? false)
+        : Boolean(input.enabled);
     const now = timestamp();
     const nextFireAt = enabled
       ? existingTimer?.nextFireAt || nextTimerFireAt(intervalMinutes, now)
@@ -124,7 +131,7 @@ export class TimersService {
               last_error = CASE WHEN @enabled = 1 THEN last_error ELSE '' END,
               updated_at = @updatedAt
             WHERE id = @id
-          `
+          `,
         )
         .run({
           id: existing.id,
@@ -134,7 +141,7 @@ export class TimersService {
           minChatMessages,
           enabled: enabled ? 1 : 0,
           nextFireAt,
-          updatedAt: now
+          updatedAt: now,
         });
     } else {
       const result = this.db
@@ -161,7 +168,7 @@ export class TimersService {
               @createdAt,
               @updatedAt
             )
-          `
+          `,
         )
         .run({
           name,
@@ -171,12 +178,14 @@ export class TimersService {
           enabled: enabled ? 1 : 0,
           nextFireAt,
           createdAt: now,
-          updatedAt: now
+          updatedAt: now,
         });
       timerId = Number(result.lastInsertRowid);
     }
 
-    const timer = timerId ? this.requireTimer(timerId) : this.requireTimerByName(name);
+    const timer = timerId
+      ? this.requireTimer(timerId)
+      : this.requireTimerByName(name);
     writeAuditLog(
       this.db,
       actor,
@@ -187,8 +196,8 @@ export class TimersService {
         name: timer.name,
         enabled: timer.enabled,
         intervalMinutes: timer.intervalMinutes,
-        minChatMessages: timer.minChatMessages
-      }
+        minChatMessages: timer.minChatMessages,
+      },
     );
 
     return timer;
@@ -197,7 +206,9 @@ export class TimersService {
   setEnabled(id: number, enabled: boolean, actor: ChatMessage) {
     const timer = this.requireTimer(id);
     const now = timestamp();
-    const nextFireAt = enabled ? nextTimerFireAt(timer.intervalMinutes, now) : "";
+    const nextFireAt = enabled
+      ? nextTimerFireAt(timer.intervalMinutes, now)
+      : "";
 
     this.db
       .prepare(
@@ -210,14 +221,14 @@ export class TimersService {
               last_error = '',
               updated_at = @updatedAt
           WHERE id = @id
-        `
+        `,
       )
       .run({
         id,
         enabled: enabled ? 1 : 0,
         nextFireAt,
         lastStatus: enabled ? timer.lastStatus : "never",
-        updatedAt: now
+        updatedAt: now,
       });
 
     writeAuditLog(
@@ -229,8 +240,8 @@ export class TimersService {
         timerId: timer.id,
         name: timer.name,
         intervalMinutes: timer.intervalMinutes,
-        minChatMessages: timer.minChatMessages
-      }
+        minChatMessages: timer.minChatMessages,
+      },
     );
 
     return this.requireTimer(id);
@@ -242,7 +253,7 @@ export class TimersService {
     this.db.prepare("DELETE FROM timers WHERE id = ?").run(id);
     writeAuditLog(this.db, actor, "timer.delete", `timer:${timer.id}`, {
       timerId: timer.id,
-      name: timer.name
+      name: timer.name,
     });
 
     return timer;
@@ -255,9 +266,10 @@ export class TimersService {
   getDueTimers(now = new Date()) {
     this.ensureEnabledSchedules(now);
 
-    return (this.db
-      .prepare(
-        `
+    return (
+      this.db
+        .prepare(
+          `
           SELECT *
           FROM timers
           WHERE enabled = 1
@@ -269,17 +281,19 @@ export class TimersService {
             )
           ORDER BY next_fire_at ASC, id ASC
           LIMIT ?
-        `
-      )
-      .all(now.toISOString(), timerLimits.maxDuePerTick) as TimerRow[]).map(timerFromRow);
+        `,
+        )
+        .all(now.toISOString(), timerLimits.maxDuePerTick) as TimerRow[]
+    ).map(timerFromRow);
   }
 
   getActivityBlockedTimers(now = new Date()) {
     this.ensureEnabledSchedules(now);
 
-    return (this.db
-      .prepare(
-        `
+    return (
+      this.db
+        .prepare(
+          `
           SELECT *
           FROM timers
           WHERE enabled = 1
@@ -289,9 +303,10 @@ export class TimersService {
             AND chat_messages_since_last_fire < min_chat_messages
           ORDER BY next_fire_at ASC, id ASC
           LIMIT ?
-        `
-      )
-      .all(now.toISOString(), timerLimits.maxDuePerTick) as TimerRow[]).map(timerFromRow);
+        `,
+        )
+        .all(now.toISOString(), timerLimits.maxDuePerTick) as TimerRow[]
+    ).map(timerFromRow);
   }
 
   recordChatActivity() {
@@ -306,7 +321,7 @@ export class TimersService {
           WHERE enabled = 1
             AND min_chat_messages > 0
             AND chat_messages_since_last_fire < min_chat_messages
-        `
+        `,
       )
       .run();
 
@@ -330,14 +345,14 @@ export class TimersService {
               last_outbound_message_id = @outboundMessageId,
               updated_at = @updatedAt
           WHERE id = @id
-        `
+        `,
       )
       .run({
         id,
         lastSentAt: sentAtIso,
         nextFireAt: nextTimerFireAt(timer.intervalMinutes, sentAtIso),
         outboundMessageId,
-        updatedAt: sentAtIso
+        updatedAt: sentAtIso,
       });
 
     return this.requireTimer(id);
@@ -355,13 +370,15 @@ export class TimersService {
               last_error = @lastError,
               updated_at = @updatedAt
           WHERE id = @id
-        `
+        `,
       )
       .run({
         id,
-        nextFireAt: new Date(blockedAt.getTime() + timerLimits.blockedRetryMs).toISOString(),
+        nextFireAt: new Date(
+          blockedAt.getTime() + timerLimits.blockedRetryMs,
+        ).toISOString(),
         lastError: sanitizeTimerStatus(reason),
-        updatedAt: blockedAtIso
+        updatedAt: blockedAtIso,
       });
 
     return this.requireTimer(id);
@@ -375,7 +392,7 @@ export class TimersService {
           FROM timers
           WHERE enabled = 1
             AND next_fire_at = ''
-        `
+        `,
       )
       .all() as TimerRow[];
 
@@ -387,20 +404,20 @@ export class TimersService {
             SET next_fire_at = @nextFireAt,
                 updated_at = @updatedAt
             WHERE id = @id
-          `
+          `,
         )
         .run({
           id: row.id,
           nextFireAt: nextTimerFireAt(row.interval_minutes, now.toISOString()),
-          updatedAt: now.toISOString()
+          updatedAt: now.toISOString(),
         });
     }
   }
 
   private requireTimerRow(id: number) {
-    const row = this.db
-      .prepare("SELECT * FROM timers WHERE id = ?")
-      .get(id) as TimerRow | undefined;
+    const row = this.db.prepare("SELECT * FROM timers WHERE id = ?").get(id) as
+      | TimerRow
+      | undefined;
 
     if (!row) {
       throw new Error(`Timer #${id} was not found.`);
@@ -436,7 +453,7 @@ export const normalizeTimerName = (value: unknown) =>
   sanitizeText(value, {
     field: "Timer name",
     maxLength: timerLimits.nameLength,
-    required: true
+    required: true,
   });
 
 export const normalizeTimerMessage = (value: unknown) => {
@@ -450,7 +467,7 @@ export const normalizeTimerInterval = (value: unknown, fallback: number) =>
     field: "Timer interval",
     fallback,
     min: timerLimits.minIntervalMinutes,
-    max: timerLimits.maxIntervalMinutes
+    max: timerLimits.maxIntervalMinutes,
   });
 
 export const normalizeTimerMinChatMessages = (value: unknown, fallback = 0) =>
@@ -458,10 +475,13 @@ export const normalizeTimerMinChatMessages = (value: unknown, fallback = 0) =>
     field: "Timer chat message requirement",
     fallback,
     min: 0,
-    max: timerLimits.maxChatMessages
+    max: timerLimits.maxChatMessages,
   });
 
-export const nextTimerFireAt = (intervalMinutes: number, from: string | Date = new Date()) => {
+export const nextTimerFireAt = (
+  intervalMinutes: number,
+  from: string | Date = new Date(),
+) => {
   const fromMs = typeof from === "string" ? Date.parse(from) : from.getTime();
   const base = Number.isFinite(fromMs) ? fromMs : Date.now();
   return new Date(base + intervalMinutes * 60 * 1000).toISOString();
@@ -470,7 +490,7 @@ export const nextTimerFireAt = (intervalMinutes: number, from: string | Date = n
 const sanitizeTimerStatus = (value: string) =>
   sanitizeText(value, {
     field: "Timer status",
-    maxLength: limits.chatMessageLength
+    maxLength: limits.chatMessageLength,
   });
 
 const timerFromRow = (row: TimerRow): TimerDefinition => ({
@@ -488,7 +508,7 @@ const timerFromRow = (row: TimerRow): TimerDefinition => ({
   lastError: row.last_error,
   lastOutboundMessageId: row.last_outbound_message_id,
   createdAt: row.created_at,
-  updatedAt: row.updated_at
+  updatedAt: row.updated_at,
 });
 
 const timestamp = () => new Date().toISOString();

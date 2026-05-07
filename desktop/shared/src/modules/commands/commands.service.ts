@@ -3,14 +3,14 @@ import type { MessageQueueMetadata } from "../../core/messageQueue";
 import {
   getPermissionLevel,
   hasPermission,
-  PermissionLevel
+  PermissionLevel,
 } from "../../core/permissions";
 import {
   limits,
   assertNoSecretLikeContent,
   normalizeCommandName,
   parseSafeInteger,
-  sanitizeChatMessage
+  sanitizeChatMessage,
 } from "../../core/security";
 import type { DbClient } from "../../db/client";
 import { getProtectedCommandNames } from "../../core/protectedCommands";
@@ -92,7 +92,7 @@ export type CustomCommandContext = {
 export class CustomCommandsService {
   constructor(
     private readonly db: DbClient,
-    private readonly options: { featureGates?: FeatureGateStore } = {}
+    private readonly options: { featureGates?: FeatureGateStore } = {},
   ) {}
 
   listCommands(): CustomCommandDefinition[] {
@@ -102,7 +102,7 @@ export class CustomCommandsService {
           SELECT *
           FROM custom_commands
           ORDER BY name ASC
-        `
+        `,
       )
       .all() as CustomCommandRow[];
 
@@ -114,51 +114,72 @@ export class CustomCommandsService {
       field: "History limit",
       fallback: 50,
       min: 1,
-      max: 200
+      max: 200,
     });
 
-    return (this.db
-      .prepare(
-        `
+    return (
+      this.db
+        .prepare(
+          `
           SELECT *
           FROM custom_command_invocations
           ORDER BY created_at DESC
           LIMIT ?
-        `
-      )
-      .all(safeLimit) as CustomCommandInvocationRow[]).map(invocationFromRow);
+        `,
+        )
+        .all(safeLimit) as CustomCommandInvocationRow[]
+    ).map(invocationFromRow);
   }
 
   saveCommand(
     input: CustomCommandSaveInput,
     actor: ChatMessage,
-    options: { reservedNames?: string[] } = {}
+    options: { reservedNames?: string[] } = {},
   ) {
-    const existing = input.id ? this.requireCommandById(Number(input.id)) : undefined;
-    const existingDefinition = existing ? this.definitionFromRow(existing) : undefined;
-    const name = normalizeCommandName(input.name ?? existingDefinition?.name, "Command name");
-    const permission = normalizePermission(input.permission ?? existingDefinition?.permission);
-    const aliases = normalizeAliasList(input.aliases ?? existingDefinition?.aliases ?? []);
+    const existing = input.id
+      ? this.requireCommandById(Number(input.id))
+      : undefined;
+    const existingDefinition = existing
+      ? this.definitionFromRow(existing)
+      : undefined;
+    const name = normalizeCommandName(
+      input.name ?? existingDefinition?.name,
+      "Command name",
+    );
+    const permission = normalizePermission(
+      input.permission ?? existingDefinition?.permission,
+    );
+    const aliases = normalizeAliasList(
+      input.aliases ?? existingDefinition?.aliases ?? [],
+    );
     const responses = normalizeResponseList(
-      input.responses ?? input.responseText ?? existingDefinition?.responses ?? []
+      input.responses ??
+        input.responseText ??
+        existingDefinition?.responses ??
+        [],
     );
     const enabled =
       input.enabled === undefined
-        ? existingDefinition?.enabled ?? true
+        ? (existingDefinition?.enabled ?? true)
         : Boolean(input.enabled);
     const globalCooldownSeconds = normalizeCooldown(
       input.globalCooldownSeconds,
       existingDefinition?.globalCooldownSeconds ?? 30,
-      "Global cooldown"
+      "Global cooldown",
     );
     const userCooldownSeconds = normalizeCooldown(
       input.userCooldownSeconds,
       existingDefinition?.userCooldownSeconds ?? 10,
-      "User cooldown"
+      "User cooldown",
     );
 
     this.assertNameAllowed(name, existing?.id, options.reservedNames);
-    this.assertAliasesAllowed(name, aliases, existing?.id, options.reservedNames);
+    this.assertAliasesAllowed(
+      name,
+      aliases,
+      existing?.id,
+      options.reservedNames,
+    );
 
     const now = timestamp();
     this.db.exec("BEGIN");
@@ -179,7 +200,7 @@ export class CustomCommandsService {
                 user_cooldown_seconds = @userCooldownSeconds,
                 updated_at = @updatedAt
               WHERE id = @id
-            `
+            `,
           )
           .run({
             id: existing.id,
@@ -188,7 +209,7 @@ export class CustomCommandsService {
             enabled: enabled ? 1 : 0,
             globalCooldownSeconds,
             userCooldownSeconds,
-            updatedAt: now
+            updatedAt: now,
           });
       } else {
         const result = this.db
@@ -211,7 +232,7 @@ export class CustomCommandsService {
                 @createdAt,
                 @updatedAt
               )
-            `
+            `,
           )
           .run({
             name,
@@ -220,7 +241,7 @@ export class CustomCommandsService {
             globalCooldownSeconds,
             userCooldownSeconds,
             createdAt: now,
-            updatedAt: now
+            updatedAt: now,
           });
         commandId = Number(result.lastInsertRowid);
       }
@@ -243,9 +264,9 @@ export class CustomCommandsService {
           enabled,
           globalCooldownSeconds,
           userCooldownSeconds,
-          responseCount: responses.length
+          responseCount: responses.length,
         },
-        now
+        now,
       );
       this.db.exec("COMMIT");
 
@@ -266,13 +287,18 @@ export class CustomCommandsService {
           UPDATE custom_commands
           SET enabled = ?, updated_at = ?
           WHERE id = ?
-        `
+        `,
       )
       .run(enabled ? 1 : 0, now, id);
-    this.audit(actor, enabled ? "custom_command.enable" : "custom_command.disable", `custom_command:${row.name}`, {
-      commandId: row.id,
-      name: row.name
-    });
+    this.audit(
+      actor,
+      enabled ? "custom_command.enable" : "custom_command.disable",
+      `custom_command:${row.name}`,
+      {
+        commandId: row.id,
+        name: row.name,
+      },
+    );
 
     return this.requireCommandDefinition(id);
   }
@@ -289,9 +315,9 @@ export class CustomCommandsService {
         globalCooldownSeconds: source.globalCooldownSeconds,
         userCooldownSeconds: source.userCooldownSeconds,
         aliases: [],
-        responses: source.responses
+        responses: source.responses,
       },
-      actor
+      actor,
     );
   }
 
@@ -303,7 +329,7 @@ export class CustomCommandsService {
       this.db.prepare("DELETE FROM custom_commands WHERE id = ?").run(id);
       this.audit(actor, "custom_command.delete", `custom_command:${row.name}`, {
         commandId: row.id,
-        name: row.name
+        name: row.name,
       });
       this.db.exec("COMMIT");
     } catch (error) {
@@ -327,15 +353,15 @@ export class CustomCommandsService {
         aliases: command.aliases,
         responses: command.responses,
         useCount: command.useCount,
-        lastUsedAt: command.lastUsedAt
-      }))
+        lastUsedAt: command.lastUsedAt,
+      })),
     };
   }
 
   importCommands(
     body: unknown,
     actor: ChatMessage,
-    options: { reservedNames?: string[] } = {}
+    options: { reservedNames?: string[] } = {},
   ) {
     const payload = body as { commands?: unknown[] };
     const commands = Array.isArray(payload.commands) ? payload.commands : [];
@@ -353,7 +379,7 @@ export class CustomCommandsService {
 
     this.audit(actor, "custom_command.import", "custom_commands", {
       imported: saved.length,
-      names: saved.map((command) => command.name)
+      names: saved.map((command) => command.name),
     });
 
     return saved;
@@ -365,17 +391,19 @@ export class CustomCommandsService {
     actor?: ChatMessage;
     rawArgs?: unknown;
   }) {
-    const command = input.commandId ? this.requireCommandDefinition(input.commandId) : undefined;
+    const command = input.commandId
+      ? this.requireCommandDefinition(input.commandId)
+      : undefined;
     const response = input.responseText
       ? sanitizeChatMessage(input.responseText)
-      : command?.responses[0] ?? "";
+      : (command?.responses[0] ?? "");
     const actor = input.actor ?? previewActor;
     const rawArgs = sanitizePreviewArgs(input.rawArgs);
     return renderTemplate(response, {
       message: actor,
       args: rawArgs ? rawArgs.split(/\s+/) : [],
       rawArgs,
-      count: Math.max((command?.useCount ?? 0) + 1, 1)
+      count: Math.max((command?.useCount ?? 0) + 1, 1),
     });
   }
 
@@ -386,20 +414,28 @@ export class CustomCommandsService {
       return false;
     }
 
-    const gate = this.options.featureGates?.describeAccess("custom_commands", context.message.source);
+    const gate = this.options.featureGates?.describeAccess(
+      "custom_commands",
+      context.message.source,
+    );
 
     if (gate && !gate.allowed) {
       return true;
     }
 
     if (!hasPermission(context.message, lookup.command.permission)) {
-      this.audit(context.message, "custom_command.denied", `custom_command:${lookup.command.name}`, {
-        commandId: lookup.command.id,
-        aliasUsed: lookup.aliasUsed,
-        userLogin: context.message.userLogin,
-        requiredPermission: lookup.command.permission,
-        userPermission: getPermissionLevel(context.message)
-      });
+      this.audit(
+        context.message,
+        "custom_command.denied",
+        `custom_command:${lookup.command.name}`,
+        {
+          commandId: lookup.command.id,
+          aliasUsed: lookup.aliasUsed,
+          userLogin: context.message.userLogin,
+          requiredPermission: lookup.command.permission,
+          userPermission: getPermissionLevel(context.message),
+        },
+      );
       return true;
     }
 
@@ -415,13 +451,16 @@ export class CustomCommandsService {
     }
 
     const now = timestamp();
-    const responseText = responses[Math.floor(Math.random() * responses.length)] ?? responses[0] ?? "";
+    const responseText =
+      responses[Math.floor(Math.random() * responses.length)] ??
+      responses[0] ??
+      "";
     const nextCount = Number(command.use_count || 0) + 1;
     const rendered = renderTemplate(responseText, {
       message: context.message,
       args: context.args,
       rawArgs: context.rawArgs,
-      count: nextCount
+      count: nextCount,
     });
 
     this.db.exec("BEGIN");
@@ -434,7 +473,7 @@ export class CustomCommandsService {
                 last_used_at = @usedAt,
                 updated_at = updated_at
             WHERE id = @id
-          `
+          `,
         )
         .run({ id: command.id, usedAt: now });
       this.db
@@ -451,12 +490,12 @@ export class CustomCommandsService {
             )
             ON CONFLICT(command_id, user_key) DO UPDATE SET
               last_used_at = excluded.last_used_at
-          `
+          `,
         )
         .run({
           commandId: command.id,
           userKey: userKey(context.message),
-          lastUsedAt: now
+          lastUsedAt: now,
         });
       this.db
         .prepare(
@@ -478,7 +517,7 @@ export class CustomCommandsService {
               @responseText,
               @createdAt
             )
-          `
+          `,
         )
         .run({
           commandId: command.id,
@@ -487,14 +526,20 @@ export class CustomCommandsService {
           userKey: userKey(context.message),
           userLogin: context.message.userLogin,
           responseText: rendered,
-          createdAt: now
+          createdAt: now,
         });
-      this.audit(context.message, "custom_command.use", `custom_command:${command.name}`, {
-        commandId: command.id,
-        aliasUsed: lookup.aliasUsed,
-        userLogin: context.message.userLogin,
-        useCount: nextCount
-      }, now);
+      this.audit(
+        context.message,
+        "custom_command.use",
+        `custom_command:${command.name}`,
+        {
+          commandId: command.id,
+          aliasUsed: lookup.aliasUsed,
+          userLogin: context.message.userLogin,
+          useCount: nextCount,
+        },
+        now,
+      );
       this.db.exec("COMMIT");
     } catch (error) {
       this.db.exec("ROLLBACK");
@@ -504,7 +549,7 @@ export class CustomCommandsService {
     context.reply(rendered, {
       category: "operator",
       action: `custom:${command.name}`,
-      importance: "normal"
+      importance: "normal",
     });
     return true;
   }
@@ -515,7 +560,8 @@ export class CustomCommandsService {
     if (
       command.global_cooldown_seconds > 0 &&
       command.last_used_at &&
-      now - Date.parse(command.last_used_at) < command.global_cooldown_seconds * 1000
+      now - Date.parse(command.last_used_at) <
+        command.global_cooldown_seconds * 1000
     ) {
       return true;
     }
@@ -530,24 +576,24 @@ export class CustomCommandsService {
           SELECT last_used_at AS lastUsedAt
           FROM custom_command_user_cooldowns
           WHERE command_id = ? AND user_key = ?
-        `
+        `,
       )
       .get(command.id, userKey(message)) as { lastUsedAt?: string } | undefined;
 
     return Boolean(
       row?.lastUsedAt &&
-      now - Date.parse(row.lastUsedAt) < command.user_cooldown_seconds * 1000
+      now - Date.parse(row.lastUsedAt) < command.user_cooldown_seconds * 1000,
     );
   }
 
   private assertNameAllowed(
     name: string,
     currentCommandId: number | undefined,
-    extraReservedNames: string[] = []
+    extraReservedNames: string[] = [],
   ) {
     const reserved = new Set([
       ...getProtectedCommandNames(),
-      ...extraReservedNames.map((item) => normalizeCommandName(item))
+      ...extraReservedNames.map((item) => normalizeCommandName(item)),
     ]);
 
     if (reserved.has(name)) {
@@ -569,7 +615,7 @@ export class CustomCommandsService {
     name: string,
     aliases: string[],
     currentCommandId: number | undefined,
-    extraReservedNames: string[] = []
+    extraReservedNames: string[] = [],
   ) {
     if (aliases.includes(name)) {
       throw new Error("An alias cannot match the command name.");
@@ -583,10 +629,17 @@ export class CustomCommandsService {
   private nextDuplicateName(name: string) {
     for (let index = 1; index < 1000; index += 1) {
       const suffix = index === 1 ? "_copy" : `_copy_${index}`;
-      const base = name.slice(0, Math.max(1, limits.commandNameLength - suffix.length));
+      const base = name.slice(
+        0,
+        Math.max(1, limits.commandNameLength - suffix.length),
+      );
       const candidate = normalizeCommandName(`${base}${suffix}`);
 
-      if (!this.findCommandByName(candidate) && !this.findAlias(candidate) && !getProtectedCommandNames().includes(candidate)) {
+      if (
+        !this.findCommandByName(candidate) &&
+        !this.findAlias(candidate) &&
+        !getProtectedCommandNames().includes(candidate)
+      ) {
         return candidate;
       }
     }
@@ -595,12 +648,14 @@ export class CustomCommandsService {
   }
 
   private replaceAliases(commandId: number, aliases: string[], now: string) {
-    this.db.prepare("DELETE FROM custom_command_aliases WHERE command_id = ?").run(commandId);
+    this.db
+      .prepare("DELETE FROM custom_command_aliases WHERE command_id = ?")
+      .run(commandId);
     const insert = this.db.prepare(
       `
         INSERT INTO custom_command_aliases (command_id, alias, created_at)
         VALUES (?, ?, ?)
-      `
+      `,
     );
 
     for (const alias of aliases) {
@@ -608,16 +663,24 @@ export class CustomCommandsService {
     }
   }
 
-  private replaceResponses(commandId: number, responses: string[], now: string) {
-    this.db.prepare("DELETE FROM custom_command_responses WHERE command_id = ?").run(commandId);
+  private replaceResponses(
+    commandId: number,
+    responses: string[],
+    now: string,
+  ) {
+    this.db
+      .prepare("DELETE FROM custom_command_responses WHERE command_id = ?")
+      .run(commandId);
     const insert = this.db.prepare(
       `
         INSERT INTO custom_command_responses (command_id, response_text, position, created_at)
         VALUES (?, ?, ?, ?)
-      `
+      `,
     );
 
-    responses.forEach((response, index) => insert.run(commandId, response, index, now));
+    responses.forEach((response, index) =>
+      insert.run(commandId, response, index, now),
+    );
   }
 
   private requireCommandDefinition(id: number) {
@@ -649,7 +712,7 @@ export class CustomCommandsService {
           SELECT command_id AS commandId, alias
           FROM custom_command_aliases
           WHERE alias = ?
-        `
+        `,
       )
       .get(alias) as { commandId: number; alias: string } | undefined;
   }
@@ -671,7 +734,7 @@ export class CustomCommandsService {
           JOIN custom_commands c ON c.id = a.command_id
           WHERE a.alias = ? AND c.enabled = 1
           LIMIT 1
-        `
+        `,
       )
       .get(name) as CustomCommandRow | undefined;
 
@@ -691,34 +754,38 @@ export class CustomCommandsService {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       aliases: this.getAliases(row.id),
-      responses: this.getResponses(row.id)
+      responses: this.getResponses(row.id),
     };
   }
 
   private getAliases(commandId: number) {
-    return (this.db
-      .prepare(
-        `
+    return (
+      this.db
+        .prepare(
+          `
           SELECT alias
           FROM custom_command_aliases
           WHERE command_id = ?
           ORDER BY alias ASC
-        `
-      )
-      .all(commandId) as { alias: string }[]).map((row) => row.alias);
+        `,
+        )
+        .all(commandId) as { alias: string }[]
+    ).map((row) => row.alias);
   }
 
   private getResponses(commandId: number) {
-    return (this.db
-      .prepare(
-        `
+    return (
+      this.db
+        .prepare(
+          `
           SELECT response_text AS responseText
           FROM custom_command_responses
           WHERE command_id = ?
           ORDER BY position ASC, id ASC
-        `
-      )
-      .all(commandId) as { responseText: string }[]).map((row) => row.responseText);
+        `,
+        )
+        .all(commandId) as { responseText: string }[]
+    ).map((row) => row.responseText);
   }
 
   private audit(
@@ -726,7 +793,7 @@ export class CustomCommandsService {
     action: string,
     target: string,
     metadata: Record<string, unknown>,
-    createdAt = timestamp()
+    createdAt = timestamp(),
   ) {
     writeAuditLog(this.db, actor, action, target, metadata, { createdAt });
   }
@@ -738,7 +805,9 @@ const normalizePermission = (value: unknown) => {
   const permission = typeof value === "string" ? value : PermissionLevel.Viewer;
 
   if (!permissionValues.has(permission as PermissionLevel)) {
-    throw new Error("Permission must be viewer, moderator, broadcaster, or admin.");
+    throw new Error(
+      "Permission must be viewer, moderator, broadcaster, or admin.",
+    );
   }
 
   return permission as PermissionLevel;
@@ -749,7 +818,7 @@ const normalizeCooldown = (value: unknown, fallback: number, field: string) =>
     field,
     fallback,
     min: 0,
-    max: limits.customCommandCooldownMaxSeconds
+    max: limits.customCommandCooldownMaxSeconds,
   });
 
 const normalizeAliasList = (value: unknown) => {
@@ -793,14 +862,21 @@ const normalizeResponseList = (value: unknown) => {
   }
 
   if (responses.length > limits.customCommandResponsesMax) {
-    throw new Error(`Use ${limits.customCommandResponsesMax} response variants or fewer.`);
+    throw new Error(
+      `Use ${limits.customCommandResponsesMax} response variants or fewer.`,
+    );
   }
 
   return responses;
 };
 
 const sanitizePreviewArgs = (value: unknown) =>
-  typeof value === "string" ? value.trim().replace(/[\r\n]+/g, " ").slice(0, 200) : "";
+  typeof value === "string"
+    ? value
+        .trim()
+        .replace(/[\r\n]+/g, " ")
+        .slice(0, 200)
+    : "";
 
 const userKey = (message: ChatMessage) => message.userId || message.userLogin;
 
@@ -811,30 +887,37 @@ const renderTemplate = (
     args: string[];
     rawArgs: string;
     count: number;
-  }
+  },
 ) => {
-  const target = input.args[0]?.replace(/^@/, "") || input.message.userDisplayName;
+  const target =
+    input.args[0]?.replace(/^@/, "") || input.message.userDisplayName;
   const values: Record<string, string> = {
     user: input.message.userDisplayName || input.message.userLogin,
     displayName: input.message.userDisplayName || input.message.userLogin,
     login: input.message.userLogin,
     args: input.rawArgs,
     target,
-    count: String(input.count)
+    count: String(input.count),
   };
 
   input.args.slice(0, 9).forEach((arg, index) => {
     values[`arg${index + 1}`] = arg;
   });
 
-  const rendered = template.replace(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g, (match, key) =>
-    Object.prototype.hasOwnProperty.call(values, key) ? values[key] ?? "" : match
+  const rendered = template.replace(
+    /\{([a-zA-Z][a-zA-Z0-9]*)\}/g,
+    (match, key) =>
+      Object.prototype.hasOwnProperty.call(values, key)
+        ? (values[key] ?? "")
+        : match,
   );
 
   return sanitizeChatMessage(rendered);
 };
 
-const invocationFromRow = (row: CustomCommandInvocationRow): CustomCommandInvocation => ({
+const invocationFromRow = (
+  row: CustomCommandInvocationRow,
+): CustomCommandInvocation => ({
   id: row.id,
   commandId: row.command_id ?? undefined,
   commandName: row.command_name,
@@ -842,7 +925,7 @@ const invocationFromRow = (row: CustomCommandInvocationRow): CustomCommandInvoca
   userKey: row.user_key,
   userLogin: row.user_login,
   responseText: row.response_text,
-  createdAt: row.created_at
+  createdAt: row.created_at,
 });
 
 const previewActor: ChatMessage = {
@@ -858,7 +941,7 @@ const previewActor: ChatMessage = {
   isVip: false,
   isSubscriber: false,
   source: "local",
-  receivedAt: new Date()
+  receivedAt: new Date(),
 };
 
 const timestamp = () => new Date().toISOString();

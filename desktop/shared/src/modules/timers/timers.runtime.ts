@@ -19,7 +19,10 @@ type TimerSchedulerOptions = {
   service: TimersService;
   featureGates: FeatureGateStore;
   logger: Logger;
-  enqueue: (message: string, metadata: MessageQueueMetadata) => string | undefined;
+  enqueue: (
+    message: string,
+    metadata: MessageQueueMetadata,
+  ) => string | undefined;
   readiness: () => TimerReadiness;
   tickMs?: number;
 };
@@ -59,7 +62,8 @@ export class TimerScheduler {
 
     try {
       const due = this.options.service.getDueTimers(now);
-      const activityBlocked = this.options.service.getActivityBlockedTimers(now);
+      const activityBlocked =
+        this.options.service.getActivityBlockedTimers(now);
       const gate = this.options.featureGates.get("timers");
 
       if (gate.mode !== "live") {
@@ -70,7 +74,7 @@ export class TimerScheduler {
           blocked: 0,
           skipped: due.length + activityBlocked.length,
           activityBlocked: activityBlocked.length,
-          gate: gate.mode
+          gate: gate.mode,
         };
       }
 
@@ -84,17 +88,28 @@ export class TimerScheduler {
           blocked += 1;
           this.options.service.markBlocked(timer.id, readiness.reason, now);
           this.options.logger.warn(
-            { timerId: timer.id, timerName: timer.name, reason: readiness.reason },
-            "Timer blocked by live readiness"
+            {
+              timerId: timer.id,
+              timerName: timer.name,
+              reason: readiness.reason,
+            },
+            "Timer blocked by live readiness",
           );
           continue;
         }
 
-        const outboundMessageId = this.options.enqueue(timer.message, timerMetadata(timer));
+        const outboundMessageId = this.options.enqueue(
+          timer.message,
+          timerMetadata(timer),
+        );
 
         if (!outboundMessageId) {
           blocked += 1;
-          this.options.service.markBlocked(timer.id, "Timer message could not be queued.", now);
+          this.options.service.markBlocked(
+            timer.id,
+            "Timer message could not be queued.",
+            now,
+          );
           continue;
         }
 
@@ -109,7 +124,7 @@ export class TimerScheduler {
         blocked,
         skipped: 0,
         activityBlocked: activityBlocked.length,
-        gate: gate.mode
+        gate: gate.mode,
       };
     } finally {
       this.running = false;
@@ -123,7 +138,7 @@ export class TimerScheduler {
       return {
         ok: true,
         counted: 0,
-        reason: "Timers are not live."
+        reason: "Timers are not live.",
       };
     }
 
@@ -131,7 +146,7 @@ export class TimerScheduler {
       return {
         ok: true,
         counted: 0,
-        reason: "Only live Twitch chat activity counts toward timers."
+        reason: "Only live Twitch chat activity counts toward timers.",
       };
     }
 
@@ -141,7 +156,7 @@ export class TimerScheduler {
       return {
         ok: true,
         counted: 0,
-        reason: readiness.reason
+        reason: readiness.reason,
       };
     }
 
@@ -150,32 +165,38 @@ export class TimerScheduler {
     if (counted > 0) {
       this.options.logger.debug(
         { counted, userLogin: message.userLogin },
-        "Timer chat activity recorded"
+        "Timer chat activity recorded",
       );
     }
 
     return {
       ok: true,
       counted,
-      reason: counted ? "Timer chat activity recorded." : "No timers needed chat activity."
+      reason: counted
+        ? "Timer chat activity recorded."
+        : "No timers needed chat activity.",
     };
   }
 }
 
-export const timerMetadata = (timer: TimerDefinition): MessageQueueMetadata => ({
+export const timerMetadata = (
+  timer: TimerDefinition,
+): MessageQueueMetadata => ({
   category: "system",
   action: `timer:${timer.id}`,
-  importance: "normal"
+  importance: "normal",
 });
 
 export const isTimerActivityMessage = (
   message: ChatMessage,
-  options: TimerActivityOptions
+  options: TimerActivityOptions,
 ) => {
   const text = message.text.trim();
   const commandPrefix = options.commandPrefix ?? "!";
 
-  return message.source === "eventsub" &&
+  return (
+    message.source === "eventsub" &&
     (!options.botUserId || message.userId !== options.botUserId) &&
-    (!commandPrefix || !text.startsWith(commandPrefix));
+    (!commandPrefix || !text.startsWith(commandPrefix))
+  );
 };

@@ -48,10 +48,16 @@ export const giveawayDuplicateEntryMessage = (input: {
 export const giveawayClosedMessage = (giveaway: Giveaway, entryCount: number) =>
   `Entries closed for ${giveaway.title}. ${entryCount} ${entryCount === 1 ? "entry" : "entries"}. Drawing soon.`;
 
-export const giveawayLastCallMessage = (giveaway: Giveaway, entryCount: number) =>
+export const giveawayLastCallMessage = (
+  giveaway: Giveaway,
+  entryCount: number,
+) =>
   `Last call for ${giveaway.title}: type !${giveaway.keyword} to enter. Current entries: ${entryCount}.`;
 
-export const giveawayReminderMessage = (giveaway: Giveaway, entryCount: number) =>
+export const giveawayReminderMessage = (
+  giveaway: Giveaway,
+  entryCount: number,
+) =>
   `Reminder: ${giveaway.title} is open. Type !${giveaway.keyword} to enter. Current entries: ${entryCount}.`;
 
 export const giveawayDrawMessage = (input: {
@@ -81,7 +87,10 @@ export const giveawayRerollMessage = (input: {
   return `${input.rerolled.display_name} was rerolled. Replacement: ${input.replacement.display_name}.`;
 };
 
-export const giveawayEndMessage = (giveaway: Giveaway, winners: GiveawayWinner[]) => {
+export const giveawayEndMessage = (
+  giveaway: Giveaway,
+  winners: GiveawayWinner[],
+) => {
   const activeWinners = winners.filter((winner) => !winner.rerolled_at);
 
   if (activeWinners.length === 0) {
@@ -91,7 +100,10 @@ export const giveawayEndMessage = (giveaway: Giveaway, winners: GiveawayWinner[]
   return `Giveaway ended: ${giveaway.title}. Final winner${activeWinners.length === 1 ? "" : "s"}: ${formatWinnerNames(activeWinners, 5)}.`;
 };
 
-export const formatWinnerNames = (winners: GiveawayWinner[], maxNames = maxWinnerNamesInChat) => {
+export const formatWinnerNames = (
+  winners: GiveawayWinner[],
+  maxNames = maxWinnerNamesInChat,
+) => {
   const shown = winners.slice(0, maxNames);
   const remaining = winners.length - shown.length;
   const names = shown.map((winner) => winner.display_name).join(", ");
@@ -108,5 +120,5 @@ export const defaultGiveawayMessageRenderer: GiveawayMessageRenderer = {
   draw: giveawayDrawMessage,
   reroll: giveawayRerollMessage,
   end: giveawayEndMessage,
-  reminder: giveawayReminderMessage
+  reminder: giveawayReminderMessage,
 };
