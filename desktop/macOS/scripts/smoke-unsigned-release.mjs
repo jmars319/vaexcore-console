@@ -11,6 +11,7 @@ import { basename, join, resolve } from "node:path";
 const releaseDir = resolve("release");
 const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
 const productName = packageJson.build?.productName ?? packageJson.name;
+const executableName = packageJson.build?.executableName ?? productName;
 const artifactProductName = productName.replace(/\s+/g, "-");
 const version = packageJson.version ?? "0.0.0";
 const artifactBase = `${artifactProductName}-${version}-mac-${process.arch}-unsigned`;
@@ -66,7 +67,7 @@ execFileSync(
 
 const listing = execFileSync("unzip", ["-l", zipPath], { encoding: "utf8" });
 assert(
-  listing.includes(`${productName}.app/Contents/MacOS/${productName}`),
+  listing.includes(`${productName}.app/Contents/MacOS/${executableName}`),
   "zip contains app executable",
 );
 assert(

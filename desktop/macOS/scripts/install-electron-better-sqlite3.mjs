@@ -9,6 +9,7 @@ const electronPackage = JSON.parse(
 const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
 const electronVersion = electronPackage.version;
 const productName = packageJson.build?.productName ?? packageJson.name;
+const executableName = packageJson.build?.executableName ?? productName;
 const prebuildInstallBin = resolve("node_modules/prebuild-install/bin.js");
 
 if (!existsSync(prebuildInstallBin)) {
@@ -85,7 +86,7 @@ function probePackagedBetterSqlite(appPath) {
     return;
   }
 
-  const binaryPath = join(appPath, "Contents/MacOS", productName);
+  const binaryPath = join(appPath, "Contents/MacOS", executableName);
   const unpackedPackagePath = join(
     appPath,
     "Contents/Resources/app/package.json",

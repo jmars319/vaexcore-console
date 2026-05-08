@@ -101,11 +101,17 @@ const closeMainWindow = () => {
 
 const launchVaexcoreSuite = () => {
   for (const appName of vaexcoreSuiteApps) {
+    if (appName === productName) {
+      continue;
+    }
+
     const child = launchDesktopApp(appName);
     if (!child) {
       dialog.showErrorBox(
         "Unable to Launch vaexcore Suite",
-        "Suite launching is supported on macOS and Windows desktop builds.",
+        isWindows
+          ? `Could not find ${appName}. Install it with the Windows installer or place it in a standard vaexcore install folder.`
+          : "Suite launching is supported on macOS and Windows desktop builds.",
       );
       continue;
     }
@@ -137,11 +143,7 @@ const launchWindowsApp = (appName) => {
     });
   }
 
-  return spawn("cmd", ["/C", "start", "", appName], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  });
+  return undefined;
 };
 
 const resolveWindowsAppPath = (appName) => {
@@ -149,25 +151,53 @@ const resolveWindowsAppPath = (appName) => {
     return undefined;
   }
 
-  const exeName = `${appName}.exe`;
+  const executableNames = windowsAppExecutableNames(appName);
+  const programFiles = process.env.ProgramFiles;
+  const programFilesX86 = process.env["ProgramFiles(x86)"];
+  const localAppDataRoots = [
+    app.getPath("localAppData"),
+    process.env.LOCALAPPDATA,
+  ].filter(Boolean);
   const candidates = [
     appName === productName &&
-    basename(process.execPath).toLowerCase() === exeName.toLowerCase()
+    executableNames.some(
+      (exeName) =>
+        basename(process.execPath).toLowerCase() === exeName.toLowerCase(),
+    )
       ? process.execPath
       : undefined,
-    join(app.getPath("localAppData"), "Programs", appName, exeName),
-    process.env.LOCALAPPDATA
-      ? join(process.env.LOCALAPPDATA, "Programs", appName, exeName)
+    ...localAppDataRoots.flatMap((root) =>
+      executableNames.flatMap((exeName) => [
+        join(root, appName, exeName),
+        join(root, "Programs", appName, exeName),
+      ]),
+    ),
+    programFiles
+      ? executableNames.map((exeName) => join(programFiles, appName, exeName))
       : undefined,
-    process.env.ProgramFiles
-      ? join(process.env.ProgramFiles, appName, exeName)
+    programFilesX86
+      ? executableNames.map((exeName) =>
+          join(programFilesX86, appName, exeName),
+        )
       : undefined,
-    process.env["ProgramFiles(x86)"]
-      ? join(process.env["ProgramFiles(x86)"], appName, exeName)
-      : undefined,
-  ].filter(Boolean);
+  ]
+    .flat()
+    .filter(Boolean);
 
   return candidates.find((candidate) => existsSync(candidate));
+};
+
+const windowsAppExecutableNames = (appName) => {
+  switch (appName) {
+    case "vaexcore studio":
+      return ["vaexcore-studio.exe"];
+    case "vaexcore pulse":
+      return ["vaexcore-pulse.exe"];
+    case "vaexcore console":
+      return ["vaexcore-console.exe"];
+    default:
+      return [`${appName}.exe`];
+  }
 };
 
 const createSettingsWindow = async (fragment = "") => {

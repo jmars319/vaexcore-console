@@ -17,7 +17,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { URL } from "node:url";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createLogger } from "../core/logger";
@@ -7326,7 +7326,15 @@ type SuiteLaunchResult = {
 
 const launchVaexcoreSuite = async () => {
   const results = await Promise.all(
-    vaexcoreSuiteApps.map((appName) => launchDesktopApp(appName)),
+    vaexcoreSuiteApps.map((appName) =>
+      appName === "vaexcore console"
+        ? Promise.resolve({
+            appName,
+            ok: true,
+            detail: "vaexcore console is already running.",
+          })
+        : launchDesktopApp(appName),
+    ),
   );
 
   appendSuiteTimelineEvent({
@@ -7396,15 +7404,19 @@ const launchMacApp = (appName: string): Promise<SuiteLaunchResult> =>
 const launchWindowsApp = (appName: string): Promise<SuiteLaunchResult> =>
   new Promise((resolveLaunch) => {
     const executable = windowsAppExecutablePath(appName);
-    const child = executable
-      ? spawn(executable, [], {
-          stdio: ["ignore", "ignore", "pipe"],
-          windowsHide: true,
-        })
-      : spawn("cmd", ["/C", "start", "", appName], {
-          stdio: ["ignore", "ignore", "pipe"],
-          windowsHide: true,
-        });
+    if (!executable) {
+      resolveLaunch({
+        appName,
+        ok: false,
+        detail: `Could not find ${appName}. Install it with the Windows installer or place it in a standard vaexcore install folder.`,
+      });
+      return;
+    }
+
+    const child = spawn(executable, [], {
+      stdio: ["ignore", "ignore", "pipe"],
+      windowsHide: true,
+    });
     let stderr = "";
 
     child.stderr?.on("data", (chunk: Buffer) => {
@@ -7425,9 +7437,7 @@ const launchWindowsApp = (appName: string): Promise<SuiteLaunchResult> =>
         ok: code === 0,
         detail:
           code === 0
-            ? executable
-              ? `Launch requested from ${executable}.`
-              : "Launch requested through Windows shell."
+            ? `Launch requested from ${executable}.`
             : stderr.trim() || `start exited with code ${code}.`,
       });
     });
@@ -7717,24 +7727,54 @@ const windowsAppExecutablePath = (appName: string) => {
     return undefined;
   }
 
-  const exeName = `${appName}.exe`;
-  const candidates = [
-    process.env.LOCALAPPDATA
-      ? join(process.env.LOCALAPPDATA, "Programs", appName, exeName)
-      : undefined,
-    join(homedir(), "AppData", "Local", "Programs", appName, exeName),
-    process.env.ProgramFiles
-      ? join(process.env.ProgramFiles, appName, exeName)
-      : undefined,
-    process.env["ProgramFiles(x86)"]
-      ? join(process.env["ProgramFiles(x86)"], appName, exeName)
-      : undefined,
-    process.argv[0]?.toLowerCase().endsWith(exeName.toLowerCase())
-      ? process.argv[0]
-      : undefined,
+  const executableNames = windowsAppExecutableNames(appName);
+  const currentExecutable = process.argv[0];
+  const programFiles = process.env.ProgramFiles;
+  const programFilesX86 = process.env["ProgramFiles(x86)"];
+  const localAppDataRoots = [
+    process.env.LOCALAPPDATA,
+    join(homedir(), "AppData", "Local"),
   ].filter((candidate): candidate is string => Boolean(candidate));
+  const candidates = [
+    ...localAppDataRoots.flatMap((root) =>
+      executableNames.flatMap((exeName) => [
+        join(root, appName, exeName),
+        join(root, "Programs", appName, exeName),
+      ]),
+    ),
+    programFiles
+      ? executableNames.map((exeName) => join(programFiles, appName, exeName))
+      : [],
+    programFilesX86
+      ? executableNames.map((exeName) =>
+          join(programFilesX86, appName, exeName),
+        )
+      : [],
+    currentExecutable &&
+    executableNames.some(
+      (exeName) =>
+        basename(currentExecutable).toLowerCase() === exeName.toLowerCase(),
+    )
+      ? currentExecutable
+      : undefined,
+  ]
+    .flat()
+    .filter((candidate): candidate is string => Boolean(candidate));
 
   return candidates.find((candidate) => existsSync(candidate));
+};
+
+const windowsAppExecutableNames = (appName: string) => {
+  switch (appName) {
+    case "vaexcore studio":
+      return ["vaexcore-studio.exe"];
+    case "vaexcore pulse":
+      return ["vaexcore-pulse.exe"];
+    case "vaexcore console":
+      return ["vaexcore-console.exe"];
+    default:
+      return [`${appName}.exe`];
+  }
 };
 
 const startSuiteCommandPoller = () => {

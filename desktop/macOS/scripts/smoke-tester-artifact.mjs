@@ -19,6 +19,7 @@ const setupUrl = `http://127.0.0.1:${setupPort}`;
 const releaseDir = resolve("release");
 const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
 const productName = packageJson.build?.productName ?? packageJson.name;
+const executableName = packageJson.build?.executableName ?? productName;
 const artifactProductName = productName.replace(/\s+/g, "-");
 const version = packageJson.version ?? "0.0.0";
 const artifactBase = `${artifactProductName}-${version}-mac-${process.arch}-unsigned`;
@@ -67,7 +68,7 @@ async function runSmoke() {
   });
 
   const appPath = join(extractDir, `${productName}.app`);
-  const executablePath = join(appPath, "Contents/MacOS", productName);
+  const executablePath = join(appPath, "Contents/MacOS", executableName);
   assert(existsSync(executablePath), "extracted app executable exists");
 
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
