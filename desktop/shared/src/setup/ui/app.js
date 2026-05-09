@@ -281,6 +281,18 @@ const api = {
   previewDiscordSetup: (body) => api.post("/api/discord/setup/preview", body),
   applyDiscordSetup: (body) => api.post("/api/discord/setup/apply", body),
   sendDiscordAnnouncement: (body) => api.post("/api/discord/announce", body),
+  discordRelayStatus: () => api.get("/api/discord/relay/status"),
+  registerDiscordRelayCommands: () =>
+    api.post("/api/discord/relay/commands/register"),
+  discordRelaySuggestions: (status = "") =>
+    api.get(
+      `/api/discord/relay/suggestions${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+    ),
+  updateDiscordRelaySuggestion: (id, status) =>
+    api.post("/api/discord/relay/suggestions/status", { id, status }),
+  discordRelayEvents: () => api.get("/api/discord/relay/events"),
+  markRelayChatbotIdentityValidated: (body) =>
+    api.post("/api/relay/chatbot-identity/validation", body),
   diagnostics: () => api.get("/api/diagnostics"),
   supportBundle: () => api.get("/api/support-bundle"),
   featureGates: () => api.get("/api/feature-gates"),
@@ -3714,6 +3726,7 @@ function renderDiscord() {
           ? callout(`Validated as ${discord.bot.username}.`, "ok")
           : null,
     ]),
+    renderDiscordRelayPanel(discord),
     card("Discord Connection", [
       h("div", { className: "grid" }, [
         formRow(
@@ -3860,6 +3873,117 @@ function renderDiscord() {
     ]),
     message(),
   ];
+}
+
+function renderDiscordRelayPanel(discord) {
+  const relay =
+    discord.relay ||
+    discord.config?.relay ||
+    state.config?.discord?.relay ||
+    {};
+  const remote = state.discordRelayStatus || {};
+  const suggestions = state.discordRelaySuggestions || [];
+  const readiness = remote.readiness || {};
+  const localReadiness = relay.localReadiness || {};
+
+  return card("Relay Slash Commands", [
+    statusGrid([
+      [
+        "Relay configured",
+        relay.configured ? "ready" : "missing",
+        relay.configured,
+      ],
+      [
+        "Interaction URL",
+        relay.interactionUrl || "missing",
+        Boolean(relay.interactionUrl),
+      ],
+      [
+        "Relay health",
+        remote.connected ? "connected" : remote.error || "not checked",
+        remote.connected,
+      ],
+      [
+        "Slash commands",
+        readiness.ready ? "registered" : "not validated",
+        Boolean(readiness.ready),
+      ],
+      ["Suggestions loaded", suggestions.length || 0, suggestions.length >= 0],
+    ]),
+    relay.interactionUrl
+      ? callout(
+          `Set the Discord application Interactions Endpoint URL to ${relay.interactionUrl}.`,
+          "info",
+        )
+      : callout(
+          "Save Relay settings before configuring Discord slash commands.",
+          "warn",
+        ),
+    remote.error
+      ? callout(remote.error, remote.ok === false ? "bad" : "warn")
+      : null,
+    readiness.checks?.length
+      ? list(
+          readiness.checks.map(
+            (check) =>
+              `${check.ok ? "PASS" : "TODO"} ${check.key}: ${check.detail}`,
+          ),
+          readiness.ready ? "ok" : "warn",
+        )
+      : localReadiness.checks?.length
+        ? list(
+            localReadiness.checks.map(
+              (check) =>
+                `${check.ok ? "PASS" : "TODO"} ${check.key}: ${check.detail}`,
+            ),
+            localReadiness.ready ? "ok" : "warn",
+          )
+        : null,
+    h("div", { className: "actions" }, [
+      actionButton("Check Relay", {
+        id: "discordRelayStatus",
+        variant: "secondary",
+        onClick: checkDiscordRelayStatus,
+      }),
+      actionButton("Register slash commands", {
+        id: "discordRelayRegisterCommands",
+        variant: "secondary",
+        onClick: registerDiscordRelayCommands,
+      }),
+      actionButton("Load suggestions", {
+        id: "discordRelayLoadSuggestions",
+        variant: "secondary",
+        onClick: loadDiscordRelaySuggestions,
+      }),
+    ]),
+    suggestions.length
+      ? h(
+          "div",
+          { className: "template-list" },
+          suggestions.map((suggestion) =>
+            h("div", { className: "template-row" }, [
+              h("span", {}, [
+                h("strong", { text: suggestion.text }),
+                h("small", {
+                  text: `${suggestion.username} - ${suggestion.status} - ${suggestion.createdAt || ""}`,
+                }),
+              ]),
+              h("div", { className: "actions inline-actions" }, [
+                ...["reviewed", "accepted", "rejected", "archived"].map(
+                  (status) =>
+                    actionButton(status, {
+                      id: `discord-suggestion-${suggestion.id}-${status}`,
+                      variant: "secondary",
+                      onClick: () =>
+                        updateDiscordRelaySuggestion(suggestion.id, status),
+                    }),
+                ),
+              ]),
+            ]),
+          ),
+        )
+      : callout("No Relay suggestions loaded.", "muted"),
+  ]);
 }
 
 function renderDiscordPlan(result) {
@@ -4247,6 +4371,12 @@ function renderSettings() {
           relay.twitchTransportMode !== "relay-chatbot" ||
             Boolean(relay.hasConsoleToken),
         ],
+        [
+          "Chat Bot identity live test",
+          relay.chatbotIdentityValidatedAt || "not recorded",
+          relay.twitchTransportMode !== "relay-chatbot" ||
+            Boolean(relay.chatbotIdentityValidatedAt),
+        ],
       ]),
       h("div", { className: "grid" }, [
         formRow(
@@ -4302,6 +4432,15 @@ function renderSettings() {
             ),
             relay.readiness.ready ? "ok" : "warn",
           )
+        : null,
+      relay.twitchTransportMode === "relay-chatbot"
+        ? h("div", { className: "actions" }, [
+            actionButton("Mark Chat Bot identity live-tested", {
+              id: "relayValidateChatbotIdentity",
+              variant: "secondary",
+              onClick: markRelayChatbotIdentityValidated,
+            }),
+          ])
         : null,
     ]),
     card("Runtime Commands", [
@@ -7233,6 +7372,32 @@ async function saveSettings() {
   );
 }
 
+async function markRelayChatbotIdentityValidated() {
+  if (
+    !confirm(
+      "Mark Twitch Chat Bot identity as live-tested only after Twitch shows vaexcorebot as a Chat Bot in the channel user list.",
+    )
+  ) {
+    return;
+  }
+
+  await runAction(
+    "relayValidateChatbotIdentity",
+    async () => {
+      const result = await api.markRelayChatbotIdentityValidated({
+        confirmed: true,
+        note: "Operator confirmed Twitch user list shows vaexcorebot as Chat Bot.",
+      });
+      state.config = {
+        ...(state.config || {}),
+        relay: result.relay,
+      };
+      return result;
+    },
+    { skipRefresh: true, success: "Chat Bot identity validation recorded." },
+  );
+}
+
 async function startTwitchPoll() {
   await runTwitchCreatorOp(
     "poll",
@@ -7415,6 +7580,67 @@ async function sendDiscordStreamAnnouncement() {
     "discordSendAnnouncement",
     async () => api.sendDiscordAnnouncement(readDiscordAnnouncementPayload()),
     { skipRefresh: true, success: "Discord announcement sent." },
+  );
+}
+
+async function checkDiscordRelayStatus() {
+  await runAction(
+    "discordRelayStatus",
+    async () => {
+      const result = await api.discordRelayStatus();
+      state.discordRelayStatus = result;
+      state.discord = {
+        ...(state.discord || {}),
+        relay: result.relay || state.discord?.relay,
+      };
+      return result;
+    },
+    { skipRefresh: true, success: "Discord Relay status checked." },
+  );
+}
+
+async function registerDiscordRelayCommands() {
+  if (
+    !confirm(
+      "Register VaexCore Discord slash commands through Relay? This updates the commands for the configured Discord application.",
+    )
+  ) {
+    return;
+  }
+
+  await runAction(
+    "discordRelayRegisterCommands",
+    async () => {
+      const result = await api.registerDiscordRelayCommands();
+      state.discordRelayStatus = await api.discordRelayStatus();
+      return result;
+    },
+    { skipRefresh: true, success: "Discord slash commands registered." },
+  );
+}
+
+async function loadDiscordRelaySuggestions() {
+  await runAction(
+    "discordRelayLoadSuggestions",
+    async () => {
+      const result = await api.discordRelaySuggestions();
+      state.discordRelaySuggestions = result.suggestions || [];
+      return result;
+    },
+    { skipRefresh: true, success: "Discord suggestions loaded." },
+  );
+}
+
+async function updateDiscordRelaySuggestion(id, status) {
+  await runAction(
+    `discordRelaySuggestion:${id}:${status}`,
+    async () => {
+      const result = await api.updateDiscordRelaySuggestion(id, status);
+      const refreshed = await api.discordRelaySuggestions();
+      state.discordRelaySuggestions = refreshed.suggestions || [];
+      return result;
+    },
+    { skipRefresh: true, success: `Discord suggestion marked ${status}.` },
   );
 }
 
@@ -9028,6 +9254,8 @@ function updateDisabledState() {
   const activeWinners = winners.filter((winner) => !winner.rerolled_at);
   const undelivered = activeWinners.filter((winner) => !winner.delivered_at);
   const config = state.config || {};
+  const discordConfig = state.discord?.config || config.discord || {};
+  const discordRelayConfig = discordConfig.relay || {};
   const runtime = state.status?.runtime || {};
   const botProcess = runtime.botProcess || {};
   const connectReady =
@@ -9221,6 +9449,26 @@ function updateDisabledState() {
     "discordSendAnnouncement",
     !(discordConfig.hasBotToken && discordConfig.streamAnnouncementChannelId),
     "Save Discord setup and an announcement channel before sending.",
+  );
+  setDisabled(
+    "discordRelayStatus",
+    !discordRelayConfig.configured,
+    "Save Relay URL, installation ID, and console token before checking Discord Relay.",
+  );
+  setDisabled(
+    "discordRelayRegisterCommands",
+    !discordRelayConfig.configured,
+    "Save Relay URL, installation ID, and console token before registering slash commands.",
+  );
+  setDisabled(
+    "discordRelayLoadSuggestions",
+    !discordRelayConfig.configured,
+    "Save Relay URL, installation ID, and console token before loading suggestions.",
+  );
+  setDisabled(
+    "relayValidateChatbotIdentity",
+    config.relay?.twitchTransportMode !== "relay-chatbot",
+    "Select relay-chatbot transport before recording live Chat Bot validation.",
   );
 
   const connectLinks = [

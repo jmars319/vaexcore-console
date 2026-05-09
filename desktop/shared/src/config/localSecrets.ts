@@ -48,6 +48,8 @@ const localSecretsSchema = z.object({
       baseUrl: z.string().optional(),
       installationId: z.string().optional(),
       consoleToken: z.string().optional(),
+      chatbotIdentityValidatedAt: z.string().optional(),
+      chatbotIdentityValidationNote: z.string().optional(),
     })
     .default({}),
 });
@@ -145,6 +147,20 @@ const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
       : undefined,
     consoleToken: secrets.relay.consoleToken
       ? sanitizeOptional(secrets.relay.consoleToken, "Relay console token", 240)
+      : undefined,
+    chatbotIdentityValidatedAt: secrets.relay.chatbotIdentityValidatedAt
+      ? sanitizeOptional(
+          secrets.relay.chatbotIdentityValidatedAt,
+          "Relay Chat Bot validation timestamp",
+          80,
+        )
+      : undefined,
+    chatbotIdentityValidationNote: secrets.relay.chatbotIdentityValidationNote
+      ? sanitizeOptional(
+          secrets.relay.chatbotIdentityValidationNote,
+          "Relay Chat Bot validation note",
+          240,
+        )
       : undefined,
   },
 });

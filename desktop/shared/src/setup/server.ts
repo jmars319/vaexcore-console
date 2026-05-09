@@ -115,6 +115,10 @@ import {
   discordAnnouncementKinds,
   minimalStreamerDiscordTemplate,
 } from "../discord/templates";
+import {
+  DiscordRelayClient,
+  type DiscordRelaySuggestionStatus,
+} from "../discord/relay";
 import { TwitchChatSender } from "../twitch/sendMessage";
 import {
   TwitchCreatorOpsClient,
@@ -375,6 +379,60 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     }
 
     sendJson(response, 200, await sendDiscordAnnouncementRoute(body));
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/discord/relay/status"
+  ) {
+    sendJson(response, 200, await getDiscordRelayStatusRoute());
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/discord/relay/commands/register"
+  ) {
+    sendJson(response, 200, await registerDiscordRelayCommandsRoute());
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/discord/relay/events"
+  ) {
+    sendJson(response, 200, await getDiscordRelayEventsRoute());
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/discord/relay/suggestions"
+  ) {
+    sendJson(
+      response,
+      200,
+      await getDiscordRelaySuggestionsRoute(url.searchParams),
+    );
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/discord/relay/suggestions/status"
+  ) {
+    const body = await readJson(request);
+    sendJson(response, 200, await updateDiscordRelaySuggestionRoute(body));
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/relay/chatbot-identity/validation"
+  ) {
+    const body = await readJson(request);
+    sendJson(response, 200, recordRelayChatbotIdentityValidation(body));
     return;
   }
 
@@ -1336,9 +1394,14 @@ const getSafeRelayConfig = (secrets = readLocalSecrets()) => {
     installationId: relay.installationId,
     consoleToken: relay.consoleToken,
   });
+  const chatbotIdentityLiveValidated = Boolean(
+    relay.chatbotIdentityValidatedAt,
+  );
   const identityNotice =
     relay.twitchTransportMode === "relay-chatbot"
-      ? "Relay chatbot mode is selected. When Relay grants are ready, Twitch can list vaexcorebot as a Chat Bot."
+      ? chatbotIdentityLiveValidated
+        ? "Relay chatbot mode is selected and Chat Bot identity has been manually live-validated."
+        : "Relay chatbot mode is selected. Chat Bot identity is not live-tested yet; complete the live validation checklist before calling it complete."
       : "Local user-token mode is selected. Twitch will show outgoing bot chat as a normal Twitch user.";
 
   return {
@@ -1346,6 +1409,9 @@ const getSafeRelayConfig = (secrets = readLocalSecrets()) => {
     baseUrl: relay.baseUrl ?? "",
     installationId: relay.installationId ?? "",
     hasConsoleToken: Boolean(relay.consoleToken),
+    chatbotIdentityLiveValidated,
+    chatbotIdentityValidatedAt: relay.chatbotIdentityValidatedAt ?? "",
+    chatbotIdentityValidationNote: relay.chatbotIdentityValidationNote ?? "",
     readiness,
     identityNotice,
   };
@@ -1372,6 +1438,26 @@ const getSafeDiscordConfig = (secrets = readLocalSecrets()) => {
     setupAppliedAt: discord.setupAppliedAt ?? "",
     createdChannelIds: discord.createdChannelIds ?? {},
     createdRoleIds: discord.createdRoleIds ?? {},
+    relay: getSafeDiscordRelayConfig(secrets),
+  };
+};
+
+const getSafeDiscordRelayConfig = (secrets = readLocalSecrets()) => {
+  const relay = secrets.relay;
+  const baseUrl = relay.baseUrl?.replace(/\/+$/, "") ?? "";
+  const readiness = relayConfigReadiness({
+    baseUrl: relay.baseUrl,
+    installationId: relay.installationId,
+    consoleToken: relay.consoleToken,
+  });
+  return {
+    configured: readiness.ready,
+    baseUrl,
+    installationId: relay.installationId ?? "",
+    hasConsoleToken: Boolean(relay.consoleToken),
+    interactionUrl: baseUrl ? `${baseUrl}/webhooks/discord/interactions` : "",
+    suggestionStatuses: ["new", "reviewed", "accepted", "rejected", "archived"],
+    localReadiness: readiness,
   };
 };
 
@@ -1661,6 +1747,160 @@ const discordAnnouncementInput = (
         getDiscordStreamAlertsRoleId(secrets.discord)
       : undefined,
   };
+};
+
+const getDiscordRelayStatusRoute = async () => {
+  const secrets = readLocalSecrets();
+  const relay = getSafeDiscordRelayConfig(secrets);
+  const connectionError = discordRelayConnectionError(secrets);
+  if (connectionError) {
+    return {
+      ok: true,
+      connected: false,
+      relay,
+      error: connectionError,
+    };
+  }
+
+  try {
+    const status = await createDiscordRelayClient(secrets).status();
+    return {
+      ok: true,
+      connected: true,
+      relay,
+      readiness: status.readiness,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      connected: false,
+      relay,
+      error: safeErrorMessage(error, "Discord Relay status check failed."),
+    };
+  }
+};
+
+const registerDiscordRelayCommandsRoute = async () => {
+  const secrets = readLocalSecrets();
+  const connectionError = discordRelayConnectionError(secrets);
+  if (connectionError) {
+    throw new SafeInputError(connectionError);
+  }
+  const result = await createDiscordRelayClient(secrets).registerCommands();
+  appendSuiteTimelineEvent({
+    sourceApp: "vaexcore-console",
+    sourceAppName: "vaexcore console",
+    kind: "discord.relay.commands.register",
+    title: "Discord slash commands registered",
+    detail: `Console registered ${result.commands.length} Discord slash commands through Relay.`,
+    metadata: {
+      scope: result.scope,
+      registeredAt: result.registeredAt,
+      commands: result.commands,
+    },
+  });
+  return result;
+};
+
+const getDiscordRelayEventsRoute = async () => {
+  const secrets = readLocalSecrets();
+  const connectionError = discordRelayConnectionError(secrets);
+  if (connectionError) {
+    throw new SafeInputError(connectionError);
+  }
+  return createDiscordRelayClient(secrets).events(50);
+};
+
+const getDiscordRelaySuggestionsRoute = async (
+  searchParams: URLSearchParams,
+) => {
+  const secrets = readLocalSecrets();
+  const connectionError = discordRelayConnectionError(secrets);
+  if (connectionError) {
+    throw new SafeInputError(connectionError);
+  }
+  return createDiscordRelayClient(secrets).suggestions(
+    optionalRelaySuggestionStatus(searchParams.get("status")),
+  );
+};
+
+const updateDiscordRelaySuggestionRoute = async (body: unknown) => {
+  const input = objectInput(body);
+  const id = optionalInputString(input.id);
+  if (!id) {
+    throw new SafeInputError("Discord suggestion ID is required.");
+  }
+  const status = relaySuggestionStatus(input.status);
+  const secrets = readLocalSecrets();
+  const connectionError = discordRelayConnectionError(secrets);
+  if (connectionError) {
+    throw new SafeInputError(connectionError);
+  }
+  return createDiscordRelayClient(secrets).updateSuggestionStatus(id, status);
+};
+
+const discordRelayConnectionError = (secrets = readLocalSecrets()) => {
+  const relay = secrets.relay;
+  const readiness = relayConfigReadiness({
+    baseUrl: relay.baseUrl,
+    installationId: relay.installationId,
+    consoleToken: relay.consoleToken,
+  });
+  if (!readiness.ready) {
+    return "Save Relay URL, installation ID, and console token before using Discord slash command Relay mode.";
+  }
+  return "";
+};
+
+const createDiscordRelayClient = (secrets = readLocalSecrets()) =>
+  new DiscordRelayClient({
+    baseUrl: secrets.relay.baseUrl,
+    installationId: secrets.relay.installationId,
+    consoleToken: secrets.relay.consoleToken,
+  });
+
+const recordRelayChatbotIdentityValidation = (body: unknown) => {
+  const input = objectInput(body);
+  const existing = readLocalSecrets();
+  const confirmed = input.confirmed !== false;
+  const note = sanitizeOptionalText(
+    optionalInputString(input.note),
+    "Chat Bot identity validation note",
+    240,
+  );
+  writeLocalSecrets({
+    ...existing,
+    relay: {
+      ...existing.relay,
+      chatbotIdentityValidatedAt: confirmed
+        ? new Date().toISOString()
+        : undefined,
+      chatbotIdentityValidationNote: confirmed ? note : undefined,
+    },
+  });
+  return { ok: true, relay: getSafeRelayConfig() };
+};
+
+const optionalRelaySuggestionStatus = (
+  value: string | null,
+): DiscordRelaySuggestionStatus | undefined =>
+  value ? relaySuggestionStatus(value) : undefined;
+
+const relaySuggestionStatus = (
+  value: unknown,
+): DiscordRelaySuggestionStatus => {
+  if (
+    value === "new" ||
+    value === "reviewed" ||
+    value === "accepted" ||
+    value === "rejected" ||
+    value === "archived"
+  ) {
+    return value;
+  }
+  throw new SafeInputError(
+    "Discord suggestion status must be new, reviewed, accepted, rejected, or archived.",
+  );
 };
 
 const discordConnectionError = (
@@ -2534,6 +2774,15 @@ const saveConfig = (body: unknown) => {
     sanitizeOptionalText(input.relayConsoleToken, "Relay console token", 240),
     existing.relay.consoleToken,
   );
+  const twitchTransportMode =
+    input.twitchTransportMode === "relay-chatbot"
+      ? "relay-chatbot"
+      : "local-user-token";
+  const relayChanged =
+    twitchTransportMode !== existing.relay.twitchTransportMode ||
+    relayBaseUrl !== existing.relay.baseUrl ||
+    relayInstallationId !== existing.relay.installationId ||
+    relayConsoleToken !== existing.relay.consoleToken;
   const twitch: LocalSecrets["twitch"] = {
     ...existing.twitch,
     clientId,
@@ -2557,13 +2806,16 @@ const saveConfig = (body: unknown) => {
     twitch,
     discord: existing.discord,
     relay: {
-      twitchTransportMode:
-        input.twitchTransportMode === "relay-chatbot"
-          ? "relay-chatbot"
-          : "local-user-token",
+      twitchTransportMode,
       baseUrl: relayBaseUrl,
       installationId: relayInstallationId,
       consoleToken: relayConsoleToken,
+      chatbotIdentityValidatedAt: relayChanged
+        ? undefined
+        : existing.relay.chatbotIdentityValidatedAt,
+      chatbotIdentityValidationNote: relayChanged
+        ? undefined
+        : existing.relay.chatbotIdentityValidationNote,
     },
   };
 
