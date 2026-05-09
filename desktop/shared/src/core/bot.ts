@@ -1,10 +1,11 @@
 import type { LiveEnv } from "../config/env";
 import type { Logger } from "./logger";
 import { CommandRouter } from "./commandRouter";
-import { MessageQueue } from "./messageQueue";
+import { MessageQueue, type MessageSendResult } from "./messageQueue";
 import { createOutboundHistory } from "./outboundHistory";
 import { createFeatureGateStore } from "./featureGates";
 import { TwitchEventSubClient } from "../twitch/eventsub";
+import { RelayChatClient, RelayEventPoller } from "../twitch/relayTransport";
 import { TwitchChatSender } from "../twitch/sendMessage";
 import {
   optionalModerationScopes,
@@ -40,9 +41,15 @@ type BotOptions = {
   logger: Logger;
 };
 
+type ChatSender = {
+  send(message: string): Promise<MessageSendResult>;
+};
+
 export class ConsoleBot {
   private readonly commandRouter: CommandRouter;
-  private readonly eventSubClient: TwitchEventSubClient;
+  private readonly eventSubClient?: TwitchEventSubClient;
+  private readonly relayClient?: RelayChatClient;
+  private readonly relayEventPoller?: RelayEventPoller;
   private readonly messageQueue: MessageQueue;
   private readonly startupChecklist: StartupChecklist;
   private readonly db: DbClient;
@@ -50,6 +57,7 @@ export class ConsoleBot {
   private readonly timerScheduler: TimerScheduler;
   private readonly moderationService: ModerationService;
   private readonly moderationClient: TwitchModerationClient;
+  private readonly usingRelayTransport: boolean;
   private pendingLivePingConfirmation = false;
   private twitchAccessToken: string;
   private twitchTokenScopes: string[] = [];
@@ -61,18 +69,29 @@ export class ConsoleBot {
     const outboundHistory = createOutboundHistory(this.db);
     const featureGates = createFeatureGateStore(this.db);
     const timersService = new TimersService(this.db);
+    this.usingRelayTransport =
+      options.env.twitchTransportMode === "relay-chatbot";
+    this.relayClient = this.usingRelayTransport
+      ? new RelayChatClient({
+          baseUrl: options.env.relayBaseUrl,
+          installationId: options.env.relayInstallationId,
+          consoleToken: options.env.relayConsoleToken,
+        })
+      : undefined;
 
-    const sender = new TwitchChatSender({
-      clientId: options.env.twitchClientId,
-      accessToken: options.env.twitchUserAccessToken,
-      accessTokenProvider: () => this.twitchAccessToken,
-      broadcasterId: options.env.twitchBroadcasterUserId,
-      senderId: options.env.twitchBotUserId,
-      logger: options.logger,
-      onHealthyChange: (healthy) => {
-        this.runtimeStatus.outboundHealthy = healthy;
-      },
-    });
+    const sender =
+      this.relayClient ??
+      new TwitchChatSender({
+        clientId: options.env.twitchClientId,
+        accessToken: options.env.twitchUserAccessToken,
+        accessTokenProvider: () => this.twitchAccessToken,
+        broadcasterId: options.env.twitchBroadcasterUserId,
+        senderId: options.env.twitchBotUserId,
+        logger: options.logger,
+        onHealthyChange: (healthy) => {
+          this.runtimeStatus.outboundHealthy = healthy;
+        },
+      });
     this.moderationClient = new TwitchModerationClient({
       clientId: options.env.twitchClientId,
       accessTokenProvider: () => this.twitchAccessToken,
@@ -189,20 +208,28 @@ export class ConsoleBot {
       featureGates,
     });
 
-    this.eventSubClient = new TwitchEventSubClient({
-      eventSubUrl: options.env.twitchEventSubUrl,
-      clientId: options.env.twitchClientId,
-      accessToken: options.env.twitchUserAccessToken,
-      accessTokenProvider: () => this.twitchAccessToken,
-      broadcasterUserId: options.env.twitchBroadcasterUserId,
-      botUserId: options.env.twitchBotUserId,
-      logger: options.logger,
-      debugPayloads: options.env.debug,
-      runtimeStatus: this.runtimeStatus,
-      onAuthFailure: () =>
-        this.refreshRuntimeAccessToken("eventsub chat subscription"),
-      onChatMessage: (event) => this.handleChatMessage(event),
-    });
+    if (this.relayClient) {
+      this.relayEventPoller = new RelayEventPoller({
+        client: this.relayClient,
+        logger: options.logger,
+        onChatMessage: (event) => this.handleChatMessage(event),
+      });
+    } else {
+      this.eventSubClient = new TwitchEventSubClient({
+        eventSubUrl: options.env.twitchEventSubUrl,
+        clientId: options.env.twitchClientId,
+        accessToken: options.env.twitchUserAccessToken,
+        accessTokenProvider: () => this.twitchAccessToken,
+        broadcasterUserId: options.env.twitchBroadcasterUserId,
+        botUserId: options.env.twitchBotUserId,
+        logger: options.logger,
+        debugPayloads: options.env.debug,
+        runtimeStatus: this.runtimeStatus,
+        onAuthFailure: () =>
+          this.refreshRuntimeAccessToken("eventsub chat subscription"),
+        onChatMessage: (event) => this.handleChatMessage(event),
+      });
+    }
 
     this.startupChecklist = new StartupChecklist({
       logger: options.logger,
@@ -230,21 +257,72 @@ export class ConsoleBot {
       messagesPerSecond: 1,
     });
 
-    await this.eventSubClient.connect();
-    this.startupChecklist.pass("EventSub connected", {
-      sessionId: this.runtimeStatus.sessionId,
-    });
-    this.startupChecklist.pass("chat subscription created", {
-      subscriptionType: "channel.chat.message",
-    });
+    if (this.usingRelayTransport) {
+      await this.startRelayTransport();
+    } else {
+      await this.startLocalEventSubTransport();
+    }
   }
 
   async stop() {
     this.timerScheduler.stop();
+    this.relayEventPoller?.stop();
     await this.messageQueue.drain(8000);
     this.messageQueue.stop();
-    await this.eventSubClient.close();
+    await this.eventSubClient?.close();
     this.db.close();
+  }
+
+  private async startLocalEventSubTransport() {
+    await this.eventSubClient?.connect();
+    this.startupChecklist.pass("EventSub connected", {
+      sessionId: this.runtimeStatus.sessionId,
+      transport: "local-user-token",
+    });
+    this.startupChecklist.pass("chat subscription created", {
+      subscriptionType: "channel.chat.message",
+      transport: "local-user-token",
+    });
+  }
+
+  private async startRelayTransport() {
+    if (!this.relayClient?.configured()) {
+      throw new Error(
+        "Relay chatbot transport is enabled but Relay URL, installation ID, or console token is missing.",
+      );
+    }
+
+    const status = await this.relayClient.status();
+    const failedChecks = status.readiness?.checks.filter((check) => !check.ok);
+
+    if (!status.readiness?.ready) {
+      throw new Error(
+        `Relay chatbot transport is not ready: ${
+          failedChecks?.map((check) => check.detail).join(" ") ||
+          "Relay did not report ready status."
+        }`,
+      );
+    }
+
+    this.startupChecklist.pass("Relay chatbot transport ready", {
+      installationId: status.installation?.id,
+      botLogin: status.installation?.botLogin,
+      broadcasterLogin: status.installation?.broadcasterLogin,
+    });
+    await this.relayClient.registerEventSub();
+    await this.relayEventPoller?.start();
+    this.runtimeStatus.eventSubConnected = true;
+    this.runtimeStatus.chatSubscriptionActive = true;
+    this.runtimeStatus.sessionId = "relay-chatbot";
+    this.runtimeStatus.outboundHealthy = true;
+    this.startupChecklist.pass("EventSub connected", {
+      sessionId: "relay-webhook",
+      transport: "relay-chatbot",
+    });
+    this.startupChecklist.pass("chat subscription created", {
+      subscriptionType: "channel.chat.message",
+      transport: "relay-webhook",
+    });
   }
 
   private async validateLiveTwitchWithRefresh() {
@@ -279,9 +357,13 @@ export class ConsoleBot {
     });
   }
 
-  private async sendChatMessage(sender: TwitchChatSender, message: string) {
+  private async sendChatMessage(sender: ChatSender, message: string) {
     const result = await sender.send(message);
     const structured = typeof result === "string" ? { status: result } : result;
+
+    if (!(sender instanceof TwitchChatSender)) {
+      return result;
+    }
 
     if (
       structured.status !== "failed" ||

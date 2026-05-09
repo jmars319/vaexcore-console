@@ -109,6 +109,10 @@ export const loadEnv = () => {
       env.TWITCH_CLIENT_SECRET && env.TWITCH_REFRESH_TOKEN,
     ),
     twitchSecretsBootstrapped: bootstrap.wrote,
+    twitchTransportMode: secrets.relay.twitchTransportMode,
+    relayBaseUrl: secrets.relay.baseUrl,
+    relayInstallationId: secrets.relay.installationId,
+    relayConsoleToken: secrets.relay.consoleToken,
   } as const;
 };
 
@@ -164,6 +168,7 @@ const bootstrapLocalOAuthStore = (
       botUserId: env.TWITCH_BOT_USER_ID,
     },
     discord: existing.discord,
+    relay: existing.relay,
   };
 
   if (JSON.stringify(existing) === JSON.stringify(next)) {

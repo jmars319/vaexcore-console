@@ -40,6 +40,16 @@ const localSecretsSchema = z.object({
       createdRoleIds: z.record(z.string()).default({}),
     })
     .default({}),
+  relay: z
+    .object({
+      twitchTransportMode: z
+        .enum(["local-user-token", "relay-chatbot"])
+        .default("local-user-token"),
+      baseUrl: z.string().optional(),
+      installationId: z.string().optional(),
+      consoleToken: z.string().optional(),
+    })
+    .default({}),
 });
 
 export type LocalSecrets = z.infer<typeof localSecretsSchema>;
@@ -50,6 +60,7 @@ export const readLocalSecrets = (): LocalSecrets => {
       mode: "live",
       twitch: { redirectUri: defaultRedirectUri, scopes: [] },
       discord: { createdChannelIds: {}, createdRoleIds: {} },
+      relay: { twitchTransportMode: "local-user-token" },
     };
   }
 
@@ -115,6 +126,26 @@ const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
     ),
     createdChannelIds: secrets.discord.createdChannelIds ?? {},
     createdRoleIds: secrets.discord.createdRoleIds ?? {},
+  },
+  relay: {
+    ...secrets.relay,
+    twitchTransportMode:
+      secrets.relay.twitchTransportMode === "relay-chatbot"
+        ? "relay-chatbot"
+        : "local-user-token",
+    baseUrl: secrets.relay.baseUrl
+      ? sanitizeOptional(secrets.relay.baseUrl, "Relay URL", 300)
+      : undefined,
+    installationId: secrets.relay.installationId
+      ? sanitizeOptional(
+          secrets.relay.installationId,
+          "Relay installation ID",
+          120,
+        )
+      : undefined,
+    consoleToken: secrets.relay.consoleToken
+      ? sanitizeOptional(secrets.relay.consoleToken, "Relay console token", 240)
+      : undefined,
   },
 });
 

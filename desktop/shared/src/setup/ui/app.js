@@ -3834,6 +3834,7 @@ function renderTesting() {
 
 function renderSettings() {
   const config = state.config || {};
+  const relay = config.relay || {};
   const required = missingConfigFields(config);
   const validationChecks = visibleValidationChecks();
   return [
@@ -3991,6 +3992,90 @@ function renderSettings() {
           }),
         ),
       ),
+    ]),
+    card("Twitch Chat Transport", [
+      statusGrid([
+        [
+          "Mode",
+          relay.twitchTransportMode === "relay-chatbot"
+            ? "Relay Chat Bot"
+            : "local user token",
+          relay.twitchTransportMode === "relay-chatbot",
+        ],
+        [
+          "Relay URL",
+          relay.baseUrl || "missing",
+          relay.twitchTransportMode !== "relay-chatbot" ||
+            Boolean(relay.baseUrl),
+        ],
+        [
+          "Installation",
+          relay.installationId || "missing",
+          relay.twitchTransportMode !== "relay-chatbot" ||
+            Boolean(relay.installationId),
+        ],
+        [
+          "Console token",
+          relay.hasConsoleToken ? "saved" : "missing",
+          relay.twitchTransportMode !== "relay-chatbot" ||
+            Boolean(relay.hasConsoleToken),
+        ],
+      ]),
+      h("div", { className: "grid" }, [
+        formRow(
+          "Transport",
+          h(
+            "select",
+            { id: "twitchTransportMode", onChange: updateSettingsDraft },
+            [
+              option("local-user-token", "local-user-token"),
+              option("relay-chatbot", "relay-chatbot"),
+            ],
+          ),
+        ),
+        formRow(
+          "Relay URL",
+          h("input", {
+            id: "relayBaseUrl",
+            placeholder: "https://vaexcore-relay.example.workers.dev",
+            onInput: updateSettingsDraft,
+          }),
+        ),
+        formRow(
+          "Relay Installation ID",
+          h("input", {
+            id: "relayInstallationId",
+            placeholder: "Relay pairing installation ID",
+            onInput: updateSettingsDraft,
+          }),
+        ),
+        formRow(
+          "Relay Console Token",
+          h("input", {
+            id: "relayConsoleToken",
+            type: "password",
+            autocomplete: "new-password",
+            placeholder: relay.hasConsoleToken ? savedCredentialMask : "",
+            onFocus: clearSavedCredentialMask,
+            onBlur: restoreSavedCredentialMask,
+            onInput: updateSettingsDraft,
+          }),
+        ),
+      ]),
+      callout(
+        relay.identityNotice ||
+          "Local user-token mode will appear as a normal Twitch user. Relay chatbot mode is required for Twitch Chat Bot identity.",
+        relay.twitchTransportMode === "relay-chatbot" ? "warn" : "muted",
+      ),
+      relay.readiness?.checks?.length
+        ? list(
+            relay.readiness.checks.map(
+              (check) =>
+                `${check.ok ? "PASS" : "FAIL"} ${check.key}: ${check.detail}`,
+            ),
+            relay.readiness.ready ? "ok" : "warn",
+          )
+        : null,
     ]),
     card("Runtime Commands", [
       h("p", {
@@ -7147,7 +7232,7 @@ function normalizeLoginInput(value) {
 function clearSavedCredentialMask(event) {
   const id = event.target.id;
   if (
-    !["clientId", "clientSecret"].includes(id) ||
+    !["clientId", "clientSecret", "relayConsoleToken"].includes(id) ||
     event.target.value !== savedCredentialMask
   ) {
     return;
@@ -7182,6 +7267,22 @@ function readSettingsPayload() {
       state.config?.broadcasterLogin || "",
     ),
     botLogin: fieldValue("botLogin", state.config?.botLogin || ""),
+    twitchTransportMode: fieldValue(
+      "twitchTransportMode",
+      state.config?.relay?.twitchTransportMode || "local-user-token",
+    ),
+    relayBaseUrl: fieldValue(
+      "relayBaseUrl",
+      state.config?.relay?.baseUrl || "",
+    ),
+    relayInstallationId: fieldValue(
+      "relayInstallationId",
+      state.config?.relay?.installationId || "",
+    ),
+    relayConsoleToken: credentialFieldValue(
+      "relayConsoleToken",
+      state.config?.relay?.hasConsoleToken,
+    ),
   };
 }
 
@@ -7938,6 +8039,7 @@ function fallbackCommandMessage(result) {
 
 function syncFormValues() {
   const config = state.config || {};
+  const relayConfig = config.relay || {};
   const discordConfig = state.discord?.config || config.discord || {};
   const summary = state.giveaway?.summary || {};
   const selectedCommand = selectedCustomCommand();
@@ -7964,6 +8066,28 @@ function syncFormValues() {
     settingsValue("broadcasterLogin", config.broadcasterLogin || ""),
   );
   setValue("botLogin", settingsValue("botLogin", config.botLogin || ""));
+  setValue(
+    "twitchTransportMode",
+    settingsValue(
+      "twitchTransportMode",
+      relayConfig.twitchTransportMode || "local-user-token",
+    ),
+  );
+  setValue(
+    "relayBaseUrl",
+    settingsValue("relayBaseUrl", relayConfig.baseUrl || ""),
+  );
+  setValue(
+    "relayInstallationId",
+    settingsValue("relayInstallationId", relayConfig.installationId || ""),
+  );
+  setValue(
+    "relayConsoleToken",
+    settingsValue(
+      "relayConsoleToken",
+      relayConfig.hasConsoleToken ? savedCredentialMask : "",
+    ),
+  );
   setValue("discordBotToken", discordValue("discordBotToken", ""));
   setValue(
     "discordGuildId",
@@ -8445,6 +8569,9 @@ function credentialFieldValue(id, hasSavedCredential) {
 function hasSavedCredential(id) {
   if (id === "clientId") return Boolean(state.config?.hasClientId);
   if (id === "clientSecret") return Boolean(state.config?.hasClientSecret);
+  if (id === "relayConsoleToken") {
+    return Boolean(state.config?.relay?.hasConsoleToken);
+  }
   return false;
 }
 

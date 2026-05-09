@@ -123,6 +123,10 @@ import {
   validateToken,
 } from "../twitch/validate";
 import {
+  RelayChatClient,
+  relayConfigReadiness,
+} from "../twitch/relayTransport";
+import {
   getTokenExpiresAt,
   refreshStoredTwitchToken,
   type TwitchOAuthTokenResponse,
@@ -1297,6 +1301,29 @@ const getSafeConfig = () => {
     tokenValidatedAt: twitch.tokenValidatedAt ?? "",
     token: twitch.accessToken ? maskToken(twitch.accessToken) : "",
     discord: getSafeDiscordConfig(secrets),
+    relay: getSafeRelayConfig(secrets),
+  };
+};
+
+const getSafeRelayConfig = (secrets = readLocalSecrets()) => {
+  const relay = secrets.relay;
+  const readiness = relayConfigReadiness({
+    baseUrl: relay.baseUrl,
+    installationId: relay.installationId,
+    consoleToken: relay.consoleToken,
+  });
+  const identityNotice =
+    relay.twitchTransportMode === "relay-chatbot"
+      ? "Relay chatbot mode is selected. When Relay grants are ready, Twitch can list vaexcorebot as a Chat Bot."
+      : "Local user-token mode is selected. Twitch will show outgoing bot chat as a normal Twitch user.";
+
+  return {
+    twitchTransportMode: relay.twitchTransportMode,
+    baseUrl: relay.baseUrl ?? "",
+    installationId: relay.installationId ?? "",
+    hasConsoleToken: Boolean(relay.consoleToken),
+    readiness,
+    identityNotice,
   };
 };
 
@@ -2149,6 +2176,22 @@ const saveConfig = (body: unknown) => {
   const broadcasterChanged =
     broadcasterLogin !== existing.twitch.broadcasterLogin;
   const botChanged = botLogin !== existing.twitch.botLogin;
+  const relayBaseUrl = valueOrExisting(
+    sanitizeRelayBaseUrl(input.relayBaseUrl),
+    existing.relay.baseUrl,
+  );
+  const relayInstallationId = valueOrExisting(
+    sanitizeOptionalText(
+      input.relayInstallationId,
+      "Relay installation ID",
+      120,
+    ),
+    existing.relay.installationId,
+  );
+  const relayConsoleToken = valueOrExisting(
+    sanitizeOptionalText(input.relayConsoleToken, "Relay console token", 240),
+    existing.relay.consoleToken,
+  );
   const twitch: LocalSecrets["twitch"] = {
     ...existing.twitch,
     clientId,
@@ -2171,6 +2214,15 @@ const saveConfig = (body: unknown) => {
     mode: input.mode === "local" ? "local" : "live",
     twitch,
     discord: existing.discord,
+    relay: {
+      twitchTransportMode:
+        input.twitchTransportMode === "relay-chatbot"
+          ? "relay-chatbot"
+          : "local-user-token",
+      baseUrl: relayBaseUrl,
+      installationId: relayInstallationId,
+      consoleToken: relayConsoleToken,
+    },
   };
 
   writeLocalSecrets(next);
@@ -6438,6 +6490,15 @@ const sendCurrentGiveawayStatus = async () => {
 const sendConfiguredChatMessage = async (message: string) => {
   const secrets = readLocalSecrets();
   const twitch = secrets.twitch;
+  const relay = secrets.relay;
+
+  if (relay.twitchTransportMode === "relay-chatbot") {
+    return new RelayChatClient({
+      baseUrl: relay.baseUrl,
+      installationId: relay.installationId,
+      consoleToken: relay.consoleToken,
+    }).send(message);
+  }
 
   if (
     !twitch.clientId ||
@@ -8400,6 +8461,22 @@ const sanitizeRedirectUri = (value: string | undefined) => {
   }
 
   return parsed.toString();
+};
+
+const sanitizeRelayBaseUrl = (value: string | undefined) => {
+  const baseUrl = sanitizeOptionalText(value, "Relay URL", 300);
+
+  if (!baseUrl) {
+    return undefined;
+  }
+
+  const parsed = new URL(baseUrl);
+
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("Relay URL must start with http:// or https://.");
+  }
+
+  return parsed.toString().replace(/\/+$/, "");
 };
 
 const consumeOauthState = (state: string) => {
