@@ -52,6 +52,7 @@ import {
   getReservedCustomCommandNames,
 } from "../modules/commands/commands.service";
 import {
+  SafeInputError,
   limits,
   normalizeCommandName,
   normalizeKeyword,
@@ -101,6 +102,19 @@ import {
   writeLocalSecrets,
   type LocalSecrets,
 } from "../config/localSecrets";
+import { DiscordApiClient } from "../discord/client";
+import {
+  applyDiscordServerSetup,
+  normalizeDiscordConfigInput,
+  planDiscordServerSetup,
+  previewDiscordSetupTemplate,
+  sendDiscordAnnouncement,
+  type DiscordAnnouncementInput,
+} from "../discord/setup";
+import {
+  discordAnnouncementKinds,
+  minimalStreamerDiscordTemplate,
+} from "../discord/templates";
 import { TwitchChatSender } from "../twitch/sendMessage";
 import {
   getTwitchUserByLogin,
@@ -290,6 +304,64 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     const saved = saveConfig(body);
     void queueLaunchPreparation("settings_saved");
     sendJson(response, 200, { ok: true, config: saved });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/discord/status") {
+    sendJson(response, 200, await getDiscordStatus(url.searchParams));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/discord/config") {
+    const body = await readJson(request);
+    const config = saveDiscordConfig(body);
+    sendJson(response, 200, { ok: true, config });
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/discord/setup/preview"
+  ) {
+    const body = await readJson(request);
+    sendJson(response, 200, await previewDiscordSetup(body));
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/discord/setup/apply"
+  ) {
+    const body = await readJson(request);
+    const connectionError = discordConnectionError();
+    if (connectionError) {
+      sendJson(response, 409, {
+        ok: false,
+        error: connectionError,
+        config: getSafeDiscordConfig(),
+      });
+      return;
+    }
+
+    sendJson(response, 200, await applyDiscordSetup(body));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/discord/announce") {
+    const body = await readJson(request);
+    const connectionError = discordConnectionError({
+      requireAnnouncementChannel: true,
+    });
+    if (connectionError) {
+      sendJson(response, 409, {
+        ok: false,
+        error: connectionError,
+        config: getSafeDiscordConfig(),
+      });
+      return;
+    }
+
+    sendJson(response, 200, await sendDiscordAnnouncementRoute(body));
     return;
   }
 
@@ -1224,8 +1296,369 @@ const getSafeConfig = () => {
     tokenExpiresAt: twitch.tokenExpiresAt ?? "",
     tokenValidatedAt: twitch.tokenValidatedAt ?? "",
     token: twitch.accessToken ? maskToken(twitch.accessToken) : "",
+    discord: getSafeDiscordConfig(secrets),
   };
 };
+
+const getSafeDiscordConfig = (secrets = readLocalSecrets()) => {
+  const discord = secrets.discord;
+  return {
+    hasBotToken: Boolean(discord.botToken),
+    guildId: discord.guildId ?? "",
+    streamAnnouncementChannelId:
+      getDiscordAnnouncementChannelId(discord) ?? "",
+    generalAnnouncementChannelId:
+      discord.generalAnnouncementChannelId ??
+      discord.createdChannelIds?.[
+        minimalStreamerDiscordTemplate.recommended.generalAnnouncementChannelId
+      ] ??
+      "",
+    streamAlertsRoleId:
+      discord.streamAlertsRoleId ??
+      discord.createdRoleIds?.[
+        minimalStreamerDiscordTemplate.recommended.streamAlertsRoleId
+      ] ??
+      "",
+    setupAppliedAt: discord.setupAppliedAt ?? "",
+    createdChannelIds: discord.createdChannelIds ?? {},
+    createdRoleIds: discord.createdRoleIds ?? {},
+  };
+};
+
+const getDiscordReadiness = (secrets = readLocalSecrets()) => {
+  const discord = secrets.discord;
+  const checks = [
+    {
+      name: "Bot token",
+      ok: Boolean(discord.botToken),
+      detail: discord.botToken
+        ? "Discord bot token is saved locally."
+        : "Save a Discord bot token created in the Discord Developer Portal.",
+    },
+    {
+      name: "Server ID",
+      ok: Boolean(discord.guildId),
+      detail: discord.guildId
+        ? "Discord server ID is saved."
+        : "Save the Discord server ID for the channel setup target.",
+    },
+    {
+      name: "Announcement channel",
+      ok: Boolean(getDiscordAnnouncementChannelId(discord)),
+      detail: getDiscordAnnouncementChannelId(discord)
+        ? "A stream announcement channel is selected."
+        : "Apply the server setup or save a stream announcement channel ID.",
+    },
+  ];
+
+  return {
+    ready: checks.every((check) => check.ok),
+    checks,
+  };
+};
+
+const getDiscordStatus = async (searchParams: URLSearchParams) => {
+  const secrets = readLocalSecrets();
+  const validate = searchParams.get("validate") === "1";
+  let bot: { id: string; username: string } | null = null;
+  let validationError = "";
+
+  if (validate && secrets.discord.botToken) {
+    try {
+      const currentUser = await createDiscordClient(
+        secrets.discord.botToken,
+      ).getCurrentUser();
+      bot = {
+        id: currentUser.id,
+        username: currentUser.global_name || currentUser.username,
+      };
+    } catch (error) {
+      validationError = safeErrorMessage(
+        error,
+        "Discord bot validation failed.",
+      );
+    }
+  }
+
+  return {
+    ok: true,
+    config: getSafeDiscordConfig(secrets),
+    readiness: getDiscordReadiness(secrets),
+    template: minimalStreamerDiscordTemplate,
+    bot,
+    validationError,
+  };
+};
+
+const saveDiscordConfig = (body: unknown) => {
+  const input = objectInput(body);
+  const existing = readLocalSecrets();
+  const normalized = normalizeDiscordConfigInput({
+    botToken: optionalInputString(input.botToken),
+    guildId: optionalInputString(input.guildId),
+    streamAnnouncementChannelId: optionalInputString(
+      input.streamAnnouncementChannelId,
+    ),
+    generalAnnouncementChannelId: optionalInputString(
+      input.generalAnnouncementChannelId,
+    ),
+    streamAlertsRoleId: optionalInputString(input.streamAlertsRoleId),
+  });
+  const guildChanged = Boolean(
+    normalized.guildId && normalized.guildId !== existing.discord.guildId,
+  );
+  const nextDiscord: LocalSecrets["discord"] = {
+    ...existing.discord,
+    botToken: normalized.botToken || existing.discord.botToken,
+    guildId: normalized.guildId || existing.discord.guildId,
+    streamAnnouncementChannelId:
+      normalized.streamAnnouncementChannelId ||
+      (guildChanged ? undefined : existing.discord.streamAnnouncementChannelId),
+    generalAnnouncementChannelId:
+      normalized.generalAnnouncementChannelId ||
+      (guildChanged
+        ? undefined
+        : existing.discord.generalAnnouncementChannelId),
+    streamAlertsRoleId:
+      normalized.streamAlertsRoleId ||
+      (guildChanged ? undefined : existing.discord.streamAlertsRoleId),
+    setupAppliedAt: guildChanged ? undefined : existing.discord.setupAppliedAt,
+    createdChannelIds: guildChanged
+      ? {}
+      : (existing.discord.createdChannelIds ?? {}),
+    createdRoleIds: guildChanged ? {} : (existing.discord.createdRoleIds ?? {}),
+  };
+
+  writeLocalSecrets({
+    ...existing,
+    discord: nextDiscord,
+  });
+
+  return getSafeDiscordConfig();
+};
+
+const previewDiscordSetup = async (body: unknown) => {
+  const includeRoles = Boolean(objectInput(body).includeRoles);
+  const secrets = readLocalSecrets();
+  const connectionError = discordConnectionError({
+    requireAnnouncementChannel: false,
+  });
+
+  if (connectionError) {
+    return {
+      ok: true,
+      connected: false,
+      message: connectionError,
+      config: getSafeDiscordConfig(secrets),
+      plan: planDiscordServerSetup({
+        existingChannels: [],
+        existingRoles: [],
+        template: minimalStreamerDiscordTemplate,
+        includeRoles,
+      }),
+      template: minimalStreamerDiscordTemplate,
+    };
+  }
+
+  const client = createDiscordClient(secrets.discord.botToken ?? "");
+  const guildId = secrets.discord.guildId ?? "";
+  const [existingChannels, existingRoles] = await Promise.all([
+    client.listGuildChannels(guildId),
+    client.listGuildRoles(guildId),
+  ]);
+
+  return {
+    ok: true,
+    connected: true,
+    config: getSafeDiscordConfig(secrets),
+    plan: planDiscordServerSetup({
+      existingChannels,
+      existingRoles,
+      template: minimalStreamerDiscordTemplate,
+      includeRoles,
+    }),
+    template: minimalStreamerDiscordTemplate,
+  };
+};
+
+const applyDiscordSetup = async (body: unknown) => {
+  const includeRoles = Boolean(objectInput(body).includeRoles);
+  const secrets = readLocalSecrets();
+  const botToken = secrets.discord.botToken;
+  const guildId = secrets.discord.guildId;
+
+  if (!botToken || !guildId) {
+    throw new SafeInputError("Discord bot token and server ID are required.");
+  }
+
+  const result = await applyDiscordServerSetup({
+    client: createDiscordClient(botToken),
+    guildId,
+    template: minimalStreamerDiscordTemplate,
+    includeRoles,
+  });
+  const latest = readLocalSecrets();
+  writeLocalSecrets({
+    ...latest,
+    discord: {
+      ...latest.discord,
+      setupAppliedAt: result.appliedAt,
+      createdChannelIds: result.channelIds,
+      createdRoleIds: result.roleIds,
+      streamAnnouncementChannelId:
+        result.recommended.streamAnnouncementChannelId ||
+        latest.discord.streamAnnouncementChannelId,
+      generalAnnouncementChannelId:
+        result.recommended.generalAnnouncementChannelId ||
+        latest.discord.generalAnnouncementChannelId,
+      streamAlertsRoleId:
+        result.recommended.streamAlertsRoleId ||
+        latest.discord.streamAlertsRoleId,
+    },
+  });
+
+  appendSuiteTimelineEvent({
+    sourceApp: "vaexcore-console",
+    sourceAppName: "vaexcore console",
+    kind: "discord.setup",
+    title: "Discord setup applied",
+    detail: `Console prepared ${result.createdChannels.length} Discord channels and ${result.createdRoles.length} roles.`,
+    metadata: {
+      guildId,
+      includeRoles,
+      createdChannelIds: Object.keys(result.channelIds),
+      createdRoleIds: Object.keys(result.roleIds),
+    },
+  });
+
+  return {
+    ...result,
+    config: getSafeDiscordConfig(),
+  };
+};
+
+const sendDiscordAnnouncementRoute = async (body: unknown) => {
+  const input = objectInput(body);
+  const secrets = readLocalSecrets();
+  const botToken = secrets.discord.botToken;
+  const channelId =
+    optionalInputString(input.channelId) ??
+    getDiscordAnnouncementChannelId(secrets.discord);
+
+  if (!botToken || !channelId) {
+    throw new SafeInputError(
+      "Discord bot token and announcement channel ID are required.",
+    );
+  }
+
+  const announcement = discordAnnouncementInput(input, secrets);
+  const sent = await sendDiscordAnnouncement({
+    client: createDiscordClient(botToken),
+    channelId,
+    input: announcement,
+  });
+
+  appendSuiteTimelineEvent({
+    sourceApp: "vaexcore-console",
+    sourceAppName: "vaexcore console",
+    kind: `discord.announcement.${announcement.kind}`,
+    title: `Discord ${announcement.kind} announcement sent`,
+    detail: announcement.title || "Discord stream announcement sent.",
+    metadata: {
+      channelId,
+      messageId: sent.result.id,
+      kind: announcement.kind,
+    },
+  });
+
+  return {
+    ok: true,
+    channelId,
+    messageId: sent.result.id,
+    announcement,
+  };
+};
+
+const discordAnnouncementInput = (
+  input: Record<string, unknown>,
+  secrets: LocalSecrets,
+): DiscordAnnouncementInput => {
+  const kind = optionalInputString(input.kind) || "live";
+  if (!discordAnnouncementKinds.includes(kind as DiscordAnnouncementInput["kind"])) {
+    throw new SafeInputError("Discord announcement kind is not supported.");
+  }
+
+  const broadcasterName =
+    optionalInputString(input.broadcasterName) ||
+    secrets.twitch.broadcasterLogin ||
+    "the channel";
+  const defaultStreamUrl = secrets.twitch.broadcasterLogin
+    ? `https://www.twitch.tv/${secrets.twitch.broadcasterLogin}`
+    : undefined;
+  const mentionRole = input.mentionRole !== false;
+
+  return {
+    kind: kind as DiscordAnnouncementInput["kind"],
+    title: optionalInputString(input.title),
+    detail: optionalInputString(input.detail),
+    streamUrl: optionalInputString(input.streamUrl) || defaultStreamUrl,
+    scheduledFor: optionalInputString(input.scheduledFor),
+    broadcasterName,
+    roleId: mentionRole
+      ? optionalInputString(input.roleId) || getDiscordStreamAlertsRoleId(secrets.discord)
+      : undefined,
+  };
+};
+
+const discordConnectionError = (
+  options: { requireAnnouncementChannel?: boolean } = {},
+) => {
+  const discord = readLocalSecrets().discord;
+  if (!discord.botToken) {
+    return "Save a Discord bot token before using Discord setup.";
+  }
+  if (!discord.guildId) {
+    return "Save the Discord server ID before using Discord setup.";
+  }
+  if (
+    options.requireAnnouncementChannel &&
+    !getDiscordAnnouncementChannelId(discord)
+  ) {
+    return "Apply Discord setup or save a stream announcement channel ID before sending announcements.";
+  }
+
+  return "";
+};
+
+const createDiscordClient = (botToken: string) =>
+  new DiscordApiClient({
+    botToken,
+    apiBaseUrl: process.env.DISCORD_API_BASE_URL,
+  });
+
+const getDiscordAnnouncementChannelId = (
+  discord: LocalSecrets["discord"],
+): string | undefined =>
+  discord.streamAnnouncementChannelId ||
+  discord.createdChannelIds?.[
+    minimalStreamerDiscordTemplate.recommended.streamAnnouncementChannelId
+  ];
+
+const getDiscordStreamAlertsRoleId = (
+  discord: LocalSecrets["discord"],
+): string | undefined =>
+  discord.streamAlertsRoleId ||
+  discord.createdRoleIds?.[
+    minimalStreamerDiscordTemplate.recommended.streamAlertsRoleId
+  ];
+
+const objectInput = (body: unknown): Record<string, unknown> =>
+  body && typeof body === "object" && !Array.isArray(body)
+    ? (body as Record<string, unknown>)
+    : {};
+
+const optionalInputString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() ? value.trim() : undefined;
 
 const getTwitchStreamKey = async (): Promise<
   | {
