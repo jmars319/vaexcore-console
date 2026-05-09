@@ -32,6 +32,14 @@ try {
 }
 
 async function runSmoke() {
+  const appJs = await text("/ui/app.js");
+  assert(appJs.includes('["discord", "Discord"]'), "Discord tab is registered");
+  assert(appJs.includes("Server Layout"), "Discord setup UI is present");
+  assert(
+    appJs.includes("Stream Announcements"),
+    "Discord announcement UI is present",
+  );
+
   const cleanStatus = await json("/api/discord/status");
   assert(cleanStatus.ok === true, "Discord status returns ok on clean install");
   assert(
@@ -48,7 +56,10 @@ async function runSmoke() {
     guildId,
   });
   assert(saved.ok === true, "Discord config save returns ok");
-  assert(saved.config.hasBotToken === true, "Discord bot token is saved safely");
+  assert(
+    saved.config.hasBotToken === true,
+    "Discord bot token is saved safely",
+  );
   assert(saved.config.guildId === guildId, "Discord guild ID is saved");
   assertSafePayload(saved);
 
@@ -228,7 +239,9 @@ async function startFakeDiscord() {
       return;
     }
 
-    send(response, 404, { message: `Unhandled ${request.method} ${url.pathname}` });
+    send(response, 404, {
+      message: `Unhandled ${request.method} ${url.pathname}`,
+    });
   });
 
   await new Promise((resolve, reject) => {
@@ -268,6 +281,15 @@ async function json(path, options = {}) {
     throw new Error(
       `${options.method || "GET"} ${path} failed ${response.status}: ${JSON.stringify(body)}`,
     );
+  }
+  return body;
+}
+
+async function text(path) {
+  const response = await fetch(`${baseUrl}${path}`);
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`GET ${path} failed ${response.status}: ${body}`);
   }
   return body;
 }

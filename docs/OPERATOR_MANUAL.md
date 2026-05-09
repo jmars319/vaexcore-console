@@ -358,6 +358,30 @@ Common setup errors:
 
 The setup UI never displays tokens after OAuth, never logs tokens, and never stores giveaway prizes.
 
+## Configuring Discord
+
+The `Discord` section in Console can prepare a minimal streamer Discord server layout and send stream status announcements. It is intentionally local-first: the bot token is stored only in `config/local.secrets.json`, the setup API never returns the token, and setup can be previewed before anything is created.
+
+Recommended Discord bot permissions:
+
+- `Manage Channels` for server layout creation.
+- `Send Messages`, `View Channels`, `Read Message History`, and `Embed Links` for announcements.
+- `Manage Roles` only if you enable the optional `Stream Alerts` role creation.
+
+Recommended operator flow:
+
+1. In Discord Developer Portal, create or select a bot and invite it to the server.
+2. Copy the bot token and the target server ID.
+3. Open Console, go to `Discord`, paste the bot token and server ID, then save Discord settings.
+4. Click `Validate bot`.
+5. Click `Preview setup` and review the categories, text channels, voice channels, and optional role.
+6. Click `Apply setup`.
+7. Use `Stream Announcements` to send live, late, cancelled, or scheduled stream notices.
+
+The default streamer layout creates `START HERE`, `STREAM`, `COMMUNITY`, `VOICE`, and `STAFF` sections with channels for rules, announcements, live notices, schedule, clips/highlights, suggestions, general chat, game chat, common voice rooms, and staff notes. Existing channels with matching names are reused, so applying setup again should not duplicate the layout.
+
+`npm run smoke:discord` runs a mocked Discord API check covering config redaction, bot validation, layout preview, idempotent setup apply, and stream announcements without touching a real Discord server.
+
 ## Security Notes
 
 vaexcore console treats Twitch chat and local UI input as untrusted. Commands, custom command definitions, giveaway fields, logins, display names, and manual chat messages are normalized and length-limited before use. Unknown commands are ignored, denied commands do not expose internals, and command handling includes lightweight per-user and global burst limits.
@@ -415,6 +439,7 @@ The `Giveaways` tab also includes stream-night controls:
 - `npm run smoke:replacement` checks the bot replacement path across stream presets, starter commands, timer presets, moderation rehearsal, live confirmation guards, protected `!enter`, and audit logging.
 - `npm run smoke:cli-env` proves a refresh-capable `.env` can bootstrap the local OAuth store while access-token-only `.env` files remain supported.
 - `npm run smoke:token-refresh` runs a mocked Twitch OAuth check proving an expired access token refreshes, stores the rotated refresh token, keeps secrets out of `/api/config`, and sends chat with the refreshed token.
+- `npm run smoke:discord` checks the mocked Discord setup and announcement path without using a real Discord token or server.
 - `npm run smoke:diagnostics` checks the local diagnostics route, setup assets, database driver, token-refresh readiness flags, and report redaction.
 - `npm run smoke:clean-install` checks a fresh app data folder, first-run recovery guidance, blocked bot startup before setup, and support bundle redaction.
 

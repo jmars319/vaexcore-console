@@ -1305,8 +1305,7 @@ const getSafeDiscordConfig = (secrets = readLocalSecrets()) => {
   return {
     hasBotToken: Boolean(discord.botToken),
     guildId: discord.guildId ?? "",
-    streamAnnouncementChannelId:
-      getDiscordAnnouncementChannelId(discord) ?? "",
+    streamAnnouncementChannelId: getDiscordAnnouncementChannelId(discord) ?? "",
     generalAnnouncementChannelId:
       discord.generalAnnouncementChannelId ??
       discord.createdChannelIds?.[
@@ -1584,7 +1583,9 @@ const discordAnnouncementInput = (
   secrets: LocalSecrets,
 ): DiscordAnnouncementInput => {
   const kind = optionalInputString(input.kind) || "live";
-  if (!discordAnnouncementKinds.includes(kind as DiscordAnnouncementInput["kind"])) {
+  if (
+    !discordAnnouncementKinds.includes(kind as DiscordAnnouncementInput["kind"])
+  ) {
     throw new SafeInputError("Discord announcement kind is not supported.");
   }
 
@@ -1605,7 +1606,8 @@ const discordAnnouncementInput = (
     scheduledFor: optionalInputString(input.scheduledFor),
     broadcasterName,
     roleId: mentionRole
-      ? optionalInputString(input.roleId) || getDiscordStreamAlertsRoleId(secrets.discord)
+      ? optionalInputString(input.roleId) ||
+        getDiscordStreamAlertsRoleId(secrets.discord)
       : undefined,
   };
 };

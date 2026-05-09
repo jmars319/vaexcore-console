@@ -142,7 +142,8 @@ export class DiscordApiClient {
       headers: {
         Authorization: `Bot ${this.botToken}`,
         "Content-Type": "application/json",
-        "User-Agent": "VaexCore Console (https://github.com/jmars319/vaexcore-console)",
+        "User-Agent":
+          "VaexCore Console (https://github.com/jmars319/vaexcore-console)",
       },
       body: options.body,
     });

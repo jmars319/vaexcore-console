@@ -14,6 +14,7 @@ const mainTabs = [
   ["moderation", "Moderation"],
   ["giveaways", "Giveaways"],
   ["chat-tools", "Operator Tools"],
+  ["discord", "Discord"],
   ["suite", "Suite"],
   ["testing", "Testing"],
   ["diagnostics", "Diagnostics"],
@@ -73,6 +74,8 @@ const state = {
   moderationFeatureGate: null,
   streamPresets: [],
   suiteStatus: null,
+  discord: null,
+  discordSetupPreview: null,
   featureGates: [],
   templates: [],
   operatorMessages: [],
@@ -113,6 +116,7 @@ const state = {
   giveawayDraft: {},
   templateDraft: {},
   operatorTemplateDraft: {},
+  discordDraft: {},
   reminderDraft: {},
   oauthNotice: readOAuthNotice(),
 };
@@ -265,6 +269,12 @@ const api = {
   runLaunchPreparation: () => api.post("/api/launch-preparation"),
   launchSuite: () => api.post("/api/launch-suite"),
   suiteStatus: () => api.get("/api/suite/status"),
+  discordStatus: (validate = false) =>
+    api.get(`/api/discord/status${validate ? "?validate=1" : ""}`),
+  saveDiscordConfig: (body) => api.post("/api/discord/config", body),
+  previewDiscordSetup: (body) => api.post("/api/discord/setup/preview", body),
+  applyDiscordSetup: (body) => api.post("/api/discord/setup/apply", body),
+  sendDiscordAnnouncement: (body) => api.post("/api/discord/announce", body),
   diagnostics: () => api.get("/api/diagnostics"),
   supportBundle: () => api.get("/api/support-bundle"),
   featureGates: () => api.get("/api/feature-gates"),
@@ -584,6 +594,7 @@ function renderTab(id) {
     moderation: renderModeration,
     giveaways: renderGiveaways,
     "chat-tools": renderChatTools,
+    discord: renderDiscord,
     suite: renderSuite,
     testing: renderTesting,
     settings: renderSettings,
@@ -3418,6 +3429,249 @@ function renderBotConfigBundleCard() {
   ]);
 }
 
+function renderDiscord() {
+  const discord = state.discord || {};
+  const config = discord.config || state.config?.discord || {};
+  const readiness = discord.readiness || { ready: false, checks: [] };
+  const preview = state.discordSetupPreview;
+
+  return [
+    sectionHeader(
+      "Discord",
+      "Set up a streamer server layout and send stream status announcements from Console.",
+      h("div", { className: "actions section-actions" }, [
+        actionButton("Refresh", {
+          id: "discordRefresh",
+          variant: "secondary",
+          busyKey: "refresh",
+          onClick: refreshAll,
+        }),
+        actionButton("Validate bot", {
+          id: "discordValidateBot",
+          variant: "secondary",
+          onClick: validateDiscordBot,
+        }),
+      ]),
+    ),
+    card("Discord Readiness", [
+      statusGrid([
+        [
+          "Bot token",
+          config.hasBotToken ? "saved" : "missing",
+          config.hasBotToken,
+        ],
+        ["Server ID", config.guildId || "missing", Boolean(config.guildId)],
+        [
+          "Stream announcements",
+          config.streamAnnouncementChannelId || "missing",
+          Boolean(config.streamAnnouncementChannelId),
+        ],
+        [
+          "Setup applied",
+          config.setupAppliedAt || "not yet",
+          Boolean(config.setupAppliedAt),
+        ],
+      ]),
+      readiness.checks?.length
+        ? list(
+            readiness.checks.map(
+              (check) =>
+                `${check.ok ? "PASS" : "TODO"} ${check.name}: ${check.detail}`,
+            ),
+            readiness.ready ? "ok" : "warn",
+          )
+        : callout("Discord readiness has not loaded yet."),
+      discord.validationError
+        ? callout(discord.validationError, "bad")
+        : discord.bot
+          ? callout(`Validated as ${discord.bot.username}.`, "ok")
+          : null,
+    ]),
+    card("Discord Connection", [
+      h("div", { className: "grid" }, [
+        formRow(
+          "Bot token",
+          h("input", {
+            id: "discordBotToken",
+            type: "password",
+            autocomplete: "new-password",
+            placeholder: config.hasBotToken ? savedCredentialMask : "Bot token",
+            onInput: updateDiscordDraft,
+          }),
+        ),
+        formRow(
+          "Server ID",
+          h("input", {
+            id: "discordGuildId",
+            placeholder: "Discord server ID",
+            onInput: updateDiscordDraft,
+          }),
+        ),
+        formRow(
+          "Stream announcement channel ID",
+          h("input", {
+            id: "discordStreamAnnouncementChannelId",
+            placeholder: "live-now channel ID",
+            onInput: updateDiscordDraft,
+          }),
+        ),
+        formRow(
+          "General announcement channel ID",
+          h("input", {
+            id: "discordGeneralAnnouncementChannelId",
+            placeholder: "announcements channel ID",
+            onInput: updateDiscordDraft,
+          }),
+        ),
+        formRow(
+          "Stream Alerts role ID",
+          h("input", {
+            id: "discordStreamAlertsRoleId",
+            placeholder: "optional role ID",
+            onInput: updateDiscordDraft,
+          }),
+        ),
+      ]),
+      callout(
+        "The bot token stays in the local secrets file and is never returned by the setup API. The bot needs Manage Channels to create the layout, Send Messages and Embed Links to announce, and Manage Roles only if you create the optional Stream Alerts role.",
+        "info",
+      ),
+      h("div", { className: "actions" }, [
+        actionButton("Save Discord settings", {
+          id: "discordSave",
+          onClick: saveDiscordSettings,
+        }),
+      ]),
+    ]),
+    card("Server Layout", [
+      h("label", { className: "inline-check" }, [
+        h("input", {
+          id: "discordCreateStreamAlertsRole",
+          type: "checkbox",
+          onChange: updateDiscordDraft,
+        }),
+        "Create optional Stream Alerts role",
+      ]),
+      h("div", { className: "actions" }, [
+        actionButton("Preview setup", {
+          id: "discordPreviewSetup",
+          variant: "secondary",
+          onClick: previewDiscordSetup,
+        }),
+        actionButton("Apply setup", {
+          id: "discordApplySetup",
+          onClick: applyDiscordSetup,
+        }),
+      ]),
+      renderDiscordPlan(preview),
+    ]),
+    card("Stream Announcements", [
+      h("div", { className: "grid" }, [
+        formRow(
+          "Status",
+          h(
+            "select",
+            {
+              id: "discordAnnouncementKind",
+              onChange: updateDiscordDraft,
+            },
+            [
+              option("live", "Stream is live"),
+              option("late", "Running late"),
+              option("cancelled", "Cancelled"),
+              option("scheduled", "Scheduled"),
+            ],
+          ),
+        ),
+        formRow(
+          "Title",
+          h("input", {
+            id: "discordAnnouncementTitle",
+            placeholder: "Stream is live",
+            onInput: updateDiscordDraft,
+          }),
+        ),
+        formRow(
+          "Stream URL",
+          h("input", {
+            id: "discordAnnouncementStreamUrl",
+            placeholder: "https://www.twitch.tv/channel",
+            onInput: updateDiscordDraft,
+          }),
+        ),
+        formRow(
+          "Scheduled time",
+          h("input", {
+            id: "discordAnnouncementScheduledFor",
+            placeholder: "Tonight at 8 PM ET",
+            onInput: updateDiscordDraft,
+          }),
+        ),
+      ]),
+      formRow(
+        "Details",
+        h("textarea", {
+          id: "discordAnnouncementDetail",
+          placeholder: "Short context for the Discord announcement",
+          onInput: updateDiscordDraft,
+        }),
+      ),
+      h("label", { className: "inline-check" }, [
+        h("input", {
+          id: "discordMentionRole",
+          type: "checkbox",
+          onChange: updateDiscordDraft,
+        }),
+        "Mention Stream Alerts role for live announcements",
+      ]),
+      h("div", { className: "actions" }, [
+        actionButton("Send announcement", {
+          id: "discordSendAnnouncement",
+          onClick: sendDiscordStreamAnnouncement,
+        }),
+      ]),
+    ]),
+    message(),
+  ];
+}
+
+function renderDiscordPlan(result) {
+  if (!result?.plan) {
+    return callout(
+      "Preview setup to see exactly which categories, text channels, voice channels, and optional roles Console will create.",
+    );
+  }
+
+  const plan = result.plan;
+  const summary = plan.summary || {};
+  const actions = plan.actions || [];
+
+  return h("div", { className: "discord-plan" }, [
+    statusGrid([
+      ["Channels to create", summary.channelsToCreate || 0],
+      ["Existing channels", summary.existingChannels || 0],
+      ["Roles to create", summary.rolesToCreate || 0],
+      ["Skipped roles", summary.skippedRoles || 0],
+    ]),
+    result.message ? callout(result.message, "warn") : null,
+    h(
+      "ul",
+      { className: "discord-plan-list" },
+      actions.map((action) =>
+        h("li", {
+          className:
+            action.type === "create_channel" || action.type === "create_role"
+              ? "warn"
+              : action.type === "skip_role"
+                ? "muted"
+                : "ok",
+          text: `${action.name}: ${action.detail}`,
+        }),
+      ),
+    ),
+  ]);
+}
+
 function renderSuite() {
   const suite = state.suiteStatus || {};
   const apps = suite.apps || [];
@@ -5086,6 +5340,7 @@ function canStartBot(runtime = state.status?.runtime || {}) {
 
 function isValidationPassed() {
   const config = state.config || {};
+  const discordConfig = state.discord?.config || config.discord || {};
   const runtime = state.status?.runtime || {};
   return Boolean(
     config.hasAccessToken &&
@@ -5633,6 +5888,7 @@ async function loadFreshState() {
     featureGateResult,
     streamPresetResult,
     suiteStatus,
+    discordStatus,
   ] = await Promise.all([
     api.config(),
     api.status(),
@@ -5650,6 +5906,7 @@ async function loadFreshState() {
     api.featureGates(),
     api.streamPresets(),
     api.suiteStatus(),
+    api.discordStatus(),
   ]);
   state.config = config;
   state.status = status;
@@ -5668,6 +5925,7 @@ async function loadFreshState() {
   state.featureGates = featureGateResult.featureGates || [];
   state.streamPresets = streamPresetResult.presets || [];
   state.suiteStatus = suiteStatus;
+  state.discord = discordStatus;
   syncLaunchPreparation(status);
   syncLaunchPreparation(diagnostics);
   state.validSetup = isValidationPassed();
@@ -5715,6 +5973,7 @@ async function refreshAfterAction() {
     featureGateResult,
     streamPresetResult,
     suiteStatus,
+    discordStatus,
   ] = await Promise.all([
     api.status(),
     api.launchPreparation(),
@@ -5730,6 +5989,7 @@ async function refreshAfterAction() {
     api.featureGates(),
     api.streamPresets(),
     api.suiteStatus(),
+    api.discordStatus(),
   ]);
   state.status = status;
   syncLaunchPreparation(launchPreparation);
@@ -5746,6 +6006,7 @@ async function refreshAfterAction() {
   state.featureGates = featureGateResult.featureGates || [];
   state.streamPresets = streamPresetResult.presets || [];
   state.suiteStatus = suiteStatus;
+  state.discord = discordStatus;
   syncLaunchPreparation(status);
   state.validSetup = isValidationPassed();
 }
@@ -6654,6 +6915,83 @@ async function saveSettings() {
   );
 }
 
+async function validateDiscordBot() {
+  await runAction(
+    "discordValidateBot",
+    async () => {
+      const result = await api.discordStatus(true);
+      state.discord = result;
+      return result;
+    },
+    { skipRefresh: true, success: "Discord bot validation completed." },
+  );
+}
+
+async function saveDiscordSettings() {
+  await runAction(
+    "discordSave",
+    async () => {
+      const result = await api.saveDiscordConfig(readDiscordConfigPayload());
+      state.discord = {
+        ...(state.discord || {}),
+        config: result.config,
+      };
+      state.discordDraft = {};
+      return result;
+    },
+    { skipRefresh: true, success: "Discord settings saved." },
+  );
+}
+
+async function previewDiscordSetup() {
+  await runAction(
+    "discordPreviewSetup",
+    async () => {
+      const result = await api.previewDiscordSetup({
+        includeRoles: Boolean(field("discordCreateStreamAlertsRole")?.checked),
+      });
+      state.discordSetupPreview = result;
+      state.discord = {
+        ...(state.discord || {}),
+        config: result.config || state.discord?.config,
+      };
+      return result;
+    },
+    { skipRefresh: true, success: "Discord setup preview updated." },
+  );
+}
+
+async function applyDiscordSetup() {
+  if (
+    !confirm(
+      "Apply the Discord server layout now? Existing channels with matching names are reused.",
+    )
+  ) {
+    return;
+  }
+
+  await runAction(
+    "discordApplySetup",
+    async () => {
+      const result = await api.applyDiscordSetup({
+        includeRoles: Boolean(field("discordCreateStreamAlertsRole")?.checked),
+      });
+      state.discordSetupPreview = result;
+      state.discord = await api.discordStatus();
+      return result;
+    },
+    { skipRefresh: true, success: "Discord server setup applied." },
+  );
+}
+
+async function sendDiscordStreamAnnouncement() {
+  await runAction(
+    "discordSendAnnouncement",
+    async () => api.sendDiscordAnnouncement(readDiscordAnnouncementPayload()),
+    { skipRefresh: true, success: "Discord announcement sent." },
+  );
+}
+
 async function disconnectTwitch() {
   if (
     !confirm(
@@ -6683,6 +7021,13 @@ async function disconnectTwitch() {
 
 function updateSettingsDraft(event) {
   state.settingsDraft[event.target.id] = event.target.value;
+}
+
+function updateDiscordDraft(event) {
+  state.discordDraft[event.target.id] =
+    event.target.type === "checkbox"
+      ? event.target.checked
+      : event.target.value;
 }
 
 function updateCommandDraft(event) {
@@ -6837,6 +7182,37 @@ function readSettingsPayload() {
       state.config?.broadcasterLogin || "",
     ),
     botLogin: fieldValue("botLogin", state.config?.botLogin || ""),
+  };
+}
+
+function readDiscordConfigPayload() {
+  const config = state.discord?.config || state.config?.discord || {};
+  return {
+    botToken: field("discordBotToken")?.value || "",
+    guildId: field("discordGuildId")?.value || config.guildId || "",
+    streamAnnouncementChannelId:
+      field("discordStreamAnnouncementChannelId")?.value ||
+      config.streamAnnouncementChannelId ||
+      "",
+    generalAnnouncementChannelId:
+      field("discordGeneralAnnouncementChannelId")?.value ||
+      config.generalAnnouncementChannelId ||
+      "",
+    streamAlertsRoleId:
+      field("discordStreamAlertsRoleId")?.value ||
+      config.streamAlertsRoleId ||
+      "",
+  };
+}
+
+function readDiscordAnnouncementPayload() {
+  return {
+    kind: field("discordAnnouncementKind")?.value || "live",
+    title: field("discordAnnouncementTitle")?.value || "",
+    detail: field("discordAnnouncementDetail")?.value || "",
+    streamUrl: field("discordAnnouncementStreamUrl")?.value || "",
+    scheduledFor: field("discordAnnouncementScheduledFor")?.value || "",
+    mentionRole: Boolean(field("discordMentionRole")?.checked),
   };
 }
 
@@ -7562,6 +7938,7 @@ function fallbackCommandMessage(result) {
 
 function syncFormValues() {
   const config = state.config || {};
+  const discordConfig = state.discord?.config || config.discord || {};
   const summary = state.giveaway?.summary || {};
   const selectedCommand = selectedCustomCommand();
   const currentTimer = selectedTimer();
@@ -7587,6 +7964,65 @@ function syncFormValues() {
     settingsValue("broadcasterLogin", config.broadcasterLogin || ""),
   );
   setValue("botLogin", settingsValue("botLogin", config.botLogin || ""));
+  setValue("discordBotToken", discordValue("discordBotToken", ""));
+  setValue(
+    "discordGuildId",
+    discordValue("discordGuildId", discordConfig.guildId || ""),
+  );
+  setValue(
+    "discordStreamAnnouncementChannelId",
+    discordValue(
+      "discordStreamAnnouncementChannelId",
+      discordConfig.streamAnnouncementChannelId || "",
+    ),
+  );
+  setValue(
+    "discordGeneralAnnouncementChannelId",
+    discordValue(
+      "discordGeneralAnnouncementChannelId",
+      discordConfig.generalAnnouncementChannelId || "",
+    ),
+  );
+  setValue(
+    "discordStreamAlertsRoleId",
+    discordValue(
+      "discordStreamAlertsRoleId",
+      discordConfig.streamAlertsRoleId || "",
+    ),
+  );
+  setChecked(
+    "discordCreateStreamAlertsRole",
+    Boolean(discordValue("discordCreateStreamAlertsRole", true)),
+  );
+  setValue(
+    "discordAnnouncementKind",
+    discordValue("discordAnnouncementKind", "live"),
+  );
+  setValue(
+    "discordAnnouncementTitle",
+    discordValue("discordAnnouncementTitle", ""),
+  );
+  setValue(
+    "discordAnnouncementStreamUrl",
+    discordValue(
+      "discordAnnouncementStreamUrl",
+      config.broadcasterLogin
+        ? `https://www.twitch.tv/${config.broadcasterLogin}`
+        : "",
+    ),
+  );
+  setValue(
+    "discordAnnouncementScheduledFor",
+    discordValue("discordAnnouncementScheduledFor", ""),
+  );
+  setValue(
+    "discordAnnouncementDetail",
+    discordValue("discordAnnouncementDetail", ""),
+  );
+  setChecked(
+    "discordMentionRole",
+    Boolean(discordValue("discordMentionRole", true)),
+  );
   setValue(
     "commandName",
     commandValue("commandName", selectedCommand?.name || ""),
@@ -7973,6 +8409,10 @@ function moderationValue(id, fallback) {
   return draftValue(state.moderationDraft, id, fallback);
 }
 
+function discordValue(id, fallback) {
+  return draftValue(state.discordDraft, id, fallback);
+}
+
 function giveawayValue(id, fallback) {
   return draftValue(state.giveawayDraft, id, fallback);
 }
@@ -8248,6 +8688,26 @@ function updateDisabledState() {
   );
   setDisabled("botStop", !botRunning, "Bot is not running.");
   setDisabled("guideBotStop", !botRunning, "Bot is not running.");
+  setDisabled(
+    "discordValidateBot",
+    !discordConfig.hasBotToken,
+    "Save a Discord bot token before validating the bot.",
+  );
+  setDisabled(
+    "discordPreviewSetup",
+    !(discordConfig.hasBotToken && discordConfig.guildId),
+    "Save a Discord bot token and server ID before previewing setup.",
+  );
+  setDisabled(
+    "discordApplySetup",
+    !(discordConfig.hasBotToken && discordConfig.guildId),
+    "Save a Discord bot token and server ID before applying setup.",
+  );
+  setDisabled(
+    "discordSendAnnouncement",
+    !(discordConfig.hasBotToken && discordConfig.streamAnnouncementChannelId),
+    "Save Discord setup and an announcement channel before sending.",
+  );
 
   const connectLinks = [
     ...document.querySelectorAll('a[data-action="connect-twitch"]'),

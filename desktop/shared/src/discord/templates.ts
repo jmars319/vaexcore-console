@@ -162,7 +162,8 @@ export const minimalStreamerDiscordTemplate: DiscordSetupTemplate = {
       name: "staff-chat",
       kind: "text",
       parentId: "category-staff",
-      topic: "Private staff coordination placeholder. Review Discord permissions after setup.",
+      topic:
+        "Private staff coordination placeholder. Review Discord permissions after setup.",
     },
     {
       id: "mod-log",
@@ -187,5 +188,4 @@ export const discordAnnouncementKinds = [
   "scheduled",
 ] as const;
 
-export type DiscordAnnouncementKind =
-  (typeof discordAnnouncementKinds)[number];
+export type DiscordAnnouncementKind = (typeof discordAnnouncementKinds)[number];

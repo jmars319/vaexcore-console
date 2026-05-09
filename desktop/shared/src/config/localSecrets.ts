@@ -92,7 +92,11 @@ const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
   },
   discord: {
     ...secrets.discord,
-    botToken: sanitizeOptional(secrets.discord.botToken, "Discord bot token", 240),
+    botToken: sanitizeOptional(
+      secrets.discord.botToken,
+      "Discord bot token",
+      240,
+    ),
     guildId: sanitizeOptional(secrets.discord.guildId, "Discord server ID", 32),
     streamAnnouncementChannelId: sanitizeOptional(
       secrets.discord.streamAnnouncementChannelId,

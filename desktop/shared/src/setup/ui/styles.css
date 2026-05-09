@@ -593,6 +593,19 @@ button.nav-button.active:hover:not(:disabled) {
   background: var(--surface-3);
   padding: 10px 12px;
 }
+.discord-plan {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.discord-plan-list {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-3);
+  padding: 10px 10px 10px 28px;
+}
 .suite-row.timeline {
   border-left-color: var(--accent-2);
 }

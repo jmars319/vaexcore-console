@@ -197,7 +197,10 @@ export const applyDiscordServerSetup = async (options: {
   includeRoles?: boolean;
 }): Promise<DiscordSetupApplyResult> => {
   const template = options.template ?? minimalStreamerDiscordTemplate;
-  const guildId = normalizeDiscordSnowflake(options.guildId, "Discord guild ID");
+  const guildId = normalizeDiscordSnowflake(
+    options.guildId,
+    "Discord guild ID",
+  );
   const existingChannels = await options.client.listGuildChannels(guildId);
   const existingRoles = await options.client.listGuildRoles(guildId);
   const includeRoles = options.includeRoles ?? false;
