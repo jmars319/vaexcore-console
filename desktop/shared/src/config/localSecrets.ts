@@ -28,6 +28,18 @@ const localSecretsSchema = z.object({
       tokenValidatedAt: z.string().optional(),
     })
     .default({}),
+  discord: z
+    .object({
+      botToken: z.string().optional(),
+      guildId: z.string().optional(),
+      streamAnnouncementChannelId: z.string().optional(),
+      generalAnnouncementChannelId: z.string().optional(),
+      streamAlertsRoleId: z.string().optional(),
+      setupAppliedAt: z.string().optional(),
+      createdChannelIds: z.record(z.string()).default({}),
+      createdRoleIds: z.record(z.string()).default({}),
+    })
+    .default({}),
 });
 
 export type LocalSecrets = z.infer<typeof localSecretsSchema>;
@@ -37,6 +49,7 @@ export const readLocalSecrets = (): LocalSecrets => {
     return {
       mode: "live",
       twitch: { redirectUri: defaultRedirectUri, scopes: [] },
+      discord: { createdChannelIds: {}, createdRoleIds: {} },
     };
   }
 
@@ -76,6 +89,28 @@ const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
     botLogin: secrets.twitch.botLogin
       ? normalizeLogin(secrets.twitch.botLogin, "Bot login")
       : undefined,
+  },
+  discord: {
+    ...secrets.discord,
+    botToken: sanitizeOptional(secrets.discord.botToken, "Discord bot token", 240),
+    guildId: sanitizeOptional(secrets.discord.guildId, "Discord server ID", 32),
+    streamAnnouncementChannelId: sanitizeOptional(
+      secrets.discord.streamAnnouncementChannelId,
+      "Discord stream announcement channel ID",
+      32,
+    ),
+    generalAnnouncementChannelId: sanitizeOptional(
+      secrets.discord.generalAnnouncementChannelId,
+      "Discord general announcement channel ID",
+      32,
+    ),
+    streamAlertsRoleId: sanitizeOptional(
+      secrets.discord.streamAlertsRoleId,
+      "Discord Stream Alerts role ID",
+      32,
+    ),
+    createdChannelIds: secrets.discord.createdChannelIds ?? {},
+    createdRoleIds: secrets.discord.createdRoleIds ?? {},
   },
 });
 

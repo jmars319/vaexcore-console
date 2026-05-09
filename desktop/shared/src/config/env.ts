@@ -163,6 +163,7 @@ const bootstrapLocalOAuthStore = (
       broadcasterUserId: env.TWITCH_BROADCASTER_USER_ID,
       botUserId: env.TWITCH_BOT_USER_ID,
     },
+    discord: existing.discord,
   };
 
   if (JSON.stringify(existing) === JSON.stringify(next)) {

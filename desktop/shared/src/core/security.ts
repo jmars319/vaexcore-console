@@ -22,9 +22,11 @@ const invisibleCharacters = /[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g;
 const secretKeys = /token|secret|authorization|clientSecret|code|refresh/i;
 const secretTextPatterns = [
   /Bearer\s+[A-Za-z0-9._~+/=-]+/gi,
+  /Bot\s+[A-Za-z0-9._~+/=-]+/gi,
   /oauth:[A-Za-z0-9._~+/=-]+/gi,
   /\b(client_secret|clientSecret|access_token|accessToken|refresh_token|refreshToken|authorization)\b["']?\s*[:=]\s*["']?[^"'\s,}&]+/gi,
   /\bTWITCH_(USER_ACCESS_TOKEN|REFRESH_TOKEN|CLIENT_SECRET)\b/gi,
+  /\bDISCORD_(BOT_TOKEN|TOKEN)\b/gi,
 ];
 
 export class SafeInputError extends Error {
@@ -226,7 +228,11 @@ export const redactSecretText = (value: string) => {
       const separator = match.match(/[:=]/)?.[0];
 
       if (!separator) {
-        return match.startsWith("Bearer") ? "Bearer [redacted]" : "[redacted]";
+        return match.startsWith("Bearer")
+          ? "Bearer [redacted]"
+          : match.startsWith("Bot")
+            ? "Bot [redacted]"
+            : "[redacted]";
       }
 
       return `${match.slice(0, match.indexOf(separator) + 1)}[redacted]`;

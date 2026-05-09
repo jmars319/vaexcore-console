@@ -1735,6 +1735,7 @@ const saveConfig = (body: unknown) => {
   const next: LocalSecrets = {
     mode: input.mode === "local" ? "local" : "live",
     twitch,
+    discord: existing.discord,
   };
 
   writeLocalSecrets(next);
