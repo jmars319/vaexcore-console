@@ -358,6 +358,20 @@ Common setup errors:
 
 The setup UI never displays tokens after OAuth, never logs tokens, and never stores giveaway prizes.
 
+## Twitch Creator Ops
+
+The `Twitch Ops` section provides guarded live controls for creator-side Twitch actions:
+
+- create and end polls
+- create, lock, resolve, or cancel predictions
+- send highlighted chat announcements
+- send shoutouts
+- start or cancel raid flows
+
+These controls use Twitch Helix APIs and require the optional creator-ops scopes shown in readiness. Reconnect Twitch from `Settings` if a creator action reports a missing scope.
+
+Every live Twitch creator-ops action requires an explicit browser confirmation before Console calls Twitch. Actions write redacted audit entries under `twitch.creator_ops.*`, and `npm run smoke:twitch-ops` validates the UI, redaction, guarded confirmation, and mocked Helix request paths without touching a real Twitch channel.
+
 ## Configuring Discord
 
 The `Discord` section in Console can prepare a minimal streamer Discord server layout and send stream status announcements. It is intentionally local-first: the bot token is stored only in `config/local.secrets.json`, the setup API never returns the token, and setup can be previewed before anything is created.

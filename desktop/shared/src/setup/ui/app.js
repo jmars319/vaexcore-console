@@ -14,6 +14,7 @@ const mainTabs = [
   ["moderation", "Moderation"],
   ["giveaways", "Giveaways"],
   ["chat-tools", "Operator Tools"],
+  ["twitch-ops", "Twitch Ops"],
   ["discord", "Discord"],
   ["suite", "Suite"],
   ["testing", "Testing"],
@@ -74,6 +75,8 @@ const state = {
   moderationFeatureGate: null,
   streamPresets: [],
   suiteStatus: null,
+  twitchOps: null,
+  twitchOpsDraft: {},
   discord: null,
   discordSetupPreview: null,
   featureGates: [],
@@ -269,6 +272,9 @@ const api = {
   runLaunchPreparation: () => api.post("/api/launch-preparation"),
   launchSuite: () => api.post("/api/launch-suite"),
   suiteStatus: () => api.get("/api/suite/status"),
+  twitchCreatorOps: () => api.get("/api/twitch/creator-ops"),
+  runTwitchCreatorOp: (action, body) =>
+    api.post(`/api/twitch/creator-ops/${action}`, body),
   discordStatus: (validate = false) =>
     api.get(`/api/discord/status${validate ? "?validate=1" : ""}`),
   saveDiscordConfig: (body) => api.post("/api/discord/config", body),
@@ -594,6 +600,7 @@ function renderTab(id) {
     moderation: renderModeration,
     giveaways: renderGiveaways,
     "chat-tools": renderChatTools,
+    "twitch-ops": renderTwitchOps,
     discord: renderDiscord,
     suite: renderSuite,
     testing: renderTesting,
@@ -3429,6 +3436,226 @@ function renderBotConfigBundleCard() {
   ]);
 }
 
+function renderTwitchOps() {
+  const ops = state.twitchOps || {};
+  const readiness = ops.readiness || { checks: [], missingScopes: [] };
+  return [
+    sectionHeader(
+      "Twitch Creator Ops",
+      "Guarded live controls for polls, predictions, raids, shoutouts, and highlighted announcements.",
+    ),
+    card("Readiness", [
+      statusGrid([
+        [
+          "Twitch identity",
+          readiness.identityReady ? "ready" : "missing",
+          Boolean(readiness.identityReady),
+        ],
+        [
+          "Broadcaster",
+          readiness.broadcasterLogin || "missing",
+          Boolean(readiness.broadcasterLogin),
+        ],
+        ["Bot", readiness.botLogin || "missing", Boolean(readiness.botLogin)],
+        [
+          "Creator scopes",
+          readiness.missingScopes?.length
+            ? `${readiness.missingScopes.length} missing`
+            : "ready",
+          !readiness.missingScopes?.length,
+        ],
+      ]),
+      readiness.checks?.length
+        ? list(
+            readiness.checks.map(
+              (check) =>
+                `${check.ok ? "PASS" : "FAIL"} ${check.name}: ${check.detail}`,
+            ),
+            readiness.ready ? "ok" : "warn",
+          )
+        : null,
+    ]),
+    card("Polls And Predictions", [
+      h("div", { className: "grid" }, [
+        formRow(
+          "Poll title",
+          h("input", {
+            id: "twitchPollTitle",
+            placeholder: "What should we run next?",
+            onInput: updateTwitchOpsDraft,
+          }),
+        ),
+        formRow(
+          "Poll duration seconds",
+          h("input", {
+            id: "twitchPollDuration",
+            type: "number",
+            min: "15",
+            max: "1800",
+            onInput: updateTwitchOpsDraft,
+          }),
+        ),
+      ]),
+      formRow(
+        "Poll choices",
+        h("textarea", {
+          id: "twitchPollChoices",
+          placeholder: "Choice one\nChoice two",
+          onInput: updateTwitchOpsDraft,
+        }),
+      ),
+      h("div", { className: "actions" }, [
+        actionButton("Start poll", {
+          id: "startTwitchPoll",
+          variant: "danger",
+          onClick: startTwitchPoll,
+        }),
+        actionButton("End poll", {
+          id: "endTwitchPoll",
+          variant: "danger",
+          onClick: endTwitchPoll,
+        }),
+      ]),
+      h("div", { className: "grid" }, [
+        formRow(
+          "Prediction title",
+          h("input", {
+            id: "twitchPredictionTitle",
+            placeholder: "Will we win this round?",
+            onInput: updateTwitchOpsDraft,
+          }),
+        ),
+        formRow(
+          "Prediction window seconds",
+          h("input", {
+            id: "twitchPredictionWindow",
+            type: "number",
+            min: "30",
+            max: "1800",
+            onInput: updateTwitchOpsDraft,
+          }),
+        ),
+      ]),
+      formRow(
+        "Prediction outcomes",
+        h("textarea", {
+          id: "twitchPredictionOutcomes",
+          placeholder: "Yes\nNo",
+          onInput: updateTwitchOpsDraft,
+        }),
+      ),
+      h("div", { className: "grid" }, [
+        formRow(
+          "Prediction ID",
+          h("input", {
+            id: "twitchPredictionId",
+            onInput: updateTwitchOpsDraft,
+          }),
+        ),
+        formRow(
+          "Winning outcome ID",
+          h("input", {
+            id: "twitchWinningOutcomeId",
+            onInput: updateTwitchOpsDraft,
+          }),
+        ),
+      ]),
+      h("div", { className: "actions" }, [
+        actionButton("Start prediction", {
+          id: "startTwitchPrediction",
+          variant: "danger",
+          onClick: startTwitchPrediction,
+        }),
+        actionButton("Lock prediction", {
+          id: "lockTwitchPrediction",
+          variant: "danger",
+          onClick: () => endTwitchPrediction("LOCKED"),
+        }),
+        actionButton("Resolve prediction", {
+          id: "resolveTwitchPrediction",
+          variant: "danger",
+          onClick: () => endTwitchPrediction("RESOLVED"),
+        }),
+        actionButton("Cancel prediction", {
+          id: "cancelTwitchPrediction",
+          variant: "danger",
+          onClick: () => endTwitchPrediction("CANCELED"),
+        }),
+      ]),
+    ]),
+    card("Stream Actions", [
+      h("div", { className: "grid" }, [
+        formRow(
+          "Announcement color",
+          h(
+            "select",
+            { id: "twitchAnnouncementColor", onChange: updateTwitchOpsDraft },
+            [
+              option("primary", "primary"),
+              option("purple", "purple"),
+              option("blue", "blue"),
+              option("green", "green"),
+              option("orange", "orange"),
+            ],
+          ),
+        ),
+        formRow(
+          "Target channel",
+          h("input", {
+            id: "twitchTargetLogin",
+            placeholder: "target_channel",
+            onInput: updateTwitchOpsDraft,
+          }),
+        ),
+      ]),
+      formRow(
+        "Announcement message",
+        h("textarea", {
+          id: "twitchAnnouncementMessage",
+          placeholder: "We are live with a special event.",
+          onInput: updateTwitchOpsDraft,
+        }),
+      ),
+      h("div", { className: "actions" }, [
+        actionButton("Send announcement", {
+          id: "sendTwitchAnnouncement",
+          variant: "danger",
+          onClick: sendTwitchAnnouncement,
+        }),
+        actionButton("Send shoutout", {
+          id: "sendTwitchShoutout",
+          variant: "danger",
+          onClick: sendTwitchShoutout,
+        }),
+        actionButton("Start raid", {
+          id: "startTwitchRaid",
+          variant: "danger",
+          onClick: startTwitchRaid,
+        }),
+        actionButton("Cancel raid", {
+          id: "cancelTwitchRaid",
+          variant: "danger",
+          onClick: cancelTwitchRaid,
+        }),
+      ]),
+    ]),
+    card("Creator Ops Log", [
+      ops.logs?.length
+        ? h(
+            "ul",
+            {},
+            ops.logs.slice(0, 12).map((log) =>
+              h("li", {
+                text: `${log.created_at} ${log.action}`,
+              }),
+            ),
+          )
+        : callout("No Twitch creator ops actions have been logged yet."),
+    ]),
+    message(),
+  ];
+}
+
 function renderDiscord() {
   const discord = state.discord || {};
   const config = discord.config || state.config?.discord || {};
@@ -5973,6 +6200,7 @@ async function loadFreshState() {
     featureGateResult,
     streamPresetResult,
     suiteStatus,
+    twitchOps,
     discordStatus,
   ] = await Promise.all([
     api.config(),
@@ -5991,6 +6219,7 @@ async function loadFreshState() {
     api.featureGates(),
     api.streamPresets(),
     api.suiteStatus(),
+    api.twitchCreatorOps(),
     api.discordStatus(),
   ]);
   state.config = config;
@@ -6010,6 +6239,7 @@ async function loadFreshState() {
   state.featureGates = featureGateResult.featureGates || [];
   state.streamPresets = streamPresetResult.presets || [];
   state.suiteStatus = suiteStatus;
+  state.twitchOps = twitchOps;
   state.discord = discordStatus;
   syncLaunchPreparation(status);
   syncLaunchPreparation(diagnostics);
@@ -6058,6 +6288,7 @@ async function refreshAfterAction() {
     featureGateResult,
     streamPresetResult,
     suiteStatus,
+    twitchOps,
     discordStatus,
   ] = await Promise.all([
     api.status(),
@@ -6074,6 +6305,7 @@ async function refreshAfterAction() {
     api.featureGates(),
     api.streamPresets(),
     api.suiteStatus(),
+    api.twitchCreatorOps(),
     api.discordStatus(),
   ]);
   state.status = status;
@@ -6091,6 +6323,7 @@ async function refreshAfterAction() {
   state.featureGates = featureGateResult.featureGates || [];
   state.streamPresets = streamPresetResult.presets || [];
   state.suiteStatus = suiteStatus;
+  state.twitchOps = twitchOps;
   state.discord = discordStatus;
   syncLaunchPreparation(status);
   state.validSetup = isValidationPassed();
@@ -7000,6 +7233,114 @@ async function saveSettings() {
   );
 }
 
+async function startTwitchPoll() {
+  await runTwitchCreatorOp(
+    "poll",
+    {
+      title: field("twitchPollTitle")?.value || "",
+      choices: field("twitchPollChoices")?.value || "",
+      durationSeconds: field("twitchPollDuration")?.value || "120",
+    },
+    "Start this Twitch poll live?",
+    "Twitch poll started.",
+  );
+}
+
+async function endTwitchPoll() {
+  const id = prompt("Poll ID to end:");
+  if (!id) return;
+  await runTwitchCreatorOp(
+    "poll/end",
+    { id, status: "TERMINATED" },
+    "End this Twitch poll now?",
+    "Twitch poll ended.",
+  );
+}
+
+async function startTwitchPrediction() {
+  await runTwitchCreatorOp(
+    "prediction",
+    {
+      title: field("twitchPredictionTitle")?.value || "",
+      outcomes: field("twitchPredictionOutcomes")?.value || "",
+      predictionWindowSeconds: field("twitchPredictionWindow")?.value || "120",
+    },
+    "Start this Twitch prediction live?",
+    "Twitch prediction started.",
+  );
+}
+
+async function endTwitchPrediction(status) {
+  await runTwitchCreatorOp(
+    "prediction/end",
+    {
+      id: field("twitchPredictionId")?.value || "",
+      status,
+      winningOutcomeId: field("twitchWinningOutcomeId")?.value || "",
+    },
+    `${status.toLowerCase()} this Twitch prediction now?`,
+    "Twitch prediction updated.",
+  );
+}
+
+async function sendTwitchAnnouncement() {
+  await runTwitchCreatorOp(
+    "announcement",
+    {
+      message: field("twitchAnnouncementMessage")?.value || "",
+      color: field("twitchAnnouncementColor")?.value || "primary",
+    },
+    "Send this Twitch announcement live?",
+    "Twitch announcement sent.",
+  );
+}
+
+async function sendTwitchShoutout() {
+  await runTwitchCreatorOp(
+    "shoutout",
+    { targetLogin: field("twitchTargetLogin")?.value || "" },
+    "Send this Twitch shoutout live?",
+    "Twitch shoutout sent.",
+  );
+}
+
+async function startTwitchRaid() {
+  await runTwitchCreatorOp(
+    "raid",
+    { targetLogin: field("twitchTargetLogin")?.value || "" },
+    "Start this Twitch raid flow live?",
+    "Twitch raid flow started.",
+  );
+}
+
+async function cancelTwitchRaid() {
+  await runTwitchCreatorOp(
+    "raid/cancel",
+    {},
+    "Cancel the current Twitch raid flow?",
+    "Twitch raid flow canceled.",
+  );
+}
+
+async function runTwitchCreatorOp(action, body, confirmation, success) {
+  if (!confirm(confirmation)) {
+    return;
+  }
+
+  await runAction(
+    `twitchCreatorOps:${action}`,
+    async () => {
+      const result = await api.runTwitchCreatorOp(action, {
+        ...body,
+        confirmed: true,
+      });
+      state.twitchOps = result.state || state.twitchOps;
+      return result;
+    },
+    { skipRefresh: true, success },
+  );
+}
+
 async function validateDiscordBot() {
   await runAction(
     "discordValidateBot",
@@ -7110,6 +7451,13 @@ function updateSettingsDraft(event) {
 
 function updateDiscordDraft(event) {
   state.discordDraft[event.target.id] =
+    event.target.type === "checkbox"
+      ? event.target.checked
+      : event.target.value;
+}
+
+function updateTwitchOpsDraft(event) {
+  state.twitchOpsDraft[event.target.id] =
     event.target.type === "checkbox"
       ? event.target.checked
       : event.target.value;
@@ -8088,6 +8436,41 @@ function syncFormValues() {
       relayConfig.hasConsoleToken ? savedCredentialMask : "",
     ),
   );
+  setValue("twitchPollDuration", twitchOpsValue("twitchPollDuration", "120"));
+  setValue(
+    "twitchPredictionWindow",
+    twitchOpsValue("twitchPredictionWindow", "120"),
+  );
+  setValue(
+    "twitchAnnouncementColor",
+    twitchOpsValue("twitchAnnouncementColor", "primary"),
+  );
+  setValue(
+    "twitchPollTitle",
+    twitchOpsValue("twitchPollTitle", "What should we do next?"),
+  );
+  setValue(
+    "twitchPollChoices",
+    twitchOpsValue("twitchPollChoices", "Option one\nOption two"),
+  );
+  setValue(
+    "twitchPredictionTitle",
+    twitchOpsValue("twitchPredictionTitle", "Will this run work?"),
+  );
+  setValue(
+    "twitchPredictionOutcomes",
+    twitchOpsValue("twitchPredictionOutcomes", "Yes\nNo"),
+  );
+  setValue("twitchPredictionId", twitchOpsValue("twitchPredictionId", ""));
+  setValue(
+    "twitchWinningOutcomeId",
+    twitchOpsValue("twitchWinningOutcomeId", ""),
+  );
+  setValue(
+    "twitchAnnouncementMessage",
+    twitchOpsValue("twitchAnnouncementMessage", ""),
+  );
+  setValue("twitchTargetLogin", twitchOpsValue("twitchTargetLogin", ""));
   setValue("discordBotToken", discordValue("discordBotToken", ""));
   setValue(
     "discordGuildId",
@@ -8535,6 +8918,10 @@ function moderationValue(id, fallback) {
 
 function discordValue(id, fallback) {
   return draftValue(state.discordDraft, id, fallback);
+}
+
+function twitchOpsValue(id, fallback) {
+  return draftValue(state.twitchOpsDraft, id, fallback);
 }
 
 function giveawayValue(id, fallback) {

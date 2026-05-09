@@ -65,6 +65,10 @@ async function runSmoke() {
     "browser UI has tabs",
   );
   assert(
+    appJs.includes("Twitch Creator Ops") && appJs.includes("Start raid"),
+    "browser UI exposes Twitch creator ops",
+  );
+  assert(
     appJs.includes("Command Library"),
     "browser UI exposes custom command library",
   );

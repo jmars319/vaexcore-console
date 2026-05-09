@@ -11,6 +11,13 @@ export const optionalModerationScopes = [
   "moderator:manage:chat_messages",
   "moderator:manage:banned_users",
 ] as const;
+export const optionalCreatorOpsScopes = [
+  "channel:manage:polls",
+  "channel:manage:predictions",
+  "channel:manage:raids",
+  "moderator:manage:announcements",
+  "moderator:manage:shoutouts",
+] as const;
 
 export type TokenValidation = {
   client_id: string;
