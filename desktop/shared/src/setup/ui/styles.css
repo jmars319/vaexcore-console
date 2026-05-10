@@ -716,6 +716,10 @@ button.nav-button.active:hover:not(:disabled) {
   margin-bottom: 3px;
   font-size: 12px;
 }
+.pill span {
+  display: block;
+  overflow-wrap: anywhere;
+}
 .chip {
   display: inline-flex;
   padding: 3px 7px;

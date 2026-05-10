@@ -7055,6 +7055,7 @@ async function loadFreshState() {
     suiteStatus,
     twitchOps,
     discordStatus,
+    discordRelayStatus,
   ] = await Promise.all([
     api.config(),
     api.status(),
@@ -7074,6 +7075,7 @@ async function loadFreshState() {
     api.suiteStatus(),
     api.twitchCreatorOps(),
     api.discordStatus(),
+    api.discordRelayStatus(),
   ]);
   state.config = config;
   state.status = status;
@@ -7094,6 +7096,7 @@ async function loadFreshState() {
   state.suiteStatus = suiteStatus;
   state.twitchOps = twitchOps;
   state.discord = discordStatus;
+  state.discordRelayStatus = discordRelayStatus;
   syncLaunchPreparation(status);
   syncLaunchPreparation(diagnostics);
   state.validSetup = isValidationPassed();
@@ -7143,6 +7146,7 @@ async function refreshAfterAction() {
     suiteStatus,
     twitchOps,
     discordStatus,
+    discordRelayStatus,
   ] = await Promise.all([
     api.status(),
     api.launchPreparation(),
@@ -7160,6 +7164,7 @@ async function refreshAfterAction() {
     api.suiteStatus(),
     api.twitchCreatorOps(),
     api.discordStatus(),
+    api.discordRelayStatus(),
   ]);
   state.status = status;
   syncLaunchPreparation(launchPreparation);
@@ -7178,6 +7183,7 @@ async function refreshAfterAction() {
   state.suiteStatus = suiteStatus;
   state.twitchOps = twitchOps;
   state.discord = discordStatus;
+  state.discordRelayStatus = discordRelayStatus;
   syncLaunchPreparation(status);
   state.validSetup = isValidationPassed();
 }
