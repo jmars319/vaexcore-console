@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -6,10 +7,12 @@ import { pathToFileURL } from "node:url";
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-relay-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
 const relayConsoleToken = "relay-console-secret";
+const relayInstallationId = "relay-installation-1";
 
 process.env.VAEXCORE_CONFIG_DIR = tempDir;
 process.env.DATABASE_URL = `file:${smokeDbPath}`;
 
+const fakeRelay = await startFakeRelay();
 const { startSetupServer } = await import(
   pathToFileURL(resolve("dist-bundle/setup-server.js")).href
 );
@@ -22,12 +25,27 @@ try {
   console.log("relay transport smoke passed");
 } finally {
   await handle.stop();
+  await fakeRelay.stop();
   rmSync(tempDir, { recursive: true, force: true });
 }
 
 async function runSmoke() {
   const appJs = await text("/ui/app.js");
   assert(appJs.includes("Twitch Chat Transport"), "Relay transport UI exists");
+  assert(
+    appJs.includes("Hosted Relay Bot Setup"),
+    "hosted Relay setup UI exists",
+  );
+  assert(
+    appJs.includes(
+      "This hosted setup path is the one that can make vaexcorebot appear as a Twitch Chat Bot",
+    ),
+    "Relay-specific setup guide is present",
+  );
+  assert(
+    appJs.includes("Add Twitch Callback URL"),
+    "Relay setup guide includes the Twitch callback step",
+  );
   assert(appJs.includes("Relay Chat Bot"), "Relay Chat Bot mode is labeled");
   assert(
     appJs.includes("will appear as a normal Twitch user"),
@@ -43,6 +61,10 @@ async function runSmoke() {
     clean.relay.hasConsoleToken === false,
     "clean install starts without Relay console token",
   );
+  assert(
+    clean.relay.setupUrls.twitchCallbackUrl === "",
+    "clean install has no Relay callback URL until a Relay URL is saved",
+  );
   assertSafePayload(clean);
 
   const saveResult = await post("/api/config", {
@@ -53,8 +75,8 @@ async function runSmoke() {
     broadcasterLogin: "vaexcore",
     botLogin: "vaexcorebot",
     twitchTransportMode: "relay-chatbot",
-    relayBaseUrl: "https://vaexcore-relay.example.workers.dev/",
-    relayInstallationId: "relay-installation-1",
+    relayBaseUrl: `${fakeRelay.url}/`,
+    relayInstallationId,
     relayConsoleToken,
   });
   const saved = saveResult.config;
@@ -63,12 +85,9 @@ async function runSmoke() {
     saved.relay.twitchTransportMode === "relay-chatbot",
     "Relay chatbot mode is saved",
   );
+  assert(saved.relay.baseUrl === fakeRelay.url, "Relay URL is normalized");
   assert(
-    saved.relay.baseUrl === "https://vaexcore-relay.example.workers.dev",
-    "Relay URL is normalized",
-  );
-  assert(
-    saved.relay.installationId === "relay-installation-1",
+    saved.relay.installationId === relayInstallationId,
     "Relay installation ID is saved",
   );
   assert(
@@ -83,7 +102,168 @@ async function runSmoke() {
     saved.relay.readiness.ready === true,
     "Relay config readiness passes when all fields are present",
   );
+  assert(
+    saved.relay.setupUrls.twitchCallbackUrl ===
+      `${fakeRelay.url}/oauth/twitch/callback`,
+    "Relay Twitch callback URL is surfaced",
+  );
+  assert(
+    saved.relay.setupUrls.twitchBotOAuthUrl ===
+      `${fakeRelay.url}/oauth/twitch/start?installationId=${relayInstallationId}&kind=bot`,
+    "Relay bot OAuth URL is surfaced",
+  );
+  assert(
+    saved.relay.setupUrls.twitchBroadcasterOAuthUrl ===
+      `${fakeRelay.url}/oauth/twitch/start?installationId=${relayInstallationId}&kind=broadcaster`,
+    "Relay broadcaster OAuth URL is surfaced",
+  );
+  assert(
+    saved.relay.setupUrls.discordInteractionUrl ===
+      `${fakeRelay.url}/webhooks/discord/interactions`,
+    "Relay Discord interaction URL is surfaced",
+  );
   assertSafePayload(saved);
+
+  const relayStatus = await json("/api/relay/status");
+  assert(relayStatus.ok === true, "Relay status route returns ok");
+  assert(relayStatus.connected === true, "Relay status route connects");
+  assert(
+    relayStatus.readiness.ready === true,
+    "Relay remote readiness is surfaced",
+  );
+  assertSafePayload(relayStatus);
+
+  const eventSub = await post("/api/relay/eventsub/register", {});
+  assert(eventSub.ok === true, "Relay EventSub registration returns ok");
+  assert(
+    fakeRelay.eventSubRegisterCount === 1,
+    "fake Relay saw EventSub registration",
+  );
+  assertSafePayload(eventSub);
+
+  const relayTestSend = await post("/api/relay/test-send", {});
+  assert(relayTestSend.ok === true, "Relay test-send route sends chat");
+  assert(fakeRelay.chatSendCount === 1, "fake Relay saw direct test chat send");
+  assertSafePayload(relayTestSend);
+
+  const genericTestSend = await post("/api/test-send", {});
+  assert(
+    genericTestSend.ok === true,
+    "generic test-send uses Relay mode without local OAuth",
+  );
+  assert(
+    fakeRelay.chatSendCount === 2,
+    "fake Relay saw generic test chat send",
+  );
+  assertSafePayload(genericTestSend);
+}
+
+async function startFakeRelay() {
+  const state = {
+    eventSubRegisterCount: 0,
+    chatSendCount: 0,
+  };
+
+  const server = createServer(async (request, response) => {
+    const url = new URL(
+      request.url ?? "/",
+      `http://${request.headers.host ?? "localhost"}`,
+    );
+
+    if (request.headers.authorization !== `Bearer ${relayConsoleToken}`) {
+      send(response, 401, { error: "Unauthorized" });
+      return;
+    }
+    if (url.searchParams.get("installationId") !== relayInstallationId) {
+      send(response, 404, { error: "Installation missing" });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/console/status") {
+      send(response, 200, {
+        ok: true,
+        installation: {
+          id: relayInstallationId,
+          name: "VaexCore Console",
+          botLogin: "vaexcorebot",
+          broadcasterLogin: "vaexcore",
+        },
+        readiness: {
+          ready: true,
+          mode: "relay-chatbot",
+          checks: [
+            { key: "bot-grant", ok: true, detail: "Bot grant stored." },
+            {
+              key: "broadcaster-grant",
+              ok: true,
+              detail: "Broadcaster grant stored.",
+            },
+            {
+              key: "separate-bot-account",
+              ok: true,
+              detail: "Bot and broadcaster accounts are separate.",
+            },
+          ],
+        },
+      });
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/console/eventsub/register"
+    ) {
+      state.eventSubRegisterCount += 1;
+      send(response, 200, {
+        ok: true,
+        subscription: { id: "eventsub-subscription-1" },
+      });
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/console/chat/send"
+    ) {
+      const body = await readBody(request);
+      state.chatSendCount += 1;
+      send(response, 200, {
+        ok: true,
+        messageId: body.message ? "relay-message-1" : "missing-message",
+      });
+      return;
+    }
+
+    send(response, 404, {
+      error: `Unhandled ${request.method} ${url.pathname}`,
+    });
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+
+  return {
+    get url() {
+      return stateUrl(server);
+    },
+    get eventSubRegisterCount() {
+      return state.eventSubRegisterCount;
+    },
+    get chatSendCount() {
+      return state.chatSendCount;
+    },
+    stop: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
+function stateUrl(server) {
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Fake Relay server did not bind to a TCP port.");
+  }
+  return `http://127.0.0.1:${address.port}`;
 }
 
 async function text(path) {
@@ -106,6 +286,20 @@ async function post(path, body) {
   });
   assert(response.ok, `${path} returned ${response.status}`);
   return response.json();
+}
+
+async function readBody(request) {
+  const chunks = [];
+  for await (const chunk of request) {
+    chunks.push(chunk);
+  }
+  const raw = Buffer.concat(chunks).toString("utf8");
+  return raw ? JSON.parse(raw) : {};
+}
+
+function send(response, status, body) {
+  response.writeHead(status, { "Content-Type": "application/json" });
+  response.end(JSON.stringify(body));
 }
 
 function assertSafePayload(payload) {

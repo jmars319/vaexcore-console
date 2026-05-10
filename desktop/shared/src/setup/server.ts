@@ -324,6 +324,24 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/relay/status") {
+    sendJson(response, 200, await getRelayStatusRoute());
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/relay/eventsub/register"
+  ) {
+    sendJson(response, 200, await registerRelayEventSubRoute());
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/relay/test-send") {
+    sendJson(response, 200, await sendRelayTestMessageRoute());
+    return;
+  }
+
   if (request.method === "GET" && url.pathname === "/api/discord/status") {
     sendJson(response, 200, await getDiscordStatus(url.searchParams));
     return;
@@ -1414,6 +1432,7 @@ const getSafeRelayConfig = (secrets = readLocalSecrets()) => {
     chatbotIdentityValidationNote: relay.chatbotIdentityValidationNote ?? "",
     readiness,
     identityNotice,
+    setupUrls: getRelaySetupUrls(relay),
   };
 };
 
@@ -1455,9 +1474,35 @@ const getSafeDiscordRelayConfig = (secrets = readLocalSecrets()) => {
     baseUrl,
     installationId: relay.installationId ?? "",
     hasConsoleToken: Boolean(relay.consoleToken),
-    interactionUrl: baseUrl ? `${baseUrl}/webhooks/discord/interactions` : "",
+    interactionUrl: getRelaySetupUrls(relay).discordInteractionUrl,
     suggestionStatuses: ["new", "reviewed", "accepted", "rejected", "archived"],
     localReadiness: readiness,
+  };
+};
+
+const getRelaySetupUrls = (relay: LocalSecrets["relay"]) => {
+  const baseUrl = relay.baseUrl?.replace(/\/+$/, "") ?? "";
+  const installationId = relay.installationId ?? "";
+  const installationQuery = installationId
+    ? `?installationId=${encodeURIComponent(installationId)}`
+    : "";
+  return {
+    publicBaseUrl: baseUrl,
+    twitchCallbackUrl: baseUrl ? `${baseUrl}/oauth/twitch/callback` : "",
+    twitchBotOAuthUrl:
+      baseUrl && installationId
+        ? `${baseUrl}/oauth/twitch/start${installationQuery}&kind=bot`
+        : "",
+    twitchBroadcasterOAuthUrl:
+      baseUrl && installationId
+        ? `${baseUrl}/oauth/twitch/start${installationQuery}&kind=broadcaster`
+        : "",
+    twitchEventSubWebhookUrl: baseUrl
+      ? `${baseUrl}/webhooks/twitch/eventsub`
+      : "",
+    discordInteractionUrl: baseUrl
+      ? `${baseUrl}/webhooks/discord/interactions`
+      : "",
   };
 };
 
@@ -1525,6 +1570,109 @@ const getDiscordStatus = async (searchParams: URLSearchParams) => {
     validationError,
   };
 };
+
+const getRelayStatusRoute = async () => {
+  const secrets = readLocalSecrets();
+  const relay = getSafeRelayConfig(secrets);
+  const connectionError = relayConnectionError(secrets);
+  if (connectionError) {
+    return {
+      ok: true,
+      connected: false,
+      relay,
+      error: connectionError,
+    };
+  }
+
+  try {
+    const status = await createRelayChatClient(secrets).status();
+    return {
+      ok: true,
+      connected: true,
+      relay,
+      installation: status.installation,
+      readiness: status.readiness,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      connected: false,
+      relay,
+      error: safeErrorMessage(error, "Relay status check failed."),
+    };
+  }
+};
+
+const registerRelayEventSubRoute = async () => {
+  const secrets = readLocalSecrets();
+  const connectionError = relayConnectionError(secrets);
+  if (connectionError) {
+    throw new SafeInputError(connectionError);
+  }
+  const result = await createRelayChatClient(secrets).registerEventSub();
+  appendSuiteTimelineEvent({
+    sourceApp: "vaexcore-console",
+    sourceAppName: "vaexcore console",
+    kind: "twitch.relay.eventsub.register",
+    title: "Twitch Relay EventSub registered",
+    detail: "Console registered the Relay chatbot EventSub subscription.",
+    metadata: {
+      transport: "relay-chatbot",
+      subscription: result.subscription ?? null,
+    },
+  });
+  return {
+    ...result,
+    relay: getSafeRelayConfig(),
+  };
+};
+
+const sendRelayTestMessageRoute = async () => {
+  const secrets = readLocalSecrets();
+  const connectionError = relayConnectionError(secrets);
+  if (connectionError) {
+    return {
+      ok: false,
+      relay: getSafeRelayConfig(secrets),
+      error: connectionError,
+      failureCategory: "config",
+    };
+  }
+
+  const result = await createRelayChatClient(secrets).send(
+    "vaexcore console relay setup test.",
+  );
+  const structured = typeof result === "string" ? { status: result } : result;
+  return {
+    ok: structured.status === "sent",
+    relay: getSafeRelayConfig(),
+    error:
+      structured.status === "sent"
+        ? undefined
+        : structured.reason || "Relay test chat message was not sent.",
+    failureCategory: structured.failureCategory,
+  };
+};
+
+const relayConnectionError = (secrets = readLocalSecrets()) => {
+  const relay = secrets.relay;
+  const readiness = relayConfigReadiness({
+    baseUrl: relay.baseUrl,
+    installationId: relay.installationId,
+    consoleToken: relay.consoleToken,
+  });
+  if (!readiness.ready) {
+    return "Save Relay URL, installation ID, and console token before using Relay chatbot setup.";
+  }
+  return "";
+};
+
+const createRelayChatClient = (secrets = readLocalSecrets()) =>
+  new RelayChatClient({
+    baseUrl: secrets.relay.baseUrl,
+    installationId: secrets.relay.installationId,
+    consoleToken: secrets.relay.consoleToken,
+  });
 
 const saveDiscordConfig = (body: unknown) => {
   const input = objectInput(body);
@@ -3131,6 +3279,10 @@ const validateSetup = async () => {
 };
 
 const sendTestMessage = async () => {
+  if (readLocalSecrets().relay.twitchTransportMode === "relay-chatbot") {
+    return sendRelayTestMessageRoute();
+  }
+
   const validation = await validateSetup();
 
   if (!validation.ok) {

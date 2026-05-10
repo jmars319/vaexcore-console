@@ -77,6 +77,9 @@ const state = {
   suiteStatus: null,
   twitchOps: null,
   twitchOpsDraft: {},
+  relayStatus: null,
+  relayEventSubResult: null,
+  relayTestSendResult: null,
   discord: null,
   discordSetupPreview: null,
   featureGates: [],
@@ -275,6 +278,9 @@ const api = {
   twitchCreatorOps: () => api.get("/api/twitch/creator-ops"),
   runTwitchCreatorOp: (action, body) =>
     api.post(`/api/twitch/creator-ops/${action}`, body),
+  relayStatus: () => api.get("/api/relay/status"),
+  registerRelayEventSub: () => api.post("/api/relay/eventsub/register"),
+  relayTestSend: () => api.post("/api/relay/test-send"),
   discordStatus: (validate = false) =>
     api.get(`/api/discord/status${validate ? "?validate=1" : ""}`),
   saveDiscordConfig: (body) => api.post("/api/discord/config", body),
@@ -4186,69 +4192,31 @@ function renderTesting() {
 function renderSettings() {
   const config = state.config || {};
   const relay = config.relay || {};
+  const relayMode = isRelayChatbotMode(config);
   const required = missingConfigFields(config);
   const validationChecks = visibleValidationChecks();
   return [
     sectionHeader(
       "Console Settings",
-      "Configure local mode, Twitch OAuth, and automatic launch validation.",
-      connectButton(config),
+      relayMode
+        ? "Configure hosted Relay chatbot identity, Discord interactions, and local fallback settings."
+        : "Configure local mode, Twitch OAuth, and automatic launch validation.",
+      relayMode
+        ? actionButton("Check Relay", {
+            id: "settingsRelayStatus",
+            variant: "secondary",
+            busyKey: "relayStatus",
+            disabled: !relay.readiness?.ready,
+            onClick: checkRelayStatus,
+          })
+        : connectButton(config),
     ),
     renderWindowsSetupPromptNotice(),
     renderSettingsLaunchNotice(),
     renderSetupGuide(),
-    card("Setup Completion", [
-      statusGrid([
-        [
-          "Completion",
-          isValidationPassed() ? "complete" : "incomplete",
-          isValidationPassed(),
-        ],
-        [
-          "Client ID",
-          config.hasClientId ? "present" : "missing",
-          config.hasClientId,
-        ],
-        [
-          "Client Secret",
-          config.hasClientSecret ? "present" : "missing",
-          config.hasClientSecret,
-        ],
-        [
-          "OAuth Token",
-          config.hasAccessToken ? "present" : "missing",
-          config.hasAccessToken,
-        ],
-        [
-          "Refresh Token",
-          config.hasRefreshToken ? "available" : "missing",
-          config.hasRefreshToken,
-        ],
-        [
-          "Broadcaster",
-          config.broadcasterLogin || "missing",
-          Boolean(config.broadcasterLogin),
-        ],
-        ["Bot", config.botLogin || "missing", Boolean(config.botLogin)],
-        [
-          "Scopes",
-          (config.scopes || []).join(", ") || "missing",
-          Boolean((config.scopes || []).length),
-        ],
-        ["Token", config.token || "not connected", Boolean(config.token)],
-        [
-          "Expires",
-          config.tokenExpiresAt || "unknown",
-          Boolean(config.tokenExpiresAt),
-        ],
-      ]),
-      required.length
-        ? list(
-            required.map((item) => `Missing required config: ${item}`),
-            "warn",
-          )
-        : callout("Required config fields are present.", "ok"),
-    ]),
+    relayMode
+      ? renderRelaySetupCompletion(relay)
+      : renderLocalSetupCompletion(config, required),
     card("Twitch Configuration", [
       h("div", { className: "grid" }, [
         formRow(
@@ -4443,6 +4411,7 @@ function renderSettings() {
           ])
         : null,
     ]),
+    renderHostedRelaySetup(relay),
     card("Runtime Commands", [
       h("p", {
         text: "Use Dashboard controls to start or stop the live bot listener. CLI commands remain available when you want terminal runtime control.",
@@ -4459,9 +4428,172 @@ function renderSettings() {
   ];
 }
 
+function renderLocalSetupCompletion(config, required) {
+  return card("Setup Completion", [
+    statusGrid([
+      [
+        "Completion",
+        isValidationPassed() ? "complete" : "incomplete",
+        isValidationPassed(),
+      ],
+      [
+        "Client ID",
+        config.hasClientId ? "present" : "missing",
+        config.hasClientId,
+      ],
+      [
+        "Client Secret",
+        config.hasClientSecret ? "present" : "missing",
+        config.hasClientSecret,
+      ],
+      [
+        "OAuth Token",
+        config.hasAccessToken ? "present" : "missing",
+        config.hasAccessToken,
+      ],
+      [
+        "Refresh Token",
+        config.hasRefreshToken ? "available" : "missing",
+        config.hasRefreshToken,
+      ],
+      [
+        "Broadcaster",
+        config.broadcasterLogin || "missing",
+        Boolean(config.broadcasterLogin),
+      ],
+      ["Bot", config.botLogin || "missing", Boolean(config.botLogin)],
+      [
+        "Scopes",
+        (config.scopes || []).join(", ") || "missing",
+        Boolean((config.scopes || []).length),
+      ],
+      ["Token", config.token || "not connected", Boolean(config.token)],
+      [
+        "Expires",
+        config.tokenExpiresAt || "unknown",
+        Boolean(config.tokenExpiresAt),
+      ],
+    ]),
+    required.length
+      ? list(
+          required.map((item) => `Missing required config: ${item}`),
+          "warn",
+        )
+      : callout("Required config fields are present.", "ok"),
+  ]);
+}
+
+function renderRelaySetupCompletion(relay = {}) {
+  const setup = relay.setupUrls || {};
+  const remote = state.relayStatus || {};
+  const readiness = remote.readiness || relay.readiness || {};
+  const botGrant = relayReadinessCheck(readiness, "bot-grant");
+  const broadcasterGrant = relayReadinessCheck(readiness, "broadcaster-grant");
+  const separateBot = relayReadinessCheck(readiness, "separate-bot-account");
+  const relayMode = relay.twitchTransportMode === "relay-chatbot";
+  const configured = Boolean(relay.readiness?.ready);
+  const eventSubOk = Boolean(state.relayEventSubResult?.ok);
+  const testSendOk = Boolean(state.relayTestSendResult?.ok);
+  const complete = Boolean(
+    relayMode &&
+    configured &&
+    botGrant?.ok &&
+    broadcasterGrant?.ok &&
+    separateBot?.ok &&
+    eventSubOk &&
+    testSendOk &&
+    relay.chatbotIdentityValidatedAt,
+  );
+  const blockers = [
+    relayMode ? null : "Select relay-chatbot transport.",
+    configured ? null : "Save Relay URL, installation ID, and console token.",
+    setup.twitchCallbackUrl
+      ? null
+      : "Save Relay URL before adding the Twitch callback URL.",
+    botGrant?.ok ? null : "Authorize the bot account OAuth grant.",
+    broadcasterGrant?.ok
+      ? null
+      : "Authorize the broadcaster channel OAuth grant.",
+    separateBot?.ok
+      ? null
+      : "Confirm the bot and broadcaster are separate Twitch accounts.",
+    eventSubOk ? null : "Register Twitch EventSub after both OAuth grants.",
+    testSendOk ? null : "Send a Relay test message from Console.",
+    relay.chatbotIdentityValidatedAt
+      ? null
+      : "Record the live Twitch Chat Bot identity check.",
+  ].filter(Boolean);
+
+  return card("Setup Completion", [
+    statusGrid([
+      ["Completion", complete ? "relay ready" : "relay pending", complete],
+      ["Relay mode", relayMode ? "selected" : "not selected", relayMode],
+      ["Relay URL", relay.baseUrl || "missing", Boolean(relay.baseUrl)],
+      [
+        "Installation",
+        relay.installationId || "missing",
+        Boolean(relay.installationId),
+      ],
+      [
+        "Console token",
+        relay.hasConsoleToken ? "saved" : "missing",
+        Boolean(relay.hasConsoleToken),
+      ],
+      [
+        "Bot OAuth",
+        botGrant?.ok ? "authorized" : "pending",
+        Boolean(botGrant?.ok),
+      ],
+      [
+        "Broadcaster OAuth",
+        broadcasterGrant?.ok ? "authorized" : "pending",
+        Boolean(broadcasterGrant?.ok),
+      ],
+      [
+        "Separate accounts",
+        separateBot?.ok ? "confirmed" : "pending",
+        Boolean(separateBot?.ok),
+      ],
+      [
+        "EventSub",
+        eventSubOk ? "registered this session" : "not recorded",
+        eventSubOk,
+      ],
+      [
+        "Relay test send",
+        testSendOk ? "sent this session" : "not recorded",
+        testSendOk,
+      ],
+      [
+        "Chat Bot live test",
+        relay.chatbotIdentityValidatedAt || "not recorded",
+        Boolean(relay.chatbotIdentityValidatedAt),
+      ],
+      [
+        "Discord endpoint",
+        setup.discordInteractionUrl ? "available" : "missing",
+        Boolean(setup.discordInteractionUrl),
+      ],
+    ]),
+    blockers.length
+      ? list(blockers, "warn")
+      : callout(
+          "Hosted Relay bot setup is code-ready. Complete live Twitch and Discord service validation outside Console.",
+          "ok",
+        ),
+  ]);
+}
+
 function renderWindowsSetupPromptNotice() {
   if (!isWindowsSetupPrompt) {
     return null;
+  }
+
+  if (isRelayChatbotMode()) {
+    return callout(
+      "Relay chatbot mode is selected. Complete the hosted Relay Setup Guide in this window; local Twitch OAuth warnings only apply if you switch back to local-user-token mode.",
+      "info",
+    );
   }
 
   return callout(
@@ -4470,8 +4602,274 @@ function renderWindowsSetupPromptNotice() {
   );
 }
 
+function renderHostedRelaySetup(relay = {}) {
+  const setup = relay.setupUrls || {};
+  const remote = state.relayStatus || {};
+  const readiness = remote.readiness || {};
+  const botGrant = relayReadinessCheck(readiness, "bot-grant");
+  const broadcasterGrant = relayReadinessCheck(readiness, "broadcaster-grant");
+  const separateBot = relayReadinessCheck(readiness, "separate-bot-account");
+  const installation = remote.installation || {};
+  const eventSubResult = state.relayEventSubResult || {};
+  const testSendResult = state.relayTestSendResult || {};
+  const relayConfigured = Boolean(relay.readiness?.ready);
+  const relayMode = relay.twitchTransportMode === "relay-chatbot";
+
+  return card("Hosted Relay Bot Setup", [
+    statusGrid([
+      ["Relay mode", relayMode ? "selected" : "not selected", relayMode],
+      [
+        "Relay health",
+        remote.connected ? "connected" : remote.error || "not checked",
+        Boolean(remote.connected),
+      ],
+      [
+        "Bot OAuth",
+        installation.botLogin || (botGrant?.ok ? "authorized" : "pending"),
+        Boolean(botGrant?.ok || installation.botLogin),
+      ],
+      [
+        "Broadcaster OAuth",
+        installation.broadcasterLogin ||
+          (broadcasterGrant?.ok ? "authorized" : "pending"),
+        Boolean(broadcasterGrant?.ok || installation.broadcasterLogin),
+      ],
+      [
+        "Separate accounts",
+        separateBot?.ok ? "confirmed" : "pending",
+        Boolean(separateBot?.ok),
+      ],
+      [
+        "Chat Bot live test",
+        relay.chatbotIdentityValidatedAt || "not recorded",
+        Boolean(relay.chatbotIdentityValidatedAt),
+      ],
+    ]),
+    relayMode
+      ? callout(
+          "Relay chatbot mode is selected. Use this panel for the hosted Twitch Chat Bot setup instead of the local Connect Twitch button.",
+          "ok",
+        )
+      : callout(
+          "Select relay-chatbot and save settings before live Chat Bot validation.",
+          "warn",
+        ),
+    h("div", { className: "template-list" }, [
+      setupUrlRow(
+        "Twitch callback URL",
+        setup.twitchCallbackUrl,
+        "Add this exact OAuth redirect URL in the Twitch Developer Console before opening either OAuth link.",
+        [
+          {
+            label: "Copy",
+            onClick: () => copySetupText(setup.twitchCallbackUrl),
+          },
+        ],
+      ),
+      setupUrlRow(
+        "Bot OAuth",
+        setup.twitchBotOAuthUrl,
+        "Open while logged into vaexcorebot.",
+        [
+          {
+            label: "Copy",
+            onClick: () => copySetupText(setup.twitchBotOAuthUrl),
+          },
+          {
+            label: "Open bot OAuth",
+            onClick: () => openExternalSetupUrl(setup.twitchBotOAuthUrl),
+          },
+        ],
+      ),
+      setupUrlRow(
+        "Broadcaster OAuth",
+        setup.twitchBroadcasterOAuthUrl,
+        "Open while logged into the broadcaster account.",
+        [
+          {
+            label: "Copy",
+            onClick: () => copySetupText(setup.twitchBroadcasterOAuthUrl),
+          },
+          {
+            label: "Open broadcaster OAuth",
+            onClick: () =>
+              openExternalSetupUrl(setup.twitchBroadcasterOAuthUrl),
+          },
+        ],
+      ),
+      setupUrlRow(
+        "Discord interactions",
+        setup.discordInteractionUrl,
+        "Use after Discord Worker secrets are set.",
+        [
+          {
+            label: "Copy",
+            onClick: () => copySetupText(setup.discordInteractionUrl),
+          },
+        ],
+      ),
+    ]),
+    remote.error
+      ? callout(remote.error, remote.ok === false ? "bad" : "warn")
+      : null,
+    readiness.checks?.length
+      ? list(
+          readiness.checks.map(
+            (check) =>
+              `${check.ok ? "PASS" : "TODO"} ${check.key}: ${check.detail}`,
+          ),
+          readiness.ready ? "ok" : "warn",
+        )
+      : relay.readiness?.checks?.length
+        ? list(
+            relay.readiness.checks.map(
+              (check) =>
+                `${check.ok ? "PASS" : "TODO"} ${check.key}: ${check.detail}`,
+            ),
+            relay.readiness.ready ? "ok" : "warn",
+          )
+        : null,
+    eventSubResult.ok
+      ? callout("Twitch EventSub registration completed through Relay.", "ok")
+      : eventSubResult.error
+        ? callout(eventSubResult.error, "bad")
+        : null,
+    testSendResult.ok
+      ? callout("Relay test chat message sent.", "ok")
+      : testSendResult.error
+        ? callout(testSendResult.error, "bad")
+        : null,
+    h("div", { className: "actions" }, [
+      actionButton("Check Relay", {
+        id: "relayStatus",
+        variant: "secondary",
+        disabled: !relayConfigured,
+        onClick: checkRelayStatus,
+      }),
+      actionButton("Register Twitch EventSub", {
+        id: "relayRegisterEventSub",
+        variant: "secondary",
+        disabled: !relayConfigured,
+        onClick: registerRelayEventSub,
+      }),
+      actionButton("Send Relay test message", {
+        id: "relayTestSend",
+        variant: "secondary",
+        disabled: !relayConfigured || !relayMode,
+        onClick: sendRelayTestMessage,
+      }),
+      actionButton("Mark Chat Bot identity live-tested", {
+        id: "relayValidateChatbotIdentityHosted",
+        variant: "secondary",
+        disabled: !relayMode,
+        onClick: markRelayChatbotIdentityValidated,
+      }),
+    ]),
+  ]);
+}
+
+function setupUrlRow(label, url, detail, actions = []) {
+  const available = Boolean(url);
+  return h("div", { className: "template-row setup-url-row" }, [
+    h("span", {}, [
+      h("strong", { text: label }),
+      h("small", { text: detail }),
+      h("code", {
+        text: available ? url : "Save Relay URL and installation ID first.",
+      }),
+    ]),
+    h(
+      "div",
+      { className: "actions inline-actions" },
+      actions.map((action) =>
+        actionButton(action.label, {
+          variant: "secondary",
+          disabled: !available,
+          onClick: action.onClick,
+        }),
+      ),
+    ),
+  ]);
+}
+
+function relayReadinessCheck(readiness = {}, key) {
+  return (readiness.checks || []).find((check) => check.key === key);
+}
+
+function isRelayChatbotMode(config = state.config || {}) {
+  return config.relay?.twitchTransportMode === "relay-chatbot";
+}
+
+function getRelaySetupProgress(relay = state.config?.relay || {}) {
+  const setup = relay.setupUrls || {};
+  const remote = state.relayStatus || {};
+  const readiness = remote.readiness || relay.readiness || {};
+  const botGrant = relayReadinessCheck(readiness, "bot-grant");
+  const broadcasterGrant = relayReadinessCheck(readiness, "broadcaster-grant");
+  const separateBot = relayReadinessCheck(readiness, "separate-bot-account");
+  const progress = {
+    relayMode: relay.twitchTransportMode === "relay-chatbot",
+    relayPaired: Boolean(relay.readiness?.ready),
+    callbackUrlReady: Boolean(setup.twitchCallbackUrl),
+    botAuthorized: Boolean(botGrant?.ok || remote.installation?.botLogin),
+    broadcasterAuthorized: Boolean(
+      broadcasterGrant?.ok || remote.installation?.broadcasterLogin,
+    ),
+    separateAccounts: Boolean(separateBot?.ok),
+    eventSubRegistered: Boolean(state.relayEventSubResult?.ok),
+    relayTestSent: Boolean(state.relayTestSendResult?.ok),
+    chatbotIdentityValidated: Boolean(relay.chatbotIdentityValidatedAt),
+    discordEndpointReady: Boolean(setup.discordInteractionUrl),
+  };
+
+  return {
+    ...progress,
+    steps: [
+      {
+        id: "relay-pair",
+        label: "Relay paired",
+        complete: progress.relayMode && progress.relayPaired,
+      },
+      {
+        id: "relay-callback",
+        label: "Callback URL ready",
+        complete: progress.callbackUrlReady,
+      },
+      {
+        id: "relay-bot-oauth",
+        label: "Bot OAuth",
+        complete: progress.botAuthorized,
+      },
+      {
+        id: "relay-broadcaster-oauth",
+        label: "Broadcaster OAuth",
+        complete: progress.broadcasterAuthorized,
+      },
+      {
+        id: "relay-eventsub",
+        label: "EventSub registered",
+        complete: progress.eventSubRegistered,
+      },
+      {
+        id: "relay-test",
+        label: "Chat Bot verified",
+        complete: progress.relayTestSent && progress.chatbotIdentityValidated,
+      },
+      {
+        id: "relay-discord",
+        label: "Discord endpoint",
+        complete: progress.discordEndpointReady,
+      },
+    ],
+  };
+}
+
 function renderSetupGuide() {
   const config = state.config || {};
+  if (isRelayChatbotMode(config)) {
+    return renderRelaySetupGuide();
+  }
+
   const progress = getSetupProgress();
   const activeStep =
     progress.steps.find((step) => !step.complete)?.id || "final";
@@ -4800,6 +5198,312 @@ function renderSetupGuide() {
             className: "ok",
             text: "Success condition: LIVE CHAT CONFIRMED",
           }),
+        ],
+      }),
+    ]),
+  ]);
+}
+
+function renderRelaySetupGuide() {
+  const config = state.config || {};
+  const relay = config.relay || {};
+  const setup = relay.setupUrls || {};
+  const remote = state.relayStatus || {};
+  const readiness = remote.readiness || relay.readiness || {};
+  const botGrant = relayReadinessCheck(readiness, "bot-grant");
+  const broadcasterGrant = relayReadinessCheck(readiness, "broadcaster-grant");
+  const separateBot = relayReadinessCheck(readiness, "separate-bot-account");
+  const progress = getRelaySetupProgress(relay);
+  const activeStep =
+    progress.steps.find((step) => !step.complete)?.id || "relay-final";
+  const relayConfigured = Boolean(relay.readiness?.ready);
+  const botOauthReady = Boolean(setup.twitchBotOAuthUrl);
+  const broadcasterOauthReady = Boolean(setup.twitchBroadcasterOAuthUrl);
+
+  return card("Setup Guide", [
+    h("div", { id: "setupGuide", className: "setup-guide" }, [
+      h(
+        "div",
+        { className: "setup-progress" },
+        progress.steps.map((step) =>
+          h(
+            "div",
+            { className: `setup-check ${step.complete ? "complete" : ""}` },
+            [
+              h("span", {
+                className: "checkmark",
+                text: step.complete ? "[x]" : "[ ]",
+              }),
+              h("span", { text: step.label }),
+            ],
+          ),
+        ),
+      ),
+      callout(
+        "Relay chatbot mode is selected. This hosted setup path is the one that can make vaexcorebot appear as a Twitch Chat Bot; local Connect Twitch remains available only as a fallback user-token mode.",
+        "info",
+      ),
+      setupStep({
+        id: "relay-pair",
+        number: 1,
+        title: "Pair Console With Relay",
+        active: activeStep === "relay-pair",
+        complete: progress.relayMode && progress.relayPaired,
+        children: [
+          h("p", {
+            text: "Save relay-chatbot transport, the hosted Relay URL, the installation ID, and the Console token.",
+          }),
+          h("div", { className: "field-ref-row" }, [
+            fieldRef("Transport", "twitchTransportMode", !progress.relayMode),
+            fieldRef("Relay URL", "relayBaseUrl", !relay.baseUrl),
+            fieldRef(
+              "Installation ID",
+              "relayInstallationId",
+              !relay.installationId,
+            ),
+            fieldRef(
+              "Console token",
+              "relayConsoleToken",
+              !relay.hasConsoleToken,
+            ),
+          ]),
+          h("div", { className: "actions" }, [
+            actionButton("Save settings", {
+              id: "guideRelaySave",
+              onClick: saveSettings,
+            }),
+            actionButton("Check Relay", {
+              id: "guideRelayStatus",
+              variant: "secondary",
+              busyKey: "relayStatus",
+              disabled: !relayConfigured,
+              onClick: checkRelayStatus,
+            }),
+          ]),
+        ],
+      }),
+      setupStep({
+        id: "relay-callback",
+        number: 2,
+        title: "Add Twitch Callback URL",
+        active: activeStep === "relay-callback",
+        complete: progress.callbackUrlReady,
+        disabled: !relayConfigured,
+        children: [
+          h("p", {
+            text: "Add this exact redirect URL to the Twitch Developer Console for the Relay app before opening either OAuth link.",
+          }),
+          h("code", {
+            text:
+              setup.twitchCallbackUrl ||
+              "Save Relay URL and installation ID first.",
+          }),
+          h("div", { className: "actions" }, [
+            h("a", {
+              className: "button secondary",
+              href: "https://dev.twitch.tv/console/apps",
+              target: "_blank",
+              rel: "noreferrer",
+              text: "Open Twitch Developer Console",
+            }),
+            actionButton("Copy callback URL", {
+              id: "guideCopyRelayCallback",
+              variant: "secondary",
+              disabled: !setup.twitchCallbackUrl,
+              onClick: () => copySetupText(setup.twitchCallbackUrl),
+            }),
+          ]),
+          callout(
+            "Console can surface the callback URL, but only Twitch confirms that it has been added to the Developer Console.",
+            "muted",
+          ),
+        ],
+      }),
+      setupStep({
+        id: "relay-bot-oauth",
+        number: 3,
+        title: "Authorize vaexcorebot",
+        active: activeStep === "relay-bot-oauth",
+        complete: progress.botAuthorized,
+        disabled: !progress.callbackUrlReady,
+        children: [
+          h("p", {
+            text: "Open this while the browser is logged into vaexcorebot. Relay requests user:bot, user:read:chat, and user:write:chat.",
+          }),
+          setupUrlRow(
+            "Bot OAuth URL",
+            setup.twitchBotOAuthUrl,
+            "Use the vaexcorebot account.",
+            [
+              {
+                label: "Copy",
+                onClick: () => copySetupText(setup.twitchBotOAuthUrl),
+              },
+              {
+                label: "Open bot OAuth",
+                onClick: () => openExternalSetupUrl(setup.twitchBotOAuthUrl),
+              },
+            ],
+          ),
+          botGrant
+            ? callout(botGrant.detail, botGrant.ok ? "ok" : "warn")
+            : callout(
+                "Check Relay after authorizing to refresh this status.",
+                "muted",
+              ),
+        ],
+      }),
+      setupStep({
+        id: "relay-broadcaster-oauth",
+        number: 4,
+        title: "Authorize Broadcaster Channel",
+        active: activeStep === "relay-broadcaster-oauth",
+        complete: progress.broadcasterAuthorized && progress.separateAccounts,
+        disabled: !progress.botAuthorized && !broadcasterOauthReady,
+        children: [
+          h("p", {
+            text: "Open this while the browser is logged into the broadcaster account. Relay requests channel:bot so the bot can operate as a channel bot.",
+          }),
+          setupUrlRow(
+            "Broadcaster OAuth URL",
+            setup.twitchBroadcasterOAuthUrl,
+            "Use the channel owner account.",
+            [
+              {
+                label: "Copy",
+                onClick: () => copySetupText(setup.twitchBroadcasterOAuthUrl),
+              },
+              {
+                label: "Open broadcaster OAuth",
+                onClick: () =>
+                  openExternalSetupUrl(setup.twitchBroadcasterOAuthUrl),
+              },
+            ],
+          ),
+          broadcasterGrant
+            ? callout(
+                broadcasterGrant.detail,
+                broadcasterGrant.ok ? "ok" : "warn",
+              )
+            : callout(
+                "Check Relay after authorizing to refresh this status.",
+                "muted",
+              ),
+          separateBot
+            ? callout(separateBot.detail, separateBot.ok ? "ok" : "warn")
+            : null,
+        ],
+      }),
+      setupStep({
+        id: "relay-eventsub",
+        number: 5,
+        title: "Register Twitch EventSub",
+        active: activeStep === "relay-eventsub",
+        complete: progress.eventSubRegistered,
+        disabled: !progress.botAuthorized || !progress.broadcasterAuthorized,
+        children: [
+          h("p", {
+            text: "After both OAuth grants are stored, have Relay register the channel.chat.message subscription.",
+          }),
+          h("div", { className: "actions" }, [
+            actionButton("Check Relay", {
+              id: "guideRelayStatusAfterOAuth",
+              variant: "secondary",
+              busyKey: "relayStatus",
+              disabled: !relayConfigured,
+              onClick: checkRelayStatus,
+            }),
+            actionButton("Register Twitch EventSub", {
+              id: "guideRelayRegisterEventSub",
+              variant: "secondary",
+              busyKey: "relayRegisterEventSub",
+              disabled:
+                !relayConfigured ||
+                !progress.botAuthorized ||
+                !progress.broadcasterAuthorized,
+              onClick: registerRelayEventSub,
+            }),
+          ]),
+          readiness.checks?.length
+            ? list(
+                readiness.checks.map(
+                  (check) =>
+                    `${check.ok ? "PASS" : "TODO"} ${check.key}: ${check.detail}`,
+                ),
+                readiness.ready ? "ok" : "warn",
+              )
+            : null,
+        ],
+      }),
+      setupStep({
+        id: "relay-test",
+        number: 6,
+        title: "Send Test And Confirm Chat Bot Identity",
+        active: activeStep === "relay-test",
+        complete: progress.relayTestSent && progress.chatbotIdentityValidated,
+        disabled: !progress.eventSubRegistered,
+        children: [
+          h("p", {
+            text: "Send a Relay chat test, then mark identity verified only after Twitch shows vaexcorebot as a Chat Bot in the channel user list.",
+          }),
+          h("div", { className: "actions" }, [
+            actionButton("Send Relay test message", {
+              id: "guideRelayTestSend",
+              variant: "secondary",
+              busyKey: "relayTestSend",
+              disabled: !relayConfigured,
+              onClick: sendRelayTestMessage,
+            }),
+            actionButton("Mark Chat Bot identity live-tested", {
+              id: "guideRelayValidateChatbotIdentity",
+              variant: "secondary",
+              busyKey: "relayValidateChatbotIdentity",
+              disabled: !relayConfigured,
+              onClick: markRelayChatbotIdentityValidated,
+            }),
+          ]),
+          state.relayTestSendResult?.ok
+            ? callout("Relay test message sent in this Console session.", "ok")
+            : callout(
+                "No Relay test message is recorded for this Console session.",
+                "muted",
+              ),
+          relay.chatbotIdentityValidatedAt
+            ? callout(
+                `Chat Bot identity live test recorded at ${relay.chatbotIdentityValidatedAt}.`,
+                "ok",
+              )
+            : null,
+        ],
+      }),
+      setupStep({
+        id: "relay-discord",
+        number: 7,
+        title: "Configure Discord Interaction URL",
+        active: activeStep === "relay-discord",
+        complete: progress.discordEndpointReady,
+        disabled: !relayConfigured,
+        children: [
+          h("p", {
+            text: "Use this URL as the Discord application's Interactions Endpoint after the Discord Worker secrets are set.",
+          }),
+          h("code", {
+            text:
+              setup.discordInteractionUrl ||
+              "Save Relay URL and installation ID first.",
+          }),
+          h("div", { className: "actions" }, [
+            actionButton("Copy Discord endpoint", {
+              id: "guideCopyDiscordInteraction",
+              variant: "secondary",
+              disabled: !setup.discordInteractionUrl,
+              onClick: () => copySetupText(setup.discordInteractionUrl),
+            }),
+          ]),
+          callout(
+            "Slash command registration and suggestion review stay in the Discord section; this guide only handles the public webhook URL setup.",
+            "muted",
+          ),
         ],
       }),
     ]),
@@ -5435,6 +6139,16 @@ function renderSettingsLaunchNotice() {
 
   if (!launch || ["pending", "ready"].includes(launch.status)) {
     return null;
+  }
+
+  if (
+    isRelayChatbotMode() &&
+    ["setup_required", "error"].includes(launch.status)
+  ) {
+    return callout(
+      "Local Twitch OAuth launch checks are incomplete, but Relay chatbot mode is selected. Use the hosted Relay Setup Guide for Chat Bot readiness; the local Connect Twitch flow remains available as a fallback.",
+      "info",
+    );
   }
 
   const tone = launchTone(launch);
@@ -7372,6 +8086,59 @@ async function saveSettings() {
   );
 }
 
+async function checkRelayStatus() {
+  await runAction(
+    "relayStatus",
+    async () => {
+      const result = await api.relayStatus();
+      state.relayStatus = result;
+      state.config = {
+        ...(state.config || {}),
+        relay: result.relay || state.config?.relay,
+      };
+      return result;
+    },
+    { skipRefresh: true, success: "Relay status checked." },
+  );
+}
+
+async function registerRelayEventSub() {
+  if (
+    !confirm(
+      "Register the Twitch EventSub chat subscription through Relay? Run this after both Twitch OAuth grants are authorized.",
+    )
+  ) {
+    return;
+  }
+
+  await runAction(
+    "relayRegisterEventSub",
+    async () => {
+      const result = await api.registerRelayEventSub();
+      state.relayEventSubResult = result;
+      state.relayStatus = await api.relayStatus();
+      return result;
+    },
+    { skipRefresh: true, success: "Relay EventSub registered." },
+  );
+}
+
+async function sendRelayTestMessage() {
+  await runAction(
+    "relayTestSend",
+    async () => {
+      const result = await api.relayTestSend();
+      state.relayTestSendResult = result;
+      state.config = {
+        ...(state.config || {}),
+        relay: result.relay || state.config?.relay,
+      };
+      return result;
+    },
+    { skipRefresh: true, success: "Relay test message sent." },
+  );
+}
+
 async function markRelayChatbotIdentityValidated() {
   if (
     !confirm(
@@ -7396,6 +8163,22 @@ async function markRelayChatbotIdentityValidated() {
     },
     { skipRefresh: true, success: "Chat Bot identity validation recorded." },
   );
+}
+
+async function copySetupText(text) {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    state.message = { text: "Copied setup value.", tone: "ok" };
+  } catch {
+    state.message = { text, tone: "info" };
+  }
+  render();
+}
+
+function openExternalSetupUrl(url) {
+  if (!url) return;
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 async function startTwitchPoll() {
@@ -9256,6 +10039,7 @@ function updateDisabledState() {
   const config = state.config || {};
   const discordConfig = state.discord?.config || config.discord || {};
   const discordRelayConfig = discordConfig.relay || {};
+  const relayConfig = config.relay || {};
   const runtime = state.status?.runtime || {};
   const botProcess = runtime.botProcess || {};
   const connectReady =
@@ -9466,7 +10250,59 @@ function updateDisabledState() {
     "Save Relay URL, installation ID, and console token before loading suggestions.",
   );
   setDisabled(
+    "relayStatus",
+    !relayConfig.readiness?.ready,
+    "Save Relay URL, installation ID, and console token before checking Relay.",
+  );
+  setDisabled(
+    "settingsRelayStatus",
+    !relayConfig.readiness?.ready,
+    "Save Relay URL, installation ID, and console token before checking Relay.",
+  );
+  setDisabled(
+    "guideRelayStatus",
+    !relayConfig.readiness?.ready,
+    "Save Relay URL, installation ID, and console token before checking Relay.",
+  );
+  setDisabled(
+    "guideRelayStatusAfterOAuth",
+    !relayConfig.readiness?.ready,
+    "Save Relay URL, installation ID, and console token before checking Relay.",
+  );
+  setDisabled(
+    "relayRegisterEventSub",
+    !relayConfig.readiness?.ready,
+    "Save Relay URL, installation ID, and console token before registering EventSub.",
+  );
+  setDisabled(
+    "guideRelayRegisterEventSub",
+    !relayConfig.readiness?.ready,
+    "Save Relay URL, installation ID, and console token before registering EventSub.",
+  );
+  setDisabled(
+    "relayTestSend",
+    relayConfig.twitchTransportMode !== "relay-chatbot" ||
+      !relayConfig.readiness?.ready,
+    "Select relay-chatbot and save Relay settings before sending a Relay test message.",
+  );
+  setDisabled(
+    "guideRelayTestSend",
+    relayConfig.twitchTransportMode !== "relay-chatbot" ||
+      !relayConfig.readiness?.ready,
+    "Select relay-chatbot and save Relay settings before sending a Relay test message.",
+  );
+  setDisabled(
     "relayValidateChatbotIdentity",
+    config.relay?.twitchTransportMode !== "relay-chatbot",
+    "Select relay-chatbot transport before recording live Chat Bot validation.",
+  );
+  setDisabled(
+    "relayValidateChatbotIdentityHosted",
+    config.relay?.twitchTransportMode !== "relay-chatbot",
+    "Select relay-chatbot transport before recording live Chat Bot validation.",
+  );
+  setDisabled(
+    "guideRelayValidateChatbotIdentity",
     config.relay?.twitchTransportMode !== "relay-chatbot",
     "Select relay-chatbot transport before recording live Chat Bot validation.",
   );

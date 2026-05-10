@@ -560,6 +560,9 @@ button.nav-button.active:hover:not(:disabled) {
   gap: 12px;
   align-items: start;
 }
+.setup-url-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
 .template-row strong {
   display: block;
   color: var(--text);
@@ -568,6 +571,14 @@ button.nav-button.active:hover:not(:disabled) {
 .template-row small {
   display: block;
   color: var(--muted);
+  line-height: 1.4;
+}
+.template-row code {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12px;
   line-height: 1.4;
 }
 .template-row textarea {
