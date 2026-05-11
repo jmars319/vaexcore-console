@@ -364,6 +364,8 @@ The `Twitch Chat Transport` panel in `Settings` supports `local-user-token` and 
 
 After Relay is deployed and paired, save the Relay URL, installation ID, and console token in Console. Relay readiness confirms config and authorization state, but Console keeps a separate `Chat Bot identity live test` field until a human validates Twitch’s user list in the real channel. Click `Mark Chat Bot identity live-tested` only after Twitch shows `vaexcorebot` as a Chat Bot.
 
+Run `npm run bot:readiness` for a redacted preflight covering Relay health, saved pairing, Twitch OAuth grant readiness, Discord Relay readiness, local Discord setup, and remaining next actions. The exact credential and portal sequence lives in [Bot Live Validation Runbook](BOT_LIVE_VALIDATION.md).
+
 ## Twitch Creator Ops
 
 The `Twitch Ops` section provides guarded live controls for creator-side Twitch actions:
@@ -397,11 +399,13 @@ Recommended operator flow:
 5. Click `Preview setup` and review the categories, text channels, voice channels, and optional role.
 6. Click `Apply setup`.
 7. Use `Stream Announcements` to send live, late, cancelled, or scheduled stream notices.
-8. If Relay is deployed, copy the `Relay Slash Commands` interaction URL into the Discord application Interactions Endpoint URL, then click `Register slash commands`.
+8. If Relay is deployed, copy the `Relay Slash Commands And Suggestions` interaction URL into the Discord application Interactions Endpoint URL, then click `Register slash commands`.
 
 The default streamer layout creates `START HERE`, `STREAM`, `COMMUNITY`, `VOICE`, and `STAFF` sections with channels for rules, announcements, live notices, schedule, clips/highlights, suggestions, general chat, game chat, common voice rooms, and staff notes. Existing channels with matching names are reused, so applying setup again should not duplicate the layout.
 
 Relay-backed Discord slash commands are optional until Relay is deployed. Relay receives Discord interactions at `/webhooks/discord/interactions`, verifies Discord signatures, and exposes suggestions plus queued announcement commands for Console review. The supported commands are `/suggest`, `/live`, `/late`, `/cancelled`, `/scheduled`, and `/setup-status`. Announcement commands only queue operator-visible actions; they do not directly post public announcements without Console-side operator action.
+
+Discord has two setup paths: local Discord setup creates channels and sends direct announcements, while Relay Discord setup handles slash commands and suggestions through the public Worker endpoint. Use [Bot Live Validation Runbook](BOT_LIVE_VALIDATION.md) when setting Worker secrets, Discord Interactions Endpoint, and live command tests.
 
 `npm run smoke:discord` runs a mocked Discord API check covering config redaction, bot validation, layout preview, idempotent setup apply, and stream announcements without touching a real Discord server. `npm run smoke:discord-relay` checks the Console-to-Relay Discord status, slash command registration, suggestion queue, and Twitch Chat Bot identity validation record against a mocked Relay server.
 

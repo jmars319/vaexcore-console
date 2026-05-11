@@ -70,6 +70,7 @@ Use local mode before connecting to Twitch. Live mode should only run after toke
 ## Related Documentation
 
 - [Operator Manual](docs/OPERATOR_MANUAL.md)
+- [Bot Live Validation Runbook](docs/BOT_LIVE_VALIDATION.md)
 - [Development Guidelines](docs/development-guidelines.md)
 - [Suite Protocol](docs/SUITE_PROTOCOL.md)
 - [Desktop Runtime](desktop/README.md)
