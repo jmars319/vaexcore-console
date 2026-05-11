@@ -3683,7 +3683,7 @@ function renderDiscord() {
   return [
     sectionHeader(
       "Discord",
-      "Set up a streamer server layout and send stream status announcements from Console.",
+      "Local setup creates server channels and sends direct announcements; Relay setup handles slash commands, suggestions, and public Discord interactions.",
       h("div", { className: "actions section-actions" }, [
         actionButton("Refresh", {
           id: "discordRefresh",
@@ -3733,7 +3733,7 @@ function renderDiscord() {
           : null,
     ]),
     renderDiscordRelayPanel(discord),
-    card("Discord Connection", [
+    card("Local Discord Connection", [
       h("div", { className: "grid" }, [
         formRow(
           "Bot token",
@@ -3789,7 +3789,7 @@ function renderDiscord() {
         }),
       ]),
     ]),
-    card("Server Layout", [
+    card("Local Server Layout", [
       h("label", { className: "inline-check" }, [
         h("input", {
           id: "discordCreateStreamAlertsRole",
@@ -3811,7 +3811,7 @@ function renderDiscord() {
       ]),
       renderDiscordPlan(preview),
     ]),
-    card("Stream Announcements", [
+    card("Local Stream Announcements", [
       h("div", { className: "grid" }, [
         formRow(
           "Status",
@@ -3892,7 +3892,7 @@ function renderDiscordRelayPanel(discord) {
   const readiness = remote.readiness || {};
   const localReadiness = relay.localReadiness || {};
 
-  return card("Relay Slash Commands", [
+  return card("Relay Slash Commands And Suggestions", [
     statusGrid([
       [
         "Relay configured",
@@ -3918,11 +3918,11 @@ function renderDiscordRelayPanel(discord) {
     ]),
     relay.interactionUrl
       ? callout(
-          `Set the Discord application Interactions Endpoint URL to ${relay.interactionUrl}.`,
+          `Relay Discord setup uses Worker secrets and this public endpoint for slash commands and suggestions. Set the Discord application Interactions Endpoint URL to ${relay.interactionUrl}.`,
           "info",
         )
       : callout(
-          "Save Relay settings before configuring Discord slash commands.",
+          "Save Relay settings before configuring Discord slash commands and suggestions.",
           "warn",
         ),
     remote.error
@@ -4391,6 +4391,12 @@ function renderSettings() {
         relay.identityNotice ||
           "Local user-token mode will appear as a normal Twitch user. Relay chatbot mode is required for Twitch Chat Bot identity.",
         relay.twitchTransportMode === "relay-chatbot" ? "warn" : "muted",
+      ),
+      callout(
+        relay.twitchTransportMode === "relay-chatbot"
+          ? "relay-chatbot sends through hosted Relay with Twitch app-token authorization; complete the OAuth grants and live user-list check before calling Chat Bot identity complete."
+          : "local-user-token is the fallback path for local testing and direct OAuth chat. It can send messages, but it is not the Twitch Chat Bot identity path.",
+        relay.twitchTransportMode === "relay-chatbot" ? "info" : "muted",
       ),
       relay.readiness?.checks?.length
         ? list(

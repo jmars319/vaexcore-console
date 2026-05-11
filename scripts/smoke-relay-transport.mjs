@@ -51,6 +51,14 @@ async function runSmoke() {
     appJs.includes("will appear as a normal Twitch user"),
     "local fallback identity warning is visible",
   );
+  assert(
+    appJs.includes("local-user-token is the fallback path"),
+    "settings UI explains local-user-token fallback",
+  );
+  assert(
+    appJs.includes("relay-chatbot sends through hosted Relay"),
+    "settings UI explains Relay Chat Bot transport",
+  );
 
   const clean = await json("/api/config");
   assert(
@@ -169,6 +177,14 @@ async function startFakeRelay() {
       request.url ?? "/",
       `http://${request.headers.host ?? "localhost"}`,
     );
+
+    if (request.method === "GET" && url.pathname === "/health") {
+      send(response, 200, {
+        ok: true,
+        service: "vaexcore relay smoke",
+      });
+      return;
+    }
 
     if (request.headers.authorization !== `Bearer ${relayConsoleToken}`) {
       send(response, 401, { error: "Unauthorized" });

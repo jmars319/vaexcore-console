@@ -33,6 +33,14 @@ async function runSmoke() {
   const appJs = await text("/ui/app.js");
   assert(appJs.includes("Relay Slash Commands"), "Discord Relay UI exists");
   assert(
+    appJs.includes("Relay Slash Commands And Suggestions"),
+    "Discord Relay UI distinguishes slash commands and suggestions",
+  );
+  assert(
+    appJs.includes("Local Discord Connection"),
+    "Discord UI labels local setup separately",
+  );
+  assert(
     appJs.includes("Mark Chat Bot identity live-tested"),
     "Twitch Relay live-validation action is visible",
   );
@@ -70,8 +78,14 @@ async function runSmoke() {
   assert(relayStatus.ok === true, "Discord Relay status returns ok");
   assert(relayStatus.connected === true, "Discord Relay status connects");
   assert(
-    relayStatus.readiness.ready === true,
-    "Discord Relay readiness is surfaced",
+    relayStatus.readiness.ready === false,
+    "Discord Relay readiness reports blocked missing Worker setup",
+  );
+  assert(
+    relayStatus.readiness.checks.some(
+      (check) => check.key === "discord-bot-token" && check.ok === false,
+    ),
+    "Discord Relay readiness surfaces missing Discord bot token",
   );
   assert(
     relayStatus.relay.interactionUrl ===
@@ -159,17 +173,51 @@ async function startFakeRelay() {
       request.method === "GET" &&
       url.pathname === "/api/console/discord/status"
     ) {
+      const commandsRegistered = state.registerCount > 0;
       send(response, 200, {
         ok: true,
         readiness: {
-          ready: true,
+          ready: false,
           mode: "relay-discord-interactions",
           interactionUrl: `${stateUrl(server)}/webhooks/discord/interactions`,
           checks: [
             {
-              key: "discord-command-registration",
+              key: "installation",
               ok: true,
-              detail: "Slash commands are registered.",
+              detail: "Relay installation exists.",
+            },
+            {
+              key: "discord-bot-token",
+              ok: false,
+              detail: "Set DISCORD_BOT_TOKEN with wrangler secret put.",
+            },
+            {
+              key: "discord-public-key",
+              ok: false,
+              detail: "Set DISCORD_PUBLIC_KEY from the Discord application.",
+            },
+            {
+              key: "discord-application-id",
+              ok: false,
+              detail: "Set DISCORD_APPLICATION_ID.",
+            },
+            {
+              key: "discord-guild-id",
+              ok: false,
+              detail:
+                "Set DISCORD_GUILD_ID for the target server before live validation.",
+            },
+            {
+              key: "discord-interaction-url",
+              ok: true,
+              detail: `Use ${stateUrl(server)}/webhooks/discord/interactions as the Discord Interactions Endpoint URL.`,
+            },
+            {
+              key: "discord-command-registration",
+              ok: commandsRegistered,
+              detail: commandsRegistered
+                ? "Slash commands are registered."
+                : "Register Discord slash commands from Console.",
             },
           ],
         },

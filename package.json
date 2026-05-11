@@ -20,6 +20,7 @@
     "app:dist:mac": "npm run build && node scripts/run-electron-builder.mjs --mac dir && node desktop/macOS/scripts/install-electron-better-sqlite3.mjs && node desktop/macOS/scripts/build-mac-dmg-from-app.mjs",
     "app:zip": "npm run app:build && node desktop/macOS/scripts/package-unsigned-mac.mjs",
     "ci": "npm run lint && npm run check:scopes && npm run typecheck && npm run smoke:ci",
+    "bot:readiness": "tsx scripts/bot-readiness.ts",
     "check:env": "tsx desktop/shared/src/cli/checkEnv.ts",
     "check:scopes": "node scripts/check-twitch-scopes.mjs",
     "format": "prettier --write .",
