@@ -228,6 +228,25 @@ export const initializeSchema = (db: DbClient) => {
       created_by TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS discord_relay_actions (
+      relay_event_id TEXT PRIMARY KEY,
+      interaction_id TEXT NOT NULL DEFAULT '',
+      command_name TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'announcement',
+      user_id TEXT NOT NULL DEFAULT '',
+      username TEXT NOT NULL DEFAULT '',
+      guild_id TEXT NOT NULL DEFAULT '',
+      channel_id TEXT NOT NULL DEFAULT '',
+      payload_json TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('queued', 'approved', 'rejected', 'sent')),
+      received_at TEXT NOT NULL,
+      loaded_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      approved_at TEXT,
+      rejected_at TEXT,
+      sent_at TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS giveaway_reminder_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
@@ -265,6 +284,10 @@ export const initializeSchema = (db: DbClient) => {
       ON moderation_allowed_links(enabled);
     CREATE INDEX IF NOT EXISTS idx_moderation_link_permits_user
       ON moderation_link_permits(user_login, expires_at, used_at);
+    CREATE INDEX IF NOT EXISTS idx_discord_relay_actions_status
+      ON discord_relay_actions(status, received_at);
+    CREATE INDEX IF NOT EXISTS idx_discord_relay_actions_command
+      ON discord_relay_actions(command_name, received_at);
   `);
 
   ensureColumn(

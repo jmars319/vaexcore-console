@@ -119,6 +119,13 @@ import {
   DiscordRelayClient,
   type DiscordRelaySuggestionStatus,
 } from "../discord/relay";
+import {
+  listDiscordRelayActions,
+  parseDiscordRelayActionFilter,
+  parseDiscordRelayActionStatus,
+  persistDiscordRelayActions,
+  updateDiscordRelayActionStatus,
+} from "../discord/relayActions";
 import { TwitchChatSender } from "../twitch/sendMessage";
 import {
   TwitchCreatorOpsClient,
@@ -449,6 +456,23 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     url.pathname === "/api/discord/relay/events"
   ) {
     sendJson(response, 200, await getDiscordRelayEventsRoute());
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/discord/relay/actions"
+  ) {
+    sendJson(response, 200, getDiscordRelayActionsRoute(url.searchParams));
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/discord/relay/actions/status"
+  ) {
+    const body = await readJson(request);
+    sendJson(response, 200, updateDiscordRelayActionStatusRoute(body));
     return;
   }
 
@@ -2053,7 +2077,58 @@ const getDiscordRelayEventsRoute = async () => {
   if (connectionError) {
     throw new SafeInputError(connectionError);
   }
-  return createDiscordRelayClient(secrets).events(50);
+  const result = await createDiscordRelayClient(secrets).events(50);
+  const persisted = persistDiscordRelayActions(db, result.events || []);
+  if (persisted > 0) {
+    writeAuditLog(
+      db,
+      localUiActor,
+      "discord.relay.actions.load",
+      "discord_relay_actions",
+      {
+        persisted,
+        eventCount: result.events.length,
+      },
+    );
+  }
+  return {
+    ...result,
+    actions: listDiscordRelayActions(db, { status: "active", limit: 50 }),
+  };
+};
+
+const getDiscordRelayActionsRoute = (searchParams: URLSearchParams) => ({
+  ok: true,
+  actions: listDiscordRelayActions(db, {
+    status: parseDiscordRelayActionFilter(searchParams.get("status")),
+    limit: searchParams.get("limit"),
+  }),
+});
+
+const updateDiscordRelayActionStatusRoute = (body: unknown) => {
+  const input = objectInput(body);
+  const id =
+    optionalInputString(input.relayEventId) || optionalInputString(input.id);
+  if (!id) {
+    throw new SafeInputError("Discord Relay action ID is required.");
+  }
+  const status = parseDiscordRelayActionStatus(input.status);
+  const action = updateDiscordRelayActionStatus(db, id, status);
+  if (!action) {
+    throw new SafeInputError("Discord Relay action was not found.");
+  }
+  writeAuditLog(
+    db,
+    localUiActor,
+    `discord.relay.action.${status}`,
+    action.relayEventId,
+    {
+      commandName: action.commandName,
+      username: action.username,
+      status,
+    },
+  );
+  return { ok: true, action };
 };
 
 const getDiscordRelaySuggestionsRoute = async (
@@ -2414,6 +2489,10 @@ const getBotSupportBundleRoute = async () => {
       getOptionalDiscordRelayEvents(),
       getOptionalDiscordRelaySuggestions(),
     ]);
+  const discordActionHistory = listDiscordRelayActions(db, {
+    status: undefined,
+    limit: 100,
+  });
   return {
     ok: true,
     bundleVersion: 1,
@@ -2422,9 +2501,14 @@ const getBotSupportBundleRoute = async () => {
     completion,
     relayDiagnostics: completion.relayReadinessReport,
     validationRecords: completion.validation,
-    queuedDiscordActions: discordEvents.events.filter((event) =>
-      ["live", "late", "cancelled", "scheduled"].includes(event.commandName),
+    queuedDiscordActions: discordActionHistory.filter((action) =>
+      ["queued", "approved"].includes(action.status),
     ),
+    discordActionHistory,
+    relayEventFetch: {
+      ok: discordEvents.ok,
+      error: "error" in discordEvents ? discordEvents.error : undefined,
+    },
     suggestions: discordSuggestions.suggestions,
     recentSendOutcomes: supportBundle.recent.outbound.slice(0, 20),
     nextActions: completion.nextActions,

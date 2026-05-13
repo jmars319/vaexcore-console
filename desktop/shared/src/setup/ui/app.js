@@ -87,7 +87,8 @@ const state = {
   discordSetupPreview: null,
   discordRelaySuggestions: [],
   discordRelayEvents: [],
-  discordRelayActionStatuses: {},
+  discordRelayActions: [],
+  discordRelayActionFilter: "active",
   featureGates: [],
   templates: [],
   operatorMessages: [],
@@ -303,6 +304,10 @@ const api = {
   updateDiscordRelaySuggestion: (id, status) =>
     api.post("/api/discord/relay/suggestions/status", { id, status }),
   discordRelayEvents: () => api.get("/api/discord/relay/events"),
+  discordRelayActions: (status = "active") =>
+    api.get(`/api/discord/relay/actions?status=${encodeURIComponent(status)}`),
+  updateDiscordRelayAction: (id, status) =>
+    api.post("/api/discord/relay/actions/status", { id, status }),
   markRelayChatbotIdentityValidated: (body) =>
     api.post("/api/relay/chatbot-identity/validation", body),
   botCompletion: () => api.get("/api/bot/completion"),
@@ -4010,10 +4015,7 @@ function renderDiscordRelayPanel(discord) {
     {};
   const remote = state.discordRelayStatus || {};
   const suggestions = state.discordRelaySuggestions || [];
-  const events = state.discordRelayEvents || [];
-  const announcementEvents = events.filter((event) =>
-    ["live", "late", "cancelled", "scheduled"].includes(event.commandName),
-  );
+  const actions = state.discordRelayActions || [];
   const readiness = remote.readiness || {};
   const localReadiness = relay.localReadiness || {};
 
@@ -4040,11 +4042,7 @@ function renderDiscordRelayPanel(discord) {
         Boolean(readiness.ready),
       ],
       ["Suggestions loaded", suggestions.length || 0, suggestions.length >= 0],
-      [
-        "Announcement actions",
-        announcementEvents.length || 0,
-        announcementEvents.length >= 0,
-      ],
+      ["Announcement actions", actions.length || 0, actions.length >= 0],
     ]),
     relay.interactionUrl
       ? callout(
@@ -4094,28 +4092,40 @@ function renderDiscordRelayPanel(discord) {
       actionButton("Load action queue", {
         id: "discordRelayLoadActions",
         variant: "secondary",
-        onClick: loadDiscordRelayActions,
+        onClick: () => loadDiscordRelayActions(undefined, true),
       }),
     ]),
-    announcementEvents.length
+    h("div", { className: "actions segmented-actions" }, [
+      ...["active", "queued", "approved", "rejected", "sent"].map((status) =>
+        actionButton(status, {
+          id: `discordRelayActionFilter-${status}`,
+          className: `segmented-button${
+            state.discordRelayActionFilter === status ? " active" : ""
+          }`,
+          onClick: () => loadDiscordRelayActions(status),
+        }),
+      ),
+    ]),
+    actions.length
       ? h(
           "div",
           { className: "template-list" },
-          announcementEvents.map((event) =>
+          actions.map((action) =>
             h("div", { className: "template-row" }, [
               h("span", {}, [
-                h("strong", { text: `/${event.commandName}` }),
+                h("strong", { text: `/${action.commandName}` }),
                 h("small", {
-                  text: `${event.username} - ${discordRelayActionStatus(event)} - ${event.receivedAt || ""}`,
+                  text: `${action.username} - ${action.status} - ${action.receivedAt || ""}${discordRelayActionOptions(action)}`,
                 }),
               ]),
               h("div", { className: "actions inline-actions" }, [
                 ...["approved", "rejected", "sent"].map((status) =>
                   actionButton(status, {
-                    id: `discord-action-${event.relayEventId}-${status}`,
+                    id: `discord-action-${action.relayEventId}-${status}`,
                     variant: "secondary",
+                    disabled: action.status === status,
                     onClick: () =>
-                      markDiscordRelayAction(event.relayEventId, status),
+                      markDiscordRelayAction(action.relayEventId, status),
                   }),
                 ),
               ]),
@@ -4154,6 +4164,15 @@ function renderDiscordRelayPanel(discord) {
         )
       : callout("No Relay suggestions loaded.", "muted"),
   ]);
+}
+
+function discordRelayActionOptions(action) {
+  const entries = Object.entries(action.options || {});
+  if (!entries.length) return "";
+  return ` - ${entries
+    .slice(0, 3)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(", ")}`;
 }
 
 function renderDiscordPlan(result) {
@@ -8652,32 +8671,45 @@ async function loadDiscordRelaySuggestions() {
   );
 }
 
-async function loadDiscordRelayActions() {
+async function loadDiscordRelayActions(statusInput, fetchRemote = false) {
+  const status =
+    typeof statusInput === "string"
+      ? statusInput
+      : state.discordRelayActionFilter || "active";
+  state.discordRelayActionFilter = status;
   await runAction(
     "discordRelayLoadActions",
     async () => {
-      const result = await api.discordRelayEvents();
+      const result = fetchRemote
+        ? await api.discordRelayEvents()
+        : { ok: true, events: [] };
+      const actionResult = await api.discordRelayActions(
+        state.discordRelayActionFilter,
+      );
       state.discordRelayEvents = result.events || [];
-      return result;
+      state.discordRelayActions = actionResult.actions || [];
+      return { ...result, actions: actionResult.actions };
     },
     { skipRefresh: true, success: "Discord Relay action queue loaded." },
   );
 }
 
-function markDiscordRelayAction(id, status) {
-  state.discordRelayActionStatuses = {
-    ...state.discordRelayActionStatuses,
-    [id]: status,
-  };
-  state.message = {
-    text: `Discord Relay action marked ${status}.`,
-    tone: status === "rejected" ? "warn" : "ok",
-  };
-  render();
-}
-
-function discordRelayActionStatus(event) {
-  return state.discordRelayActionStatuses[event.relayEventId] || "queued";
+async function markDiscordRelayAction(id, status) {
+  await runAction(
+    `discordRelayAction:${id}:${status}`,
+    async () => {
+      const result = await api.updateDiscordRelayAction(id, status);
+      const refreshed = await api.discordRelayActions(
+        state.discordRelayActionFilter,
+      );
+      state.discordRelayActions = refreshed.actions || [];
+      return result;
+    },
+    {
+      skipRefresh: true,
+      success: `Discord Relay action marked ${status}.`,
+    },
+  );
 }
 
 async function updateDiscordRelaySuggestion(id, status) {

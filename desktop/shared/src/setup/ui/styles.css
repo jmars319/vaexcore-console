@@ -432,6 +432,11 @@ button.nav-button.active:hover:not(:disabled) {
 .segmented-actions button {
   min-width: 88px;
 }
+.segmented-button.active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(85, 117, 255, 0.18);
+}
 .table-actions {
   gap: 6px;
 }

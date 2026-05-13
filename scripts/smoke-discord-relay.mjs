@@ -122,6 +122,27 @@ async function runSmoke() {
 
   const events = await json("/api/discord/relay/events");
   assert(events.ok === true, "Discord Relay events route returns ok");
+  assert(
+    events.actions.length === 1 && events.actions[0].status === "queued",
+    "Discord Relay announcement actions are persisted locally",
+  );
+
+  const approved = await post("/api/discord/relay/actions/status", {
+    id: "event-live-1",
+    status: "approved",
+  });
+  assert(
+    approved.action.status === "approved",
+    "Discord Relay action approval is persisted",
+  );
+  const actionHistory = await json(
+    "/api/discord/relay/actions?status=approved",
+  );
+  assert(
+    actionHistory.actions.length === 1 &&
+      actionHistory.actions[0].relayEventId === "event-live-1",
+    "Discord Relay action history can be filtered by status",
+  );
 
   const validation = await post("/api/relay/chatbot-identity/validation", {
     confirmed: true,
@@ -281,7 +302,24 @@ async function startFakeRelay() {
       request.method === "GET" &&
       url.pathname === "/api/console/discord/events"
     ) {
-      send(response, 200, { ok: true, events: [] });
+      send(response, 200, {
+        ok: true,
+        events: [
+          {
+            relayEventId: "event-live-1",
+            id: "interaction-live-1",
+            commandName: "live",
+            kind: "announcement",
+            userId: "discord-user-2",
+            username: "Moderator",
+            guildId: "guild-1",
+            channelId: "channel-1",
+            options: { title: "Live now" },
+            allowed: true,
+            receivedAt: "2026-05-09T00:00:02.000Z",
+          },
+        ],
+      });
       return;
     }
 
