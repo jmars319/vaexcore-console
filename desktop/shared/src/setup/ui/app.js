@@ -856,6 +856,15 @@ function renderBotCompletionCard(context = "default") {
   const validation = completion.validation?.checklist || [];
   const pending = checks.filter((check) => !check.complete);
   const nextActions = completion.nextActions || [];
+  const sections = completion.sections?.length
+    ? completion.sections
+    : clientBotCompletionSections(checks);
+  const statusLabel =
+    completion.statusLabel || botCompletionStatusLabel(completion.status);
+  const statusDetail =
+    completion.statusDetail ||
+    nextActions[0] ||
+    "Run bot completion refresh to load readiness.";
   const title =
     context === "discord" ? "Bot Completion" : "Bot Completion Status";
 
@@ -875,50 +884,57 @@ function renderBotCompletionCard(context = "default") {
           "unknown",
         completion.transportMode === "relay-chatbot",
       ],
+      ["State", statusLabel || "not checked", completion.status === "ready"],
       [
-        "Relay report",
+        "Relay",
         completion.relayReadinessReport?.connected ? "connected" : "not ready",
         Boolean(completion.relayReadinessReport?.connected),
       ],
       ["Pending", pending.length, pending.length === 0 && checks.length > 0],
     ]),
     completion.status
-      ? callout(
-          completion.status === "ready"
-            ? "Pre-credential bot readiness is complete in code. Remaining work is live credentials and external validation."
-            : "This card tracks the exact Twitch and Discord live setup records that remain.",
-          completion.status === "ready" ? "ok" : "warn",
-        )
+      ? callout(statusDetail, botCompletionTone(statusLabel))
       : callout("Run bot completion refresh to load readiness.", "muted"),
+    h(
+      "div",
+      { className: "bot-completion-sections" },
+      sections.map(renderBotCompletionSection),
+    ),
     nextActions.length
-      ? list(nextActions, "warn")
+      ? h("div", { className: "bot-next-actions" }, [
+          h("strong", { text: "Next actions" }),
+          list(nextActions, "warn"),
+        ])
       : callout("No pending bot setup actions reported.", "ok"),
     validation.length
-      ? h(
-          "div",
-          { className: "template-list compact-list" },
-          validation.map((item) =>
-            h("div", { className: "template-row" }, [
-              h("span", {}, [
-                h("strong", { text: item.label }),
-                h("small", {
-                  text: item.recordedAt
-                    ? `recorded ${item.recordedAt}`
-                    : "not recorded",
-                }),
+      ? h("div", { className: "bot-validation-records" }, [
+          h("strong", { text: "Manual validation records" }),
+          h(
+            "div",
+            { className: "template-list compact-list" },
+            validation.map((item) =>
+              h("div", { className: "template-row" }, [
+                h("span", {}, [
+                  h("strong", { text: item.label }),
+                  h("small", {
+                    text: item.recordedAt
+                      ? `recorded ${item.recordedAt}`
+                      : "not recorded",
+                  }),
+                ]),
+                h("div", { className: "actions inline-actions" }, [
+                  actionButton(item.recordedAt ? "Clear" : "Record", {
+                    id: `bot-validation-${item.key}`,
+                    variant: "secondary",
+                    busyKey: `botValidation:${item.key}`,
+                    onClick: () =>
+                      recordBotValidation(item.key, !item.recordedAt),
+                  }),
+                ]),
               ]),
-              h("div", { className: "actions inline-actions" }, [
-                actionButton(item.recordedAt ? "Clear" : "Record", {
-                  id: `bot-validation-${item.key}`,
-                  variant: "secondary",
-                  busyKey: `botValidation:${item.key}`,
-                  onClick: () =>
-                    recordBotValidation(item.key, !item.recordedAt),
-                }),
-              ]),
-            ]),
+            ),
           ),
-        )
+        ])
       : null,
     h("div", { className: "actions" }, [
       actionButton("Refresh bot completion", {
@@ -933,11 +949,17 @@ function renderBotCompletionCard(context = "default") {
         busyKey: "botRehearsal",
         onClick: runBotRehearsal,
       }),
-      actionButton("Build bot support bundle", {
-        id: "botSupportBundle",
+      actionButton("Copy bot support bundle", {
+        id: "botSupportBundleCopy",
         variant: "secondary",
-        busyKey: "botSupportBundle",
-        onClick: loadBotSupportBundle,
+        busyKey: "botSupportBundleCopy",
+        onClick: copyBotSupportBundle,
+      }),
+      actionButton("Export bot support bundle", {
+        id: "botSupportBundleExport",
+        variant: "secondary",
+        busyKey: "botSupportBundleExport",
+        onClick: exportBotSupportBundle,
       }),
     ]),
     state.botRehearsal?.steps?.length
@@ -956,6 +978,124 @@ function renderBotCompletionCard(context = "default") {
         )
       : null,
   ]);
+}
+
+function renderBotCompletionSection(section) {
+  const stateLabel = section.state || "not checked";
+  const tone = botCompletionTone(stateLabel);
+  const stateClass = String(stateLabel).replace(/\s+/g, "-");
+  const checks = section.checks || [];
+
+  return h(
+    "div",
+    { className: `bot-completion-section ${tone} ${stateClass}` },
+    [
+      h("div", { className: "bot-completion-section-head" }, [
+        h("span", {}, [
+          h("strong", { text: section.title || section.key || "Section" }),
+          h("small", {
+            text: `${section.completed || 0}/${section.total || 0} complete`,
+          }),
+        ]),
+        h("span", { className: `chip ${tone}`, text: stateLabel }),
+      ]),
+      h("small", { text: section.detail || section.nextAction || "" }),
+      checks.length
+        ? h(
+            "div",
+            { className: "bot-check-list" },
+            checks.map((check) =>
+              h("div", { className: "bot-check-row" }, [
+                h("span", {
+                  className: check.complete ? "ok" : "warn",
+                  text: check.complete ? "ready" : "todo",
+                }),
+                h("span", {}, [
+                  h("strong", { text: check.label }),
+                  h("small", {
+                    text: check.complete
+                      ? "Recorded or detected."
+                      : check.nextAction,
+                  }),
+                ]),
+              ]),
+            ),
+          )
+        : null,
+    ],
+  );
+}
+
+function clientBotCompletionSections(checks) {
+  if (!checks.length) return [];
+  return [
+    ["Local pairing", "blocked", ["relay-paired", "twitch-transport-relay"]],
+    [
+      "Twitch credentials",
+      "needs credentials",
+      [
+        "twitch-callback-recorded",
+        "twitch-bot-oauth",
+        "twitch-broadcaster-oauth",
+        "twitch-separate-account",
+        "twitch-eventsub",
+      ],
+    ],
+    [
+      "Discord credentials",
+      "needs credentials",
+      [
+        "discord-local-setup",
+        "discord-worker-config",
+        "discord-interaction-endpoint",
+        "discord-slash-commands",
+      ],
+    ],
+    [
+      "Live validation",
+      "live validation required",
+      [
+        "twitch-test-send",
+        "twitch-chatbot-user-list",
+        "discord-suggest-tested",
+        "discord-announcement-tested",
+      ],
+    ],
+  ].map(([title, incompleteState, keys]) => {
+    const sectionChecks = keys
+      .map((key) => checks.find((check) => check.key === key))
+      .filter(Boolean);
+    const pending = sectionChecks.filter((check) => !check.complete);
+    return {
+      title,
+      state: pending.length ? incompleteState : "ready",
+      detail: pending[0]?.nextAction || "Section ready.",
+      completed: sectionChecks.length - pending.length,
+      total: sectionChecks.length,
+      checks: sectionChecks,
+    };
+  });
+}
+
+function botCompletionStatusLabel(status) {
+  return (
+    {
+      ready: "ready",
+      blocked: "blocked",
+      "needs-credentials": "needs credentials",
+      "live-validation-required": "live validation required",
+      "pending-live-validation": "live validation required",
+      "needs-review": "needs review",
+    }[status] || status
+  );
+}
+
+function botCompletionTone(stateLabel = "") {
+  if (stateLabel === "ready") return "ok";
+  if (stateLabel === "blocked") return "bad";
+  if (stateLabel === "live validation required") return "info";
+  if (stateLabel === "needs review") return "warn";
+  return "warn";
 }
 
 function dashboardStep({
@@ -8419,6 +8559,41 @@ async function loadBotSupportBundle() {
       return result;
     },
     { skipRefresh: true, success: "Bot support bundle generated." },
+  );
+}
+
+async function copyBotSupportBundle() {
+  await runAction(
+    "botSupportBundleCopy",
+    async () => {
+      const result = await api.botSupportBundle();
+      state.botSupportBundle = result;
+      state.botCompletion = result.completion || state.botCompletion;
+      await copyText(
+        JSON.stringify(result, null, 2),
+        "Bot support bundle copied.",
+      );
+      return result;
+    },
+    { skipRefresh: true, quiet: true },
+  );
+}
+
+async function exportBotSupportBundle() {
+  await runAction(
+    "botSupportBundleExport",
+    async () => {
+      const result = await api.botSupportBundle();
+      state.botSupportBundle = result;
+      state.botCompletion = result.completion || state.botCompletion;
+      downloadTextFile(
+        `vaexcore-bot-support-${new Date().toISOString().slice(0, 10)}.json`,
+        `${JSON.stringify(result, null, 2)}\n`,
+        "application/json",
+      );
+      return result;
+    },
+    { skipRefresh: true, success: "Bot support bundle exported." },
   );
 }
 

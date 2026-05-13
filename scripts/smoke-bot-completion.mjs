@@ -33,6 +33,14 @@ async function runSmoke() {
   assert(appJs.includes("Bot Completion"), "Bot Completion card is present");
   assert(appJs.includes("Run dry-run rehearsal"), "rehearsal UI is present");
   assert(
+    appJs.includes("Copy bot support bundle"),
+    "bot-only support copy action is present",
+  );
+  assert(
+    appJs.includes("Export bot support bundle"),
+    "bot-only support export action is present",
+  );
+  assert(
     appJs.includes("Load action queue"),
     "Discord action queue UI is present",
   );
@@ -42,6 +50,13 @@ async function runSmoke() {
   assert(
     clean.validation.checklist.length === 10,
     "validation checklist is complete",
+  );
+  assert(
+    clean.sections.some(
+      (section) =>
+        section.title === "Local pairing" && section.state === "blocked",
+    ),
+    "bot completion route groups blocked local pairing",
   );
   assertSafePayload(clean);
 
@@ -79,6 +94,14 @@ async function runSmoke() {
     completion.checks.some((check) => check.key === "discord-worker-config"),
     "Discord Worker checks are included",
   );
+  assert(
+    completion.sections.some(
+      (section) =>
+        section.title === "Twitch credentials" &&
+        ["ready", "needs credentials"].includes(section.state),
+    ),
+    "bot completion route groups Twitch credential work",
+  );
   assert(completion.nextActions.length > 0, "completion returns next actions");
   assertSafePayload(completion);
 
@@ -103,6 +126,12 @@ async function runSmoke() {
   assert(
     bundle.queuedDiscordActions.length === 1,
     "support bundle includes queued Discord announcement actions",
+  );
+  assert(
+    bundle.completion.sections.some(
+      (section) => section.title === "Support/export",
+    ),
+    "support bundle includes grouped bot completion sections",
   );
   assertSafePayload(bundle);
 }

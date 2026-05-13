@@ -2225,6 +2225,7 @@ const getBotCompletionRoute = async () => {
     localDiscord,
     records,
   });
+  const sections = buildBotCompletionSections(checks);
   const nextActions = checks
     .filter((check) => !check.complete)
     .map((check) => check.nextAction)
@@ -2232,20 +2233,22 @@ const getBotCompletionRoute = async () => {
     .slice(0, 8);
   const completed = checks.filter((check) => check.complete).length;
   const completionPercent = Math.round((completed / checks.length) * 100);
+  const operatorStatus = botCompletionOperatorStatus({
+    completionPercent,
+    sections,
+  });
 
   return {
     ok: true,
     generatedAt: new Date().toISOString(),
-    status:
-      completionPercent === 100
-        ? "ready"
-        : nextActions.length
-          ? "pending-live-validation"
-          : "needs-review",
+    status: operatorStatus.status,
+    statusLabel: operatorStatus.label,
+    statusDetail: operatorStatus.detail,
     completionPercent,
     completed,
     total: checks.length,
     checks,
+    sections,
     nextActions,
     validation,
     relay,
@@ -2442,6 +2445,162 @@ const botCompletionCheck = (
   state: complete ? "ready" : "todo",
   nextAction: complete ? "" : nextAction,
 });
+
+const buildBotCompletionSections = (
+  checks: ReturnType<typeof botCompletionCheck>[],
+) => {
+  const byKey = new Map(checks.map((check) => [check.key, check]));
+  const sectionDefinitions = [
+    {
+      key: "local-pairing",
+      title: "Local pairing",
+      incompleteState: "blocked",
+      readyDetail:
+        "Console is paired to Relay and configured for hosted Chat Bot transport.",
+      blockedDetail:
+        "Pair Console with Relay and select relay-chatbot transport before live setup can proceed.",
+      checkKeys: ["relay-paired", "twitch-transport-relay"],
+    },
+    {
+      key: "twitch-credentials",
+      title: "Twitch credentials",
+      incompleteState: "needs credentials",
+      readyDetail:
+        "Twitch callback, OAuth grants, account separation, and EventSub records are present.",
+      blockedDetail:
+        "Complete the Twitch app callback, bot grant, broadcaster grant, account separation, and EventSub records.",
+      checkKeys: [
+        "twitch-callback-recorded",
+        "twitch-bot-oauth",
+        "twitch-broadcaster-oauth",
+        "twitch-separate-account",
+        "twitch-eventsub",
+      ],
+    },
+    {
+      key: "discord-credentials",
+      title: "Discord credentials",
+      incompleteState: "needs credentials",
+      readyDetail:
+        "Discord local fallback, Worker secrets, endpoint acceptance, and slash commands are ready.",
+      blockedDetail:
+        "Save Discord credentials, configure Relay Worker Discord secrets, accept the endpoint, and register commands.",
+      checkKeys: [
+        "discord-local-setup",
+        "discord-worker-config",
+        "discord-interaction-endpoint",
+        "discord-slash-commands",
+      ],
+    },
+    {
+      key: "live-validation",
+      title: "Live validation",
+      incompleteState: "live validation required",
+      readyDetail:
+        "Twitch test sends, Chat Bot user-list confirmation, and Discord command tests are recorded.",
+      blockedDetail:
+        "Run the Twitch and Discord live checks, then record the operator confirmations.",
+      checkKeys: [
+        "twitch-test-send",
+        "twitch-chatbot-user-list",
+        "discord-suggest-tested",
+        "discord-announcement-tested",
+      ],
+    },
+  ] as const;
+
+  const sections = sectionDefinitions.map((definition) => {
+    const sectionChecks = definition.checkKeys
+      .map((key) => byKey.get(key))
+      .filter((check): check is ReturnType<typeof botCompletionCheck> =>
+        Boolean(check),
+      );
+    const pending = sectionChecks.filter((check) => !check.complete);
+    return {
+      key: definition.key,
+      title: definition.title,
+      state: pending.length ? definition.incompleteState : "ready",
+      detail: pending.length
+        ? definition.blockedDetail
+        : definition.readyDetail,
+      complete: pending.length === 0,
+      completed: sectionChecks.length - pending.length,
+      total: sectionChecks.length,
+      nextAction: pending[0]?.nextAction ?? "",
+      checks: sectionChecks,
+    };
+  });
+
+  return [
+    ...sections,
+    {
+      key: "support-export",
+      title: "Support/export",
+      state: "ready",
+      detail:
+        "Bot-only support bundle copy and export use the secret-safe support route.",
+      complete: true,
+      completed: 1,
+      total: 1,
+      nextAction: "",
+      checks: [],
+    },
+  ];
+};
+
+const botCompletionOperatorStatus = ({
+  completionPercent,
+  sections,
+}: {
+  completionPercent: number;
+  sections: ReturnType<typeof buildBotCompletionSections>;
+}) => {
+  if (completionPercent === 100) {
+    return {
+      status: "ready",
+      label: "ready",
+      detail:
+        "Code readiness is complete. Remaining risk is external live-service validation.",
+    };
+  }
+
+  const blocked = sections.find((section) => section.state === "blocked");
+  if (blocked) {
+    return {
+      status: "blocked",
+      label: "blocked",
+      detail: blocked.nextAction || blocked.detail,
+    };
+  }
+
+  const credentials = sections.find(
+    (section) => section.state === "needs credentials",
+  );
+  if (credentials) {
+    return {
+      status: "needs-credentials",
+      label: "needs credentials",
+      detail: credentials.nextAction || credentials.detail,
+    };
+  }
+
+  const liveValidation = sections.find(
+    (section) => section.state === "live validation required",
+  );
+  if (liveValidation) {
+    return {
+      status: "live-validation-required",
+      label: "live validation required",
+      detail: liveValidation.nextAction || liveValidation.detail,
+    };
+  }
+
+  return {
+    status: "needs-review",
+    label: "needs review",
+    detail: "Review bot completion checks before calling setup complete.",
+  };
+};
 
 const recordBotValidation = (body: unknown) => {
   const input = objectInput(body);

@@ -589,6 +589,69 @@ button.nav-button.active:hover:not(:disabled) {
 .template-row textarea {
   min-height: 70px;
 }
+.bot-completion-sections,
+.bot-check-list,
+.bot-validation-records,
+.bot-next-actions {
+  display: grid;
+  gap: 10px;
+}
+.bot-completion-sections {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.bot-completion-section {
+  display: grid;
+  gap: 9px;
+  align-content: start;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  padding: 11px 12px;
+}
+.bot-completion-section.ok {
+  border-left-color: var(--accent);
+}
+.bot-completion-section.warn {
+  border-left-color: var(--warn);
+}
+.bot-completion-section.bad {
+  border-left-color: var(--danger);
+}
+.bot-completion-section.info {
+  border-left-color: var(--blue);
+}
+.bot-completion-section-head,
+.bot-check-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+.bot-completion-section-head strong,
+.bot-check-row strong,
+.bot-validation-records > strong,
+.bot-next-actions > strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.bot-completion-section small,
+.bot-check-row small {
+  display: block;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.bot-check-row {
+  grid-template-columns: 54px minmax(0, 1fr);
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+.bot-check-row > span:first-child {
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0;
+}
 .operator-template-row {
   grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) auto;
 }
