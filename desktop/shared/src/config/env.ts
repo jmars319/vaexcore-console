@@ -169,6 +169,7 @@ const bootstrapLocalOAuthStore = (
     },
     discord: existing.discord,
     relay: existing.relay,
+    botValidation: existing.botValidation,
   };
 
   if (JSON.stringify(existing) === JSON.stringify(next)) {

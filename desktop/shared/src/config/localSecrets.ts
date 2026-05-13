@@ -52,6 +52,20 @@ const localSecretsSchema = z.object({
       chatbotIdentityValidationNote: z.string().optional(),
     })
     .default({}),
+  botValidation: z
+    .object({
+      twitchCallbackAddedAt: z.string().optional(),
+      twitchBotOAuthCompletedAt: z.string().optional(),
+      twitchBroadcasterOAuthCompletedAt: z.string().optional(),
+      twitchEventSubRegisteredAt: z.string().optional(),
+      twitchRelayTestSendPassedAt: z.string().optional(),
+      twitchChatBotUserListConfirmedAt: z.string().optional(),
+      discordInteractionEndpointAcceptedAt: z.string().optional(),
+      discordSlashCommandsRegisteredAt: z.string().optional(),
+      discordSuggestCommandTestedAt: z.string().optional(),
+      discordAnnouncementCommandTestedAt: z.string().optional(),
+    })
+    .default({}),
 });
 
 export type LocalSecrets = z.infer<typeof localSecretsSchema>;
@@ -63,6 +77,7 @@ export const readLocalSecrets = (): LocalSecrets => {
       twitch: { redirectUri: defaultRedirectUri, scopes: [] },
       discord: { createdChannelIds: {}, createdRoleIds: {} },
       relay: { twitchTransportMode: "local-user-token" },
+      botValidation: {},
     };
   }
 
@@ -162,6 +177,58 @@ const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
           240,
         )
       : undefined,
+  },
+  botValidation: {
+    twitchCallbackAddedAt: sanitizeOptional(
+      secrets.botValidation.twitchCallbackAddedAt,
+      "Twitch callback validation timestamp",
+      80,
+    ),
+    twitchBotOAuthCompletedAt: sanitizeOptional(
+      secrets.botValidation.twitchBotOAuthCompletedAt,
+      "Twitch bot OAuth validation timestamp",
+      80,
+    ),
+    twitchBroadcasterOAuthCompletedAt: sanitizeOptional(
+      secrets.botValidation.twitchBroadcasterOAuthCompletedAt,
+      "Twitch broadcaster OAuth validation timestamp",
+      80,
+    ),
+    twitchEventSubRegisteredAt: sanitizeOptional(
+      secrets.botValidation.twitchEventSubRegisteredAt,
+      "Twitch EventSub validation timestamp",
+      80,
+    ),
+    twitchRelayTestSendPassedAt: sanitizeOptional(
+      secrets.botValidation.twitchRelayTestSendPassedAt,
+      "Twitch Relay test send validation timestamp",
+      80,
+    ),
+    twitchChatBotUserListConfirmedAt: sanitizeOptional(
+      secrets.botValidation.twitchChatBotUserListConfirmedAt,
+      "Twitch Chat Bot user-list validation timestamp",
+      80,
+    ),
+    discordInteractionEndpointAcceptedAt: sanitizeOptional(
+      secrets.botValidation.discordInteractionEndpointAcceptedAt,
+      "Discord interaction endpoint validation timestamp",
+      80,
+    ),
+    discordSlashCommandsRegisteredAt: sanitizeOptional(
+      secrets.botValidation.discordSlashCommandsRegisteredAt,
+      "Discord slash command validation timestamp",
+      80,
+    ),
+    discordSuggestCommandTestedAt: sanitizeOptional(
+      secrets.botValidation.discordSuggestCommandTestedAt,
+      "Discord suggest command validation timestamp",
+      80,
+    ),
+    discordAnnouncementCommandTestedAt: sanitizeOptional(
+      secrets.botValidation.discordAnnouncementCommandTestedAt,
+      "Discord announcement command validation timestamp",
+      80,
+    ),
   },
 });
 

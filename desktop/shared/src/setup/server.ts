@@ -138,6 +138,7 @@ import {
 import {
   RelayChatClient,
   relayConfigReadiness,
+  type RelayBotReadinessReport,
 } from "../twitch/relayTransport";
 import {
   getTokenExpiresAt,
@@ -187,6 +188,33 @@ const vaexcoreSuiteAppDefinitions = [
 const logger = createLogger("info");
 const oauthStates = new Map<string, number>();
 const db = createDbClient(databaseUrl);
+const botValidationKeys = [
+  "twitchCallbackAddedAt",
+  "twitchBotOAuthCompletedAt",
+  "twitchBroadcasterOAuthCompletedAt",
+  "twitchEventSubRegisteredAt",
+  "twitchRelayTestSendPassedAt",
+  "twitchChatBotUserListConfirmedAt",
+  "discordInteractionEndpointAcceptedAt",
+  "discordSlashCommandsRegisteredAt",
+  "discordSuggestCommandTestedAt",
+  "discordAnnouncementCommandTestedAt",
+] as const;
+type BotValidationKey = (typeof botValidationKeys)[number];
+
+const botValidationLabels: Record<BotValidationKey, string> = {
+  twitchCallbackAddedAt: "Twitch callback URL added",
+  twitchBotOAuthCompletedAt: "Twitch bot OAuth completed",
+  twitchBroadcasterOAuthCompletedAt: "Twitch broadcaster OAuth completed",
+  twitchEventSubRegisteredAt: "Twitch EventSub registered",
+  twitchRelayTestSendPassedAt: "Twitch Relay test send passed",
+  twitchChatBotUserListConfirmedAt: "Twitch user list shows Chat Bot",
+  discordInteractionEndpointAcceptedAt: "Discord interaction endpoint accepted",
+  discordSlashCommandsRegisteredAt: "Discord slash commands registered",
+  discordSuggestCommandTestedAt: "Discord /suggest tested",
+  discordAnnouncementCommandTestedAt: "Discord announcement command tested",
+};
+
 const giveawaysService = new GiveawaysService({ db, logger });
 const featureGates = createFeatureGateStore(db);
 const customCommandsService = new CustomCommandsService(db, { featureGates });
@@ -451,6 +479,30 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
   ) {
     const body = await readJson(request);
     sendJson(response, 200, recordRelayChatbotIdentityValidation(body));
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/bot/completion") {
+    sendJson(response, 200, await getBotCompletionRoute());
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/bot/validation-record"
+  ) {
+    const body = await readJson(request);
+    sendJson(response, 200, recordBotValidation(body));
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/bot/support-bundle") {
+    sendJson(response, 200, await getBotSupportBundleRoute());
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/bot/rehearsal/run") {
+    sendJson(response, 200, await runBotSetupRehearsalRoute());
     return;
   }
 
@@ -1402,6 +1454,22 @@ const getSafeConfig = () => {
     token: twitch.accessToken ? maskToken(twitch.accessToken) : "",
     discord: getSafeDiscordConfig(secrets),
     relay: getSafeRelayConfig(secrets),
+    botValidation: getSafeBotValidation(secrets),
+  };
+};
+
+const getSafeBotValidation = (secrets = readLocalSecrets()) => {
+  const records = Object.fromEntries(
+    botValidationKeys.map((key) => [key, secrets.botValidation[key] ?? ""]),
+  ) as Record<BotValidationKey, string>;
+  return {
+    records,
+    checklist: botValidationKeys.map((key) => ({
+      key,
+      label: botValidationLabels[key],
+      recordedAt: records[key],
+      complete: Boolean(records[key]),
+    })),
   };
 };
 
@@ -1610,6 +1678,14 @@ const registerRelayEventSubRoute = async () => {
     throw new SafeInputError(connectionError);
   }
   const result = await createRelayChatClient(secrets).registerEventSub();
+  const current = readLocalSecrets();
+  writeLocalSecrets({
+    ...current,
+    botValidation: {
+      ...current.botValidation,
+      twitchEventSubRegisteredAt: new Date().toISOString(),
+    },
+  });
   appendSuiteTimelineEvent({
     sourceApp: "vaexcore-console",
     sourceAppName: "vaexcore console",
@@ -1641,8 +1717,21 @@ const sendRelayTestMessageRoute = async () => {
 
   const result = await createRelayChatClient(secrets).send(
     "vaexcore console relay setup test.",
+    {
+      idempotencyKey: `console-test-send-${new Date().toISOString().slice(0, 10)}`,
+    },
   );
   const structured = typeof result === "string" ? { status: result } : result;
+  if (structured.status === "sent") {
+    const current = readLocalSecrets();
+    writeLocalSecrets({
+      ...current,
+      botValidation: {
+        ...current.botValidation,
+        twitchRelayTestSendPassedAt: new Date().toISOString(),
+      },
+    });
+  }
   return {
     ok: structured.status === "sent",
     relay: getSafeRelayConfig(),
@@ -1935,6 +2024,14 @@ const registerDiscordRelayCommandsRoute = async () => {
     throw new SafeInputError(connectionError);
   }
   const result = await createDiscordRelayClient(secrets).registerCommands();
+  const current = readLocalSecrets();
+  writeLocalSecrets({
+    ...current,
+    botValidation: {
+      ...current.botValidation,
+      discordSlashCommandsRegisteredAt: new Date().toISOString(),
+    },
+  });
   appendSuiteTimelineEvent({
     sourceApp: "vaexcore-console",
     sourceAppName: "vaexcore console",
@@ -2025,9 +2122,426 @@ const recordRelayChatbotIdentityValidation = (body: unknown) => {
         : undefined,
       chatbotIdentityValidationNote: confirmed ? note : undefined,
     },
+    botValidation: {
+      ...existing.botValidation,
+      twitchChatBotUserListConfirmedAt: confirmed
+        ? new Date().toISOString()
+        : undefined,
+    },
   });
   return { ok: true, relay: getSafeRelayConfig() };
 };
+
+const getBotCompletionRoute = async () => {
+  const secrets = readLocalSecrets();
+  const [relayStatus, relayReport, discordStatus] = await Promise.all([
+    getRelayStatusRoute(),
+    getRelayReadinessReport(secrets),
+    getDiscordStatus(new URLSearchParams()),
+  ]);
+  const validation = getSafeBotValidation(secrets);
+  const relay = getSafeRelayConfig(secrets);
+  const localDiscord = getDiscordReadiness(secrets);
+  const records = validation.records;
+  const checks = buildBotCompletionChecks({
+    secrets,
+    relayStatus,
+    relayReport,
+    localDiscord,
+    records,
+  });
+  const nextActions = checks
+    .filter((check) => !check.complete)
+    .map((check) => check.nextAction)
+    .filter(Boolean)
+    .slice(0, 8);
+  const completed = checks.filter((check) => check.complete).length;
+  const completionPercent = Math.round((completed / checks.length) * 100);
+
+  return {
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    status:
+      completionPercent === 100
+        ? "ready"
+        : nextActions.length
+          ? "pending-live-validation"
+          : "needs-review",
+    completionPercent,
+    completed,
+    total: checks.length,
+    checks,
+    nextActions,
+    validation,
+    relay,
+    relayStatus,
+    relayReadinessReport: relayReport,
+    discord: {
+      localReadiness: localDiscord,
+      localConfig: getSafeDiscordConfig(secrets),
+      relay: discordStatus,
+    },
+    transportMode: secrets.relay.twitchTransportMode,
+  };
+};
+
+const getRelayReadinessReport = async (
+  secrets = readLocalSecrets(),
+): Promise<
+  | { ok: true; connected: true; report: RelayBotReadinessReport }
+  | { ok: false; connected: false; error: string }
+> => {
+  if (relayConnectionError(secrets)) {
+    return {
+      ok: false,
+      connected: false,
+      error:
+        "Relay readiness report was not requested because local Relay pairing is incomplete.",
+    };
+  }
+
+  try {
+    return {
+      ok: true,
+      connected: true,
+      report: await createRelayChatClient(secrets).readinessReport(),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      connected: false,
+      error: safeErrorMessage(error, "Relay readiness report failed."),
+    };
+  }
+};
+
+const buildBotCompletionChecks = ({
+  secrets,
+  relayStatus,
+  relayReport,
+  localDiscord,
+  records,
+}: {
+  secrets: LocalSecrets;
+  relayStatus: Awaited<ReturnType<typeof getRelayStatusRoute>>;
+  relayReport: Awaited<ReturnType<typeof getRelayReadinessReport>>;
+  localDiscord: ReturnType<typeof getDiscordReadiness>;
+  records: Record<BotValidationKey, string>;
+}) => {
+  const relayChecks =
+    relayReport.ok && relayReport.report
+      ? relayReport.report.checks || []
+      : relayStatus.connected
+        ? relayStatus.readiness?.checks || []
+        : [];
+  const checkByKey = (key: string) =>
+    relayChecks.find((item) => item.key === key);
+  const discordChecks =
+    relayReport.ok && relayReport.report ? relayReport.report.checks || [] : [];
+  const discordCheckByKey = (key: string) =>
+    discordChecks.find((item) => item.key === key);
+
+  return [
+    botCompletionCheck(
+      "relay-paired",
+      "Console paired to Relay",
+      !relayConnectionError(secrets),
+      "Save Relay URL, installation ID, and console token.",
+    ),
+    botCompletionCheck(
+      "twitch-transport-relay",
+      "Twitch transport is relay-chatbot",
+      secrets.relay.twitchTransportMode === "relay-chatbot",
+      "Switch Twitch Chat Transport to relay-chatbot in Settings.",
+    ),
+    botCompletionCheck(
+      "twitch-callback-recorded",
+      botValidationLabels.twitchCallbackAddedAt,
+      Boolean(records.twitchCallbackAddedAt),
+      "Add the Relay callback URL in the Twitch Developer Console, then record it here.",
+    ),
+    botCompletionCheck(
+      "twitch-bot-oauth",
+      botValidationLabels.twitchBotOAuthCompletedAt,
+      Boolean(records.twitchBotOAuthCompletedAt || checkByKey("bot-grant")?.ok),
+      "Open bot OAuth while logged into vaexcorebot.",
+    ),
+    botCompletionCheck(
+      "twitch-broadcaster-oauth",
+      botValidationLabels.twitchBroadcasterOAuthCompletedAt,
+      Boolean(
+        records.twitchBroadcasterOAuthCompletedAt ||
+        checkByKey("broadcaster-grant")?.ok,
+      ),
+      "Open broadcaster OAuth while logged into the channel owner account.",
+    ),
+    botCompletionCheck(
+      "twitch-separate-account",
+      "Twitch bot and broadcaster accounts are separate",
+      Boolean(checkByKey("separate-bot-account")?.ok),
+      "Relay must show vaexcorebot and broadcaster grants as separate accounts.",
+    ),
+    botCompletionCheck(
+      "twitch-eventsub",
+      botValidationLabels.twitchEventSubRegisteredAt,
+      Boolean(
+        records.twitchEventSubRegisteredAt ||
+        checkByKey("latest-eventsub-registration")?.ok,
+      ),
+      "Register EventSub through Console after OAuth grants are ready.",
+    ),
+    botCompletionCheck(
+      "twitch-test-send",
+      botValidationLabels.twitchRelayTestSendPassedAt,
+      Boolean(
+        records.twitchRelayTestSendPassedAt ||
+        checkByKey("latest-outbound-send")?.ok,
+      ),
+      "Send a Relay test message through Console.",
+    ),
+    botCompletionCheck(
+      "twitch-chatbot-user-list",
+      botValidationLabels.twitchChatBotUserListConfirmedAt,
+      Boolean(
+        records.twitchChatBotUserListConfirmedAt ||
+        secrets.relay.chatbotIdentityValidatedAt,
+      ),
+      "Confirm Twitch lists vaexcorebot as a Chat Bot in the channel user list.",
+    ),
+    botCompletionCheck(
+      "discord-local-setup",
+      "Local Discord setup is ready for channel management fallback",
+      localDiscord.ready,
+      "Save Discord bot token, server ID, and announcement channel if Console should manage local Discord setup.",
+    ),
+    botCompletionCheck(
+      "discord-worker-config",
+      "Discord Worker secrets are configured",
+      Boolean(
+        discordCheckByKey("discord-bot-token")?.ok &&
+        discordCheckByKey("discord-public-key")?.ok &&
+        discordCheckByKey("discord-application-id")?.ok &&
+        discordCheckByKey("discord-guild-id")?.ok,
+      ),
+      "Set Discord Worker secrets on Relay.",
+    ),
+    botCompletionCheck(
+      "discord-interaction-endpoint",
+      botValidationLabels.discordInteractionEndpointAcceptedAt,
+      Boolean(records.discordInteractionEndpointAcceptedAt),
+      "Set the Discord Interactions Endpoint to the Relay URL and record Discord acceptance.",
+    ),
+    botCompletionCheck(
+      "discord-slash-commands",
+      botValidationLabels.discordSlashCommandsRegisteredAt,
+      Boolean(
+        records.discordSlashCommandsRegisteredAt ||
+        discordCheckByKey("discord-command-registration")?.ok,
+      ),
+      "Register Discord slash commands through Console after Worker secrets are set.",
+    ),
+    botCompletionCheck(
+      "discord-suggest-tested",
+      botValidationLabels.discordSuggestCommandTestedAt,
+      Boolean(records.discordSuggestCommandTestedAt),
+      "Run /suggest in Discord and confirm it appears in Console.",
+    ),
+    botCompletionCheck(
+      "discord-announcement-tested",
+      botValidationLabels.discordAnnouncementCommandTestedAt,
+      Boolean(records.discordAnnouncementCommandTestedAt),
+      "Run /live, /late, /cancelled, or /scheduled and confirm Console review behavior.",
+    ),
+  ];
+};
+
+const botCompletionCheck = (
+  key: string,
+  label: string,
+  complete: boolean,
+  nextAction: string,
+) => ({
+  key,
+  label,
+  complete,
+  state: complete ? "ready" : "todo",
+  nextAction: complete ? "" : nextAction,
+});
+
+const recordBotValidation = (body: unknown) => {
+  const input = objectInput(body);
+  const key = botValidationKey(input.key);
+  const confirmed = input.confirmed !== false;
+  const existing = readLocalSecrets();
+  const timestamp = confirmed ? new Date().toISOString() : undefined;
+  const next: LocalSecrets = {
+    ...existing,
+    botValidation: {
+      ...existing.botValidation,
+      [key]: timestamp,
+    },
+  };
+
+  if (key === "twitchChatBotUserListConfirmedAt") {
+    next.relay = {
+      ...next.relay,
+      chatbotIdentityValidatedAt: timestamp,
+      chatbotIdentityValidationNote: confirmed
+        ? "Operator confirmed Twitch user list shows vaexcorebot as Chat Bot."
+        : undefined,
+    };
+  }
+
+  writeLocalSecrets(next);
+  return { ok: true, validation: getSafeBotValidation() };
+};
+
+const botValidationKey = (value: unknown): BotValidationKey => {
+  if (
+    typeof value === "string" &&
+    botValidationKeys.includes(value as BotValidationKey)
+  ) {
+    return value as BotValidationKey;
+  }
+  throw new SafeInputError("Unknown bot validation record key.");
+};
+
+const getBotSupportBundleRoute = async () => {
+  const [completion, supportBundle, discordEvents, discordSuggestions] =
+    await Promise.all([
+      getBotCompletionRoute(),
+      Promise.resolve(getSupportBundle()),
+      getOptionalDiscordRelayEvents(),
+      getOptionalDiscordRelaySuggestions(),
+    ]);
+  return {
+    ok: true,
+    bundleVersion: 1,
+    generatedAt: new Date().toISOString(),
+    note: "Secret-safe bot setup support bundle. It reports presence and readiness only, never tokens or secrets.",
+    completion,
+    relayDiagnostics: completion.relayReadinessReport,
+    validationRecords: completion.validation,
+    queuedDiscordActions: discordEvents.events.filter((event) =>
+      ["live", "late", "cancelled", "scheduled"].includes(event.commandName),
+    ),
+    suggestions: discordSuggestions.suggestions,
+    recentSendOutcomes: supportBundle.recent.outbound.slice(0, 20),
+    nextActions: completion.nextActions,
+  };
+};
+
+const getOptionalDiscordRelayEvents = async () => {
+  try {
+    return await getDiscordRelayEventsRoute();
+  } catch (error) {
+    return {
+      ok: false,
+      events: [],
+      error: safeErrorMessage(error, "Discord Relay events are unavailable."),
+    };
+  }
+};
+
+const getOptionalDiscordRelaySuggestions = async () => {
+  try {
+    return await getDiscordRelaySuggestionsRoute(new URLSearchParams());
+  } catch (error) {
+    return {
+      ok: false,
+      suggestions: [],
+      error: safeErrorMessage(
+        error,
+        "Discord Relay suggestions are unavailable.",
+      ),
+    };
+  }
+};
+
+const runBotSetupRehearsalRoute = async () => {
+  const completion = await getBotCompletionRoute();
+  const setupUrls = getRelaySetupUrls(readLocalSecrets().relay);
+  const steps = [
+    dryRunStep(
+      "twitch-callback",
+      "Generate Twitch callback URL",
+      Boolean(setupUrls.twitchCallbackUrl),
+      setupUrls.twitchCallbackUrl ||
+        "Save Relay URL before generating the callback URL.",
+    ),
+    dryRunStep(
+      "bot-oauth",
+      "Generate bot OAuth URL",
+      Boolean(setupUrls.twitchBotOAuthUrl),
+      setupUrls.twitchBotOAuthUrl || "Save Relay installation ID first.",
+    ),
+    dryRunStep(
+      "broadcaster-oauth",
+      "Generate broadcaster OAuth URL",
+      Boolean(setupUrls.twitchBroadcasterOAuthUrl),
+      setupUrls.twitchBroadcasterOAuthUrl ||
+        "Save Relay installation ID first.",
+    ),
+    dryRunStep(
+      "eventsub",
+      "Mock Twitch EventSub registration",
+      true,
+      "Dry run would call Relay EventSub registration after OAuth grants are live.",
+    ),
+    dryRunStep(
+      "relay-send",
+      "Mock Relay chat send",
+      true,
+      "Dry run would send a Relay test chat message with an idempotency key.",
+    ),
+    dryRunStep(
+      "chatbot-identity",
+      "Mock Twitch Chat Bot user-list confirmation",
+      true,
+      "Dry run keeps this as an operator validation record until live Twitch confirms it.",
+    ),
+    dryRunStep(
+      "discord-endpoint",
+      "Generate Discord interaction endpoint",
+      Boolean(setupUrls.discordInteractionUrl),
+      setupUrls.discordInteractionUrl ||
+        "Save Relay URL before generating the Discord interaction endpoint.",
+    ),
+    dryRunStep(
+      "discord-commands",
+      "Mock Discord slash command registration",
+      true,
+      "Dry run would register /suggest, /live, /late, /cancelled, /scheduled, and /setup-status after Discord Worker secrets are live.",
+    ),
+    dryRunStep(
+      "discord-command-tests",
+      "Mock Discord command validation",
+      true,
+      "Dry run would confirm /suggest queues a suggestion and announcement commands queue operator-visible actions.",
+    ),
+  ];
+  return {
+    ok: true,
+    dryRun: true,
+    generatedAt: new Date().toISOString(),
+    steps,
+    completion,
+    nextActions: completion.nextActions,
+  };
+};
+
+const dryRunStep = (
+  key: string,
+  label: string,
+  ok: boolean,
+  detail: string,
+) => ({
+  key,
+  label,
+  ok,
+  status: ok ? "pass" : "todo",
+  detail,
+});
 
 const optionalRelaySuggestionStatus = (
   value: string | null,
@@ -2965,6 +3479,7 @@ const saveConfig = (body: unknown) => {
         ? undefined
         : existing.relay.chatbotIdentityValidationNote,
     },
+    botValidation: existing.botValidation,
   };
 
   writeLocalSecrets(next);

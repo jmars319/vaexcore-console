@@ -91,6 +91,7 @@ addSection("Twitch Relay Setup URLs", [
 await addRelayHealthSection();
 await addTwitchRelaySection();
 await addDiscordRelaySection();
+addValidationRecordSection();
 
 addSection("Local Discord Setup", [
   check(
@@ -179,12 +180,24 @@ async function addTwitchRelaySection() {
 
   if (relayConfigured) {
     try {
-      const status = await new RelayChatClient({
+      const client = new RelayChatClient({
         baseUrl: relayBaseUrl,
         installationId: secrets.relay.installationId,
         consoleToken: secrets.relay.consoleToken,
-      }).status();
+      });
+      const status = await client.status();
       checks.push(...relayChecks(status.readiness?.checks ?? []));
+      const report = await client.readinessReport().catch(() => null);
+      if (report?.checks?.length) {
+        checks.push(...relayChecks(report.checks));
+      }
+      if (report?.counts) {
+        checks.push({
+          label: "Relay queue counts",
+          status: "pass",
+          detail: `twitch events ${report.counts.queuedTwitchChatEvents ?? 0}, discord interactions ${report.counts.queuedDiscordInteractions ?? 0}, outbound dead-lettered ${report.counts.outboundSends?.deadLettered ?? 0}`,
+        });
+      }
     } catch (error) {
       checks.push({
         label: "Twitch Relay status",
@@ -245,6 +258,76 @@ async function addDiscordRelaySection() {
   }
 
   addSection("Discord Relay Readiness", checks);
+}
+
+function addValidationRecordSection() {
+  const records = secrets.botValidation;
+  addSection("Live Validation Records", [
+    recordCheck(
+      "Twitch callback URL added",
+      records.twitchCallbackAddedAt,
+      "Add the Relay callback URL in the Twitch Developer Console.",
+    ),
+    recordCheck(
+      "Twitch bot OAuth completed",
+      records.twitchBotOAuthCompletedAt,
+      "Authorize vaexcorebot through Relay.",
+    ),
+    recordCheck(
+      "Twitch broadcaster OAuth completed",
+      records.twitchBroadcasterOAuthCompletedAt,
+      "Authorize the broadcaster channel through Relay.",
+    ),
+    recordCheck(
+      "Twitch EventSub registered",
+      records.twitchEventSubRegisteredAt,
+      "Register EventSub through Console after OAuth grants.",
+    ),
+    recordCheck(
+      "Twitch Relay test send passed",
+      records.twitchRelayTestSendPassedAt,
+      "Send a Relay test message through Console.",
+    ),
+    recordCheck(
+      "Twitch Chat Bot user-list confirmed",
+      records.twitchChatBotUserListConfirmedAt ||
+        secrets.relay.chatbotIdentityValidatedAt,
+      "Confirm Twitch lists vaexcorebot as a Chat Bot.",
+    ),
+    recordCheck(
+      "Discord interaction endpoint accepted",
+      records.discordInteractionEndpointAcceptedAt,
+      "Set the Discord Interactions Endpoint URL to Relay.",
+    ),
+    recordCheck(
+      "Discord slash commands registered",
+      records.discordSlashCommandsRegisteredAt,
+      "Register Discord slash commands through Console.",
+    ),
+    recordCheck(
+      "Discord /suggest tested",
+      records.discordSuggestCommandTestedAt,
+      "Run /suggest and confirm it reaches Console.",
+    ),
+    recordCheck(
+      "Discord announcement command tested",
+      records.discordAnnouncementCommandTestedAt,
+      "Run /live, /late, /cancelled, or /scheduled and confirm operator review.",
+    ),
+  ]);
+}
+
+function recordCheck(
+  label: string,
+  value: string | undefined,
+  nextAction: string,
+): ReadinessCheck {
+  return {
+    label,
+    status: value ? "pass" : "todo",
+    detail: value || "not recorded",
+    nextAction: value ? undefined : nextAction,
+  };
 }
 
 function addSection(title: string, checks: ReadinessCheck[]) {

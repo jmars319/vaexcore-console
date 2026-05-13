@@ -80,8 +80,14 @@ const state = {
   relayStatus: null,
   relayEventSubResult: null,
   relayTestSendResult: null,
+  botCompletion: null,
+  botRehearsal: null,
+  botSupportBundle: null,
   discord: null,
   discordSetupPreview: null,
+  discordRelaySuggestions: [],
+  discordRelayEvents: [],
+  discordRelayActionStatuses: {},
   featureGates: [],
   templates: [],
   operatorMessages: [],
@@ -299,6 +305,11 @@ const api = {
   discordRelayEvents: () => api.get("/api/discord/relay/events"),
   markRelayChatbotIdentityValidated: (body) =>
     api.post("/api/relay/chatbot-identity/validation", body),
+  botCompletion: () => api.get("/api/bot/completion"),
+  recordBotValidation: (key, confirmed = true) =>
+    api.post("/api/bot/validation-record", { key, confirmed }),
+  botSupportBundle: () => api.get("/api/bot/support-bundle"),
+  runBotRehearsal: () => api.post("/api/bot/rehearsal/run"),
   diagnostics: () => api.get("/api/diagnostics"),
   supportBundle: () => api.get("/api/support-bundle"),
   featureGates: () => api.get("/api/feature-gates"),
@@ -723,6 +734,7 @@ function renderDashboard() {
       }),
     ),
     renderDashboardStartCard(runtime, readiness),
+    renderBotCompletionCard("dashboard"),
     h("div", { className: "dashboard-grid" }, [
       renderDashboardReadinessCard(runtime, readiness),
       renderDashboardGiveawayCard(status?.giveaway),
@@ -830,6 +842,114 @@ function renderDashboardStartCard(runtime, readiness) {
         }),
       }),
     ]),
+  ]);
+}
+
+function renderBotCompletionCard(context = "default") {
+  const completion = state.botCompletion || {};
+  const checks = completion.checks || [];
+  const validation = completion.validation?.checklist || [];
+  const pending = checks.filter((check) => !check.complete);
+  const nextActions = completion.nextActions || [];
+  const title =
+    context === "discord" ? "Bot Completion" : "Bot Completion Status";
+
+  return card(title, [
+    statusGrid([
+      [
+        "Overall",
+        completion.completionPercent !== undefined
+          ? `${completion.completionPercent}%`
+          : "not checked",
+        completion.completionPercent === 100,
+      ],
+      [
+        "Transport",
+        completion.transportMode ||
+          state.config?.relay?.twitchTransportMode ||
+          "unknown",
+        completion.transportMode === "relay-chatbot",
+      ],
+      [
+        "Relay report",
+        completion.relayReadinessReport?.connected ? "connected" : "not ready",
+        Boolean(completion.relayReadinessReport?.connected),
+      ],
+      ["Pending", pending.length, pending.length === 0 && checks.length > 0],
+    ]),
+    completion.status
+      ? callout(
+          completion.status === "ready"
+            ? "Pre-credential bot readiness is complete in code. Remaining work is live credentials and external validation."
+            : "This card tracks the exact Twitch and Discord live setup records that remain.",
+          completion.status === "ready" ? "ok" : "warn",
+        )
+      : callout("Run bot completion refresh to load readiness.", "muted"),
+    nextActions.length
+      ? list(nextActions, "warn")
+      : callout("No pending bot setup actions reported.", "ok"),
+    validation.length
+      ? h(
+          "div",
+          { className: "template-list compact-list" },
+          validation.map((item) =>
+            h("div", { className: "template-row" }, [
+              h("span", {}, [
+                h("strong", { text: item.label }),
+                h("small", {
+                  text: item.recordedAt
+                    ? `recorded ${item.recordedAt}`
+                    : "not recorded",
+                }),
+              ]),
+              h("div", { className: "actions inline-actions" }, [
+                actionButton(item.recordedAt ? "Clear" : "Record", {
+                  id: `bot-validation-${item.key}`,
+                  variant: "secondary",
+                  busyKey: `botValidation:${item.key}`,
+                  onClick: () =>
+                    recordBotValidation(item.key, !item.recordedAt),
+                }),
+              ]),
+            ]),
+          ),
+        )
+      : null,
+    h("div", { className: "actions" }, [
+      actionButton("Refresh bot completion", {
+        id: "botCompletionRefresh",
+        variant: "secondary",
+        busyKey: "botCompletion",
+        onClick: refreshBotCompletion,
+      }),
+      actionButton("Run dry-run rehearsal", {
+        id: "botRehearsalRun",
+        variant: "secondary",
+        busyKey: "botRehearsal",
+        onClick: runBotRehearsal,
+      }),
+      actionButton("Build bot support bundle", {
+        id: "botSupportBundle",
+        variant: "secondary",
+        busyKey: "botSupportBundle",
+        onClick: loadBotSupportBundle,
+      }),
+    ]),
+    state.botRehearsal?.steps?.length
+      ? list(
+          state.botRehearsal.steps.map(
+            (step) =>
+              `${step.ok ? "PASS" : "TODO"} ${step.label}: ${step.detail}`,
+          ),
+          state.botRehearsal.steps.every((step) => step.ok) ? "ok" : "warn",
+        )
+      : null,
+    state.botSupportBundle
+      ? callout(
+          `Support bundle ready: ${state.botSupportBundle.nextActions?.length || 0} next actions, ${state.botSupportBundle.queuedDiscordActions?.length || 0} queued Discord actions.`,
+          "info",
+        )
+      : null,
   ]);
 }
 
@@ -3732,6 +3852,7 @@ function renderDiscord() {
           ? callout(`Validated as ${discord.bot.username}.`, "ok")
           : null,
     ]),
+    renderBotCompletionCard("discord"),
     renderDiscordRelayPanel(discord),
     card("Local Discord Connection", [
       h("div", { className: "grid" }, [
@@ -3889,6 +4010,10 @@ function renderDiscordRelayPanel(discord) {
     {};
   const remote = state.discordRelayStatus || {};
   const suggestions = state.discordRelaySuggestions || [];
+  const events = state.discordRelayEvents || [];
+  const announcementEvents = events.filter((event) =>
+    ["live", "late", "cancelled", "scheduled"].includes(event.commandName),
+  );
   const readiness = remote.readiness || {};
   const localReadiness = relay.localReadiness || {};
 
@@ -3915,6 +4040,11 @@ function renderDiscordRelayPanel(discord) {
         Boolean(readiness.ready),
       ],
       ["Suggestions loaded", suggestions.length || 0, suggestions.length >= 0],
+      [
+        "Announcement actions",
+        announcementEvents.length || 0,
+        announcementEvents.length >= 0,
+      ],
     ]),
     relay.interactionUrl
       ? callout(
@@ -3961,7 +4091,41 @@ function renderDiscordRelayPanel(discord) {
         variant: "secondary",
         onClick: loadDiscordRelaySuggestions,
       }),
+      actionButton("Load action queue", {
+        id: "discordRelayLoadActions",
+        variant: "secondary",
+        onClick: loadDiscordRelayActions,
+      }),
     ]),
+    announcementEvents.length
+      ? h(
+          "div",
+          { className: "template-list" },
+          announcementEvents.map((event) =>
+            h("div", { className: "template-row" }, [
+              h("span", {}, [
+                h("strong", { text: `/${event.commandName}` }),
+                h("small", {
+                  text: `${event.username} - ${discordRelayActionStatus(event)} - ${event.receivedAt || ""}`,
+                }),
+              ]),
+              h("div", { className: "actions inline-actions" }, [
+                ...["approved", "rejected", "sent"].map((status) =>
+                  actionButton(status, {
+                    id: `discord-action-${event.relayEventId}-${status}`,
+                    variant: "secondary",
+                    onClick: () =>
+                      markDiscordRelayAction(event.relayEventId, status),
+                  }),
+                ),
+              ]),
+            ]),
+          ),
+        )
+      : callout(
+          "No Relay announcement actions are loaded. Public /live, /late, /cancelled, and /scheduled commands stay reviewable here.",
+          "muted",
+        ),
     suggestions.length
       ? h(
           "div",
@@ -4214,6 +4378,7 @@ function renderSettings() {
     renderWindowsSetupPromptNotice(),
     renderSettingsLaunchNotice(),
     renderSetupGuide(),
+    renderBotCompletionCard("settings"),
     relayMode
       ? renderRelaySetupCompletion(relay)
       : renderLocalSetupCompletion(config, required),
@@ -7062,6 +7227,7 @@ async function loadFreshState() {
     twitchOps,
     discordStatus,
     discordRelayStatus,
+    botCompletion,
   ] = await Promise.all([
     api.config(),
     api.status(),
@@ -7082,6 +7248,7 @@ async function loadFreshState() {
     api.twitchCreatorOps(),
     api.discordStatus(),
     api.discordRelayStatus(),
+    api.botCompletion(),
   ]);
   state.config = config;
   state.status = status;
@@ -7103,6 +7270,7 @@ async function loadFreshState() {
   state.twitchOps = twitchOps;
   state.discord = discordStatus;
   state.discordRelayStatus = discordRelayStatus;
+  state.botCompletion = botCompletion;
   syncLaunchPreparation(status);
   syncLaunchPreparation(diagnostics);
   state.validSetup = isValidationPassed();
@@ -7153,6 +7321,7 @@ async function refreshAfterAction() {
     twitchOps,
     discordStatus,
     discordRelayStatus,
+    botCompletion,
   ] = await Promise.all([
     api.status(),
     api.launchPreparation(),
@@ -7171,6 +7340,7 @@ async function refreshAfterAction() {
     api.twitchCreatorOps(),
     api.discordStatus(),
     api.discordRelayStatus(),
+    api.botCompletion(),
   ]);
   state.status = status;
   syncLaunchPreparation(launchPreparation);
@@ -7190,6 +7360,7 @@ async function refreshAfterAction() {
   state.twitchOps = twitchOps;
   state.discord = discordStatus;
   state.discordRelayStatus = discordRelayStatus;
+  state.botCompletion = botCompletion;
   syncLaunchPreparation(status);
   state.validSetup = isValidationPassed();
 }
@@ -8177,6 +8348,61 @@ async function markRelayChatbotIdentityValidated() {
   );
 }
 
+async function refreshBotCompletion() {
+  await runAction(
+    "botCompletion",
+    async () => {
+      const result = await api.botCompletion();
+      state.botCompletion = result;
+      return result;
+    },
+    { skipRefresh: true, success: "Bot completion refreshed." },
+  );
+}
+
+async function recordBotValidation(key, confirmed = true) {
+  await runAction(
+    `botValidation:${key}`,
+    async () => {
+      const result = await api.recordBotValidation(key, confirmed);
+      state.botCompletion = await api.botCompletion();
+      return result;
+    },
+    {
+      skipRefresh: true,
+      success: confirmed
+        ? "Bot validation record saved."
+        : "Bot validation record cleared.",
+    },
+  );
+}
+
+async function runBotRehearsal() {
+  await runAction(
+    "botRehearsal",
+    async () => {
+      const result = await api.runBotRehearsal();
+      state.botRehearsal = result;
+      state.botCompletion = result.completion || state.botCompletion;
+      return result;
+    },
+    { skipRefresh: true, success: "Bot setup rehearsal completed." },
+  );
+}
+
+async function loadBotSupportBundle() {
+  await runAction(
+    "botSupportBundle",
+    async () => {
+      const result = await api.botSupportBundle();
+      state.botSupportBundle = result;
+      state.botCompletion = result.completion || state.botCompletion;
+      return result;
+    },
+    { skipRefresh: true, success: "Bot support bundle generated." },
+  );
+}
+
 async function copySetupText(text) {
   if (!text) return;
   try {
@@ -8424,6 +8650,34 @@ async function loadDiscordRelaySuggestions() {
     },
     { skipRefresh: true, success: "Discord suggestions loaded." },
   );
+}
+
+async function loadDiscordRelayActions() {
+  await runAction(
+    "discordRelayLoadActions",
+    async () => {
+      const result = await api.discordRelayEvents();
+      state.discordRelayEvents = result.events || [];
+      return result;
+    },
+    { skipRefresh: true, success: "Discord Relay action queue loaded." },
+  );
+}
+
+function markDiscordRelayAction(id, status) {
+  state.discordRelayActionStatuses = {
+    ...state.discordRelayActionStatuses,
+    [id]: status,
+  };
+  state.message = {
+    text: `Discord Relay action marked ${status}.`,
+    tone: status === "rejected" ? "warn" : "ok",
+  };
+  render();
+}
+
+function discordRelayActionStatus(event) {
+  return state.discordRelayActionStatuses[event.relayEventId] || "queued";
 }
 
 async function updateDiscordRelaySuggestion(id, status) {

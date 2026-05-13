@@ -26,6 +26,31 @@ export type RelayStatus = {
   };
 };
 
+export type RelayBotReadinessReport = {
+  ok: boolean;
+  generatedAt: string;
+  installation?: {
+    id: string;
+    name: string;
+    botLogin: string;
+    broadcasterLogin: string;
+  };
+  urls?: Record<string, string>;
+  checks?: Array<{
+    key: string;
+    ok: boolean;
+    state?: "ready" | "todo" | "degraded" | "blocked";
+    detail: string;
+  }>;
+  counts?: {
+    queuedTwitchChatEvents?: number;
+    queuedDiscordInteractions?: number;
+    suggestions?: Record<string, number>;
+    outboundSends?: Record<string, number>;
+  };
+  latest?: Record<string, unknown>;
+};
+
 export type RelayEvent = {
   relayEventId: string;
   id: string;
@@ -60,6 +85,12 @@ export class RelayChatClient {
     return this.request<RelayStatus>("/api/console/status");
   }
 
+  async readinessReport() {
+    return this.request<RelayBotReadinessReport>(
+      "/api/console/readiness-report",
+    );
+  }
+
   async registerEventSub() {
     return this.request<{ ok: true; subscription?: unknown }>(
       "/api/console/eventsub/register",
@@ -73,7 +104,10 @@ export class RelayChatClient {
     );
   }
 
-  async send(message: string): Promise<MessageSendResult> {
+  async send(
+    message: string,
+    options: { idempotencyKey?: string } = {},
+  ): Promise<MessageSendResult> {
     if (!this.configured()) {
       return {
         status: "failed",
@@ -88,7 +122,10 @@ export class RelayChatClient {
         "/api/console/chat/send",
         {
           method: "POST",
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({
+            message,
+            idempotencyKey: options.idempotencyKey,
+          }),
         },
       );
       return result.ok ? "sent" : "failed";
