@@ -20,6 +20,13 @@ type ReadinessSection = {
 };
 
 const secrets = readLocalSecrets();
+const configuredSecretValues = [
+  secrets.twitch.clientSecret,
+  secrets.twitch.accessToken,
+  secrets.twitch.refreshToken,
+  secrets.discord.botToken,
+  secrets.relay.consoleToken,
+].filter((value): value is string => Boolean(value && value.length >= 4));
 const relayBaseUrl = (secrets.relay.baseUrl ?? "").replace(/\/+$/, "");
 const relayConfigured = Boolean(
   relayBaseUrl && secrets.relay.installationId && secrets.relay.consoleToken,
@@ -355,7 +362,7 @@ function relayChecks(
   return checks.map((item) => ({
     label: item.key,
     status: item.ok ? "pass" : "todo",
-    detail: item.detail,
+    detail: redactText(item.detail),
     nextAction: item.ok ? undefined : relayNextAction(item.key),
   }));
 }
@@ -415,10 +422,10 @@ function printReport() {
     console.log(section.title);
     for (const item of section.checks) {
       console.log(
-        `- ${statusLabel(item.status)} ${item.label}: ${item.detail}`,
+        `- ${statusLabel(item.status)} ${item.label}: ${redactText(item.detail)}`,
       );
       if (item.nextAction) {
-        console.log(`  next: ${item.nextAction}`);
+        console.log(`  next: ${redactText(item.nextAction)}`);
       }
     }
     console.log("");
@@ -436,5 +443,18 @@ function statusLabel(status: CheckStatus) {
 }
 
 function safeError(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  return redactText(error instanceof Error ? error.message : String(error));
+}
+
+function redactText(value: string) {
+  let output = value;
+  for (const secret of configuredSecretValues) {
+    output = output.replaceAll(secret, "[redacted]");
+  }
+  return output
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(
+      /\b(access[ _-]?token|refresh[ _-]?token|console[ _-]?token|client[ _-]?secret|bot[ _-]?token|authorization|oauth[ _-]?code)(\s*[:=]\s*)[^\n,;]+/gi,
+      "$1$2[redacted]",
+    );
 }
