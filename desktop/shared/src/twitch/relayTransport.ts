@@ -29,6 +29,15 @@ export type RelayStatus = {
 export type RelayBotReadinessReport = {
   ok: boolean;
   generatedAt: string;
+  summary?: {
+    state: "ready" | "app-check-available" | "degraded" | "failed";
+    detail: string;
+    lastCheckedAt: string;
+    readyCount: number;
+    todoCount: number;
+    degradedCount: number;
+    blockedCount: number;
+  };
   installation?: {
     id: string;
     name: string;

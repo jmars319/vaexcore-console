@@ -31,6 +31,7 @@ try {
 async function runSmoke() {
   const appJs = await text("/ui/app.js");
   assert(appJs.includes("Bot Completion"), "Bot Completion card is present");
+  assert(appJs.includes("Last checked"), "bot completion shows last checked");
   assert(appJs.includes("Run dry-run rehearsal"), "rehearsal UI is present");
   assert(
     appJs.includes("Copy bot support bundle"),
@@ -89,6 +90,11 @@ async function runSmoke() {
   assert(
     completion.relayReadinessReport.connected === true,
     "Relay readiness report connects",
+  );
+  assert(
+    completion.relayReadinessReport.report.summary.state ===
+      "app-check-available",
+    "Relay readiness summary is surfaced",
   );
   assert(
     completion.checks.some((check) => check.key === "discord-worker-config"),
@@ -288,9 +294,19 @@ function relayStatus() {
 
 function relayReadinessReport() {
   const status = relayStatus();
+  const generatedAt = "2026-05-13T12:00:00.000Z";
   return {
     ok: true,
-    generatedAt: "2026-05-13T12:00:00.000Z",
+    generatedAt,
+    summary: {
+      state: "app-check-available",
+      detail: "2 app-integrated setup check(s) have not been recorded yet.",
+      lastCheckedAt: generatedAt,
+      readyCount: 10,
+      todoCount: 2,
+      degradedCount: 0,
+      blockedCount: 0,
+    },
     installation: status.installation,
     urls: {
       publicBaseUrl: fakeRelay.url,

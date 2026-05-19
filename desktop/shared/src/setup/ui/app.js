@@ -865,6 +865,7 @@ function renderBotCompletionCard(context = "default") {
     completion.statusDetail ||
     nextActions[0] ||
     "Run bot completion refresh to load readiness.";
+  const relaySummary = completion.relayReadinessReport?.report?.summary;
   const title =
     context === "discord" ? "Bot Completion" : "Bot Completion Status";
 
@@ -886,8 +887,16 @@ function renderBotCompletionCard(context = "default") {
       ],
       ["State", statusLabel || "not checked", completion.status === "ready"],
       [
+        "Last checked",
+        completion.generatedAt || "not checked",
+        Boolean(completion.generatedAt),
+      ],
+      [
         "Relay",
-        completion.relayReadinessReport?.connected ? "connected" : "not ready",
+        relaySummary?.state ||
+          (completion.relayReadinessReport?.connected
+            ? "connected"
+            : "not ready"),
         Boolean(completion.relayReadinessReport?.connected),
       ],
       ["Pending", pending.length, pending.length === 0 && checks.length > 0],
