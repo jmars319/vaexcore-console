@@ -40,6 +40,15 @@ async function runSmoke() {
     appJs.includes("Lock Staff category"),
     "Discord Staff privacy toggle is present",
   );
+  assert(appJs.includes("Staff role picker"), "Discord role picker is present");
+  assert(
+    appJs.includes("Load roles"),
+    "Discord role loading action is present",
+  );
+  assert(
+    appJs.includes("Required bot permissions for this baseline"),
+    "Discord preview explains required bot permissions",
+  );
   assert(
     appJs.includes("Stream Announcements"),
     "Discord announcement UI is present",
@@ -74,6 +83,16 @@ async function runSmoke() {
 
   const validated = await json("/api/discord/status?validate=1");
   assert(validated.bot?.username === "VaexCore Test Bot", "bot validates");
+
+  const roles = await json("/api/discord/roles");
+  assert(roles.connected === true, "Discord roles route connects");
+  assert(
+    roles.roles.some(
+      (role) => role.id === staffRoleId && role.staffEligible === true,
+    ),
+    "Discord roles route returns selectable Staff roles",
+  );
+  assertSafePayload(roles);
 
   const preview = await post("/api/discord/setup/preview", {
     includeRoles: true,
@@ -241,7 +260,20 @@ async function startFakeDiscord() {
         position: 3,
       },
     ],
-    roles: [{ id: guildId, name: "@everyone", managed: false }],
+    roles: [
+      { id: guildId, name: "@everyone", managed: false },
+      {
+        id: staffRoleId,
+        name: "Moderators",
+        managed: false,
+        mentionable: false,
+      },
+      {
+        id: "777777777777777777",
+        name: "Managed Integration",
+        managed: true,
+      },
+    ],
     messages: [],
     permissionOverwrites: [],
   };

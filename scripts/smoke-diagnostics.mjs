@@ -145,6 +145,15 @@ async function runSmoke() {
     bundle.diagnostics.config.hasRefreshToken === true,
     "support bundle includes safe diagnostics",
   );
+  assert(bundle.setup.mode, "support bundle includes setup mode");
+  assert(
+    Array.isArray(bundle.setup.modeCapabilities),
+    "support bundle includes setup mode capabilities",
+  );
+  assert(
+    bundle.discordSetup.templateName === "Streamer Community Baseline",
+    "support bundle includes Discord setup template summary",
+  );
   assert(
     Array.isArray(bundle.recent.outbound),
     "support bundle includes outbound history",

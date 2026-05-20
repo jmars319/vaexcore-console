@@ -190,6 +190,15 @@ async function runSmoke() {
     "settings launcher requests the smaller settings window size",
   );
   assert(
+    appJs.includes("Run setup health checks"),
+    "dashboard exposes unified setup health checks",
+  );
+  assert(
+    appJs.includes("Staff role picker"),
+    "Discord setup exposes role picker",
+  );
+  assert(appJs.includes("Load roles"), "Discord setup can load roles");
+  assert(
     appJs.includes("Twitch authorization failed"),
     "setup guide surfaces OAuth errors",
   );
@@ -521,6 +530,10 @@ async function runSmoke() {
   assert(
     setupServerJs.includes("/api/support-bundle"),
     "setup server exposes support bundle route",
+  );
+  assert(
+    setupServerJs.includes("/api/discord/roles"),
+    "setup server exposes Discord role loading route",
   );
   assert(
     setupServerJs.includes("getDiagnosticsReport"),

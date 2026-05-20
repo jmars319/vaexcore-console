@@ -410,6 +410,11 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/discord/roles") {
+    sendJson(response, 200, await getDiscordRolesRoute());
+    return;
+  }
+
   if (
     request.method === "POST" &&
     url.pathname === "/api/discord/setup/preview"
@@ -2022,6 +2027,52 @@ const getDiscordStatus = async (searchParams: URLSearchParams) => {
   };
 };
 
+const getDiscordRolesRoute = async () => {
+  const secrets = readLocalSecrets();
+  const connectionError = discordConnectionError({
+    requireAnnouncementChannel: false,
+  });
+
+  if (connectionError) {
+    return {
+      ok: true,
+      connected: false,
+      roles: [],
+      error: connectionError,
+      config: getSafeDiscordConfig(secrets),
+    };
+  }
+
+  try {
+    const guildId = secrets.discord.guildId ?? "";
+    const roles = await createDiscordClient(
+      secrets.discord.botToken ?? "",
+    ).listGuildRoles(guildId);
+    return {
+      ok: true,
+      connected: true,
+      roles: roles
+        .map((role) => ({
+          id: role.id,
+          name: role.name,
+          managed: Boolean(role.managed),
+          mentionable: Boolean(role.mentionable),
+          staffEligible: role.id !== guildId && !role.managed,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      config: getSafeDiscordConfig(secrets),
+    };
+  } catch (error) {
+    return {
+      ok: true,
+      connected: false,
+      roles: [],
+      error: safeErrorMessage(error, "Discord role loading failed."),
+      config: getSafeDiscordConfig(secrets),
+    };
+  }
+};
+
 const getRelayStatusRoute = async () => {
   const secrets = readLocalSecrets();
   const relay = getSafeRelayConfig(secrets);
@@ -2656,6 +2707,9 @@ const getBotCompletionRoute = async () => {
     relay,
     relayStatus,
     relayReadinessReport: relayReport,
+    setupChecks: getSafeSetupChecks(secrets),
+    modeCapabilities: getSetupCapabilitySummary(getSetupMode(secrets)),
+    discordSetup: getDiscordSetupSummary(secrets),
     discord: {
       localReadiness: localDiscord,
       localConfig: getSafeDiscordConfig(secrets),
@@ -2663,6 +2717,46 @@ const getBotCompletionRoute = async () => {
     },
     setupMode: getSetupMode(secrets),
     transportMode: secrets.relay.twitchTransportMode,
+  };
+};
+
+const getSetupCapabilitySummary = (setupMode: SetupMode) => {
+  const local = [
+    "Local Twitch chat send while Console is running.",
+    "Local Discord announcements and server layout setup.",
+    "Giveaway controls and OBS overlay from this machine.",
+  ];
+  const relay = [
+    "Hosted Relay handles public callbacks and webhook endpoints.",
+    "Relay Chat Bot identity and Discord slash-command workflows.",
+    "Console remains the local operator review surface.",
+  ];
+
+  if (setupMode === "advanced") {
+    return [...local, ...relay];
+  }
+
+  return setupMode === "relay-assisted" ? relay : local;
+};
+
+const getDiscordSetupSummary = (secrets = readLocalSecrets()) => {
+  const discord = getSafeDiscordConfig(secrets);
+  return {
+    templateId: discord.setupTemplateId,
+    templateName: discord.setupTemplate.name,
+    setupAppliedAt: discord.setupAppliedAt,
+    staffPrivacy: {
+      enabled: discord.lockStaffCategory,
+      staffRoleSelected: Boolean(discord.staffRoleId),
+      staffRoleId: discord.staffRoleId,
+    },
+    createdChannelKeys: Object.keys(discord.createdChannelIds || {}).sort(),
+    createdRoleKeys: Object.keys(discord.createdRoleIds || {}).sort(),
+    recommendedMappings: {
+      streamAlerts: discord.streamAnnouncementChannelId,
+      announcements: discord.generalAnnouncementChannelId,
+      streamAlertsRole: discord.streamAlertsRoleId,
+    },
   };
 };
 
@@ -3135,6 +3229,12 @@ const getBotSupportBundleRoute = async () => {
     generatedAt: new Date().toISOString(),
     note: "Secret-safe bot setup support bundle. It reports presence and readiness only, never tokens or secrets.",
     completion,
+    setup: {
+      mode: completion.setupMode,
+      setupChecks: completion.setupChecks,
+      modeCapabilities: completion.modeCapabilities,
+    },
+    discordSetup: completion.discordSetup,
     relayDiagnostics: completion.relayReadinessReport,
     validationRecords: completion.validation,
     queuedDiscordActions: discordActionHistory.filter((action) =>
@@ -5059,6 +5159,8 @@ const getDiagnosticsReport = () => {
 };
 
 const getSupportBundle = () => {
+  const secrets = readLocalSecrets();
+  const setupMode = getSetupMode(secrets);
   const diagnostics = getDiagnosticsReport();
   const outbound = outboundHistory
     .list()
@@ -5123,6 +5225,12 @@ const getSupportBundle = () => {
     bundleVersion: 1,
     generatedAt: new Date().toISOString(),
     note: "Secret-safe local support bundle. Twitch client secrets, access tokens, and refresh tokens are not included.",
+    setup: {
+      mode: setupMode,
+      setupChecks: getSafeSetupChecks(secrets),
+      modeCapabilities: getSetupCapabilitySummary(setupMode),
+    },
+    discordSetup: getDiscordSetupSummary(secrets),
     diagnostics,
     featureGates: featureGates.list(),
     recent: {

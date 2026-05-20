@@ -84,6 +84,8 @@ const state = {
   botRehearsal: null,
   botSupportBundle: null,
   discord: null,
+  discordRoles: [],
+  discordRolesStatus: null,
   discordSetupPreview: null,
   discordRelaySuggestions: [],
   discordRelayEvents: [],
@@ -292,6 +294,7 @@ const api = {
   discordStatus: (validate = false) =>
     api.get(`/api/discord/status${validate ? "?validate=1" : ""}`),
   saveDiscordConfig: (body) => api.post("/api/discord/config", body),
+  discordRoles: () => api.get("/api/discord/roles"),
   previewDiscordSetup: (body) => api.post("/api/discord/setup/preview", body),
   applyDiscordSetup: (body) => api.post("/api/discord/setup/apply", body),
   sendDiscordAnnouncement: (body) => api.post("/api/discord/announce", body),
@@ -741,6 +744,7 @@ function renderDashboard() {
       }),
     ),
     renderDashboardStartCard(runtime, readiness),
+    renderDashboardModeCard(),
     renderBotCompletionCard("dashboard"),
     h("div", { className: "dashboard-grid" }, [
       renderDashboardReadinessCard(runtime, readiness),
@@ -748,6 +752,77 @@ function renderDashboard() {
     ]),
     message(),
   ];
+}
+
+function renderDashboardModeCard() {
+  const config = state.config || {};
+  const completion = state.botCompletion || {};
+  const mode = completion.setupMode || currentSetupMode(config);
+  const checks = completion.setupChecks || config.setupChecks || {};
+  const capabilities = completion.modeCapabilities?.length
+    ? completion.modeCapabilities
+    : setupModeCapabilities(mode).map((item) => item.detail);
+
+  return card("Operating Mode", [
+    h("div", { className: "state-banner compact info" }, [
+      h("strong", { text: setupModeLabel(mode) }),
+      h("span", { text: setupModeSummary(mode) }),
+    ]),
+    statusGrid([
+      ["Mode", setupModeLabel(mode), true],
+      [
+        "Transport",
+        transportModeLabel(
+          completion.transportMode || config.relay?.twitchTransportMode,
+        ),
+        true,
+      ],
+      [
+        "Local check",
+        setupCheckStatusLabel(checks.local),
+        checks.local?.status === "ready",
+      ],
+      [
+        "Relay check",
+        setupCheckStatusLabel(checks.relay),
+        checks.relay?.status === "ready",
+      ],
+      [
+        "Completion refresh",
+        completion.generatedAt || "not checked",
+        Boolean(completion.generatedAt),
+      ],
+    ]),
+    h(
+      "div",
+      { className: "compact-capability-list" },
+      capabilities
+        .slice(0, mode === "advanced" ? 6 : 4)
+        .map((detail) => h("span", { text: detail })),
+    ),
+    checks.local?.message ? callout(`Local: ${checks.local.message}`) : null,
+    checks.relay?.message ? callout(`Relay: ${checks.relay.message}`) : null,
+    h("div", { className: "actions" }, [
+      actionButton("Run setup health checks", {
+        id: "dashboardSetupHealthChecks",
+        variant: "secondary",
+        busyKey: "setupHealthChecks",
+        onClick: runSetupHealthChecks,
+      }),
+      actionButton("Open Settings", {
+        id: "dashboardModeSettings",
+        variant: "secondary",
+        onClick: () => openSettingsWindow("#operatingMode"),
+      }),
+    ]),
+  ]);
+}
+
+function setupCheckStatusLabel(check = {}) {
+  if (!check.status) return "not checked";
+  return check.checkedAt
+    ? `${check.status} at ${check.checkedAt}`
+    : check.status;
 }
 
 function renderDashboardStartCard(runtime, readiness) {
@@ -4276,6 +4351,12 @@ function renderTwitchOps() {
   ];
 }
 
+function discordStaffRoleOptions() {
+  return (state.discordRoles || []).filter(
+    (role) => role.staffEligible && role.name !== "@everyone",
+  );
+}
+
 function renderDiscord() {
   const discord = state.discord || {};
   const config = discord.config || state.config?.discord || {};
@@ -4388,7 +4469,37 @@ function renderDiscord() {
             onInput: updateDiscordDraft,
           }),
         ),
+        formRow(
+          "Staff role picker",
+          h(
+            "select",
+            {
+              id: "discordStaffRoleSelect",
+              disabled: !discordStaffRoleOptions().length,
+              onChange: selectDiscordStaffRole,
+            },
+            [
+              option(
+                "",
+                discordStaffRoleOptions().length
+                  ? "Select a loaded role"
+                  : "Load roles first",
+              ),
+              ...discordStaffRoleOptions().map((role) =>
+                option(role.id, `${role.name} (${role.id})`),
+              ),
+            ],
+          ),
+        ),
       ]),
+      state.discordRolesStatus?.error
+        ? callout(state.discordRolesStatus.error, "warn")
+        : state.discordRoles?.length
+          ? callout(
+              `${state.discordRoles.length} Discord roles loaded. Managed roles and @everyone are hidden from the Staff role picker.`,
+              "ok",
+            )
+          : null,
       callout(
         "The bot token stays in the local secrets file and is never returned by the setup API. The bot needs Manage Channels to create the layout, Send Messages and Embed Links to announce, Manage Roles only if you create the optional Stream Alerts role, and Manage Channels to apply Staff privacy.",
         "info",
@@ -4397,6 +4508,12 @@ function renderDiscord() {
         actionButton("Save Discord settings", {
           id: "discordSave",
           onClick: saveDiscordSettings,
+        }),
+        actionButton("Load roles", {
+          id: "discordLoadRoles",
+          variant: "secondary",
+          busyKey: "discordLoadRoles",
+          onClick: loadDiscordRoles,
         }),
       ]),
     ]),
@@ -4706,6 +4823,20 @@ function renderDiscordPlan(result) {
         !summary.blockedPermissions,
       ],
     ]),
+    callout(
+      "Required bot permissions for this baseline: View Channels, Manage Channels, Send Messages, Embed Links, and Manage Roles only when creating Stream Alerts.",
+      "info",
+    ),
+    h("div", { className: "compact-capability-list" }, [
+      h("span", { text: "Stream alerts map to live-now." }),
+      h("span", { text: "General announcements map to announcements." }),
+      h("span", { text: "Relay suggestions map to suggestions." }),
+      h("span", {
+        text: plan.lockStaffCategory
+          ? "Staff privacy will only touch the STAFF category."
+          : "Staff privacy is preview-only until enabled with a Staff role.",
+      }),
+    ]),
     result.message ? callout(result.message, "warn") : null,
     h(
       "ul",
@@ -4964,6 +5095,12 @@ function renderOperatingModeCard(config = state.config || {}) {
       : null,
     h("div", { className: "actions" }, [
       actionButton("Save settings", { id: "saveMode", onClick: saveSettings }),
+      actionButton("Run setup health checks", {
+        id: "checkSelectedSetupMode",
+        variant: "secondary",
+        busyKey: "setupHealthChecks",
+        onClick: runSetupHealthChecks,
+      }),
       actionButton("Check Local Setup", {
         id: "checkLocalSetupMode",
         variant: "secondary",
@@ -9016,11 +9153,34 @@ async function checkSetupMode(mode) {
     async () => {
       const result = await api.checkSetupMode(mode);
       state.config = result.config || state.config;
+      state.botCompletion = await api.botCompletion();
       return result;
     },
     {
       skipRefresh: true,
       success: `${setupModeLabel(mode)} checked.`,
+    },
+  );
+}
+
+async function runSetupHealthChecks() {
+  const mode = currentSetupMode(state.config || {});
+  const modes = mode === "advanced" ? ["local-only", "relay-assisted"] : [mode];
+
+  await runAction(
+    "setupHealthChecks",
+    async () => {
+      let result = null;
+      for (const item of modes) {
+        result = await api.checkSetupMode(item);
+        state.config = result.config || state.config;
+      }
+      state.botCompletion = await api.botCompletion();
+      return result || { ok: true };
+    },
+    {
+      skipRefresh: true,
+      success: "Setup health checks completed.",
     },
   );
 }
@@ -9312,6 +9472,30 @@ async function validateDiscordBot() {
     },
     { skipRefresh: true, success: "Discord bot validation completed." },
   );
+}
+
+async function loadDiscordRoles() {
+  await runAction(
+    "discordLoadRoles",
+    async () => {
+      const result = await api.discordRoles();
+      state.discordRoles = result.roles || [];
+      state.discordRolesStatus = result;
+      state.discord = {
+        ...(state.discord || {}),
+        config: result.config || state.discord?.config,
+      };
+      return result;
+    },
+    { skipRefresh: true, success: "Discord roles loaded." },
+  );
+}
+
+function selectDiscordStaffRole(event) {
+  const roleId = event?.target?.value || "";
+  if (!roleId) return;
+  state.discordDraft.staffRoleId = roleId;
+  setValue("discordStaffRoleId", roleId);
 }
 
 async function saveDiscordSettings() {
@@ -10591,6 +10775,10 @@ function syncFormValues() {
   );
   setValue(
     "discordStaffRoleId",
+    discordValue("discordStaffRoleId", discordConfig.staffRoleId || ""),
+  );
+  setValue(
+    "discordStaffRoleSelect",
     discordValue("discordStaffRoleId", discordConfig.staffRoleId || ""),
   );
   setChecked(

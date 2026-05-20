@@ -591,6 +591,21 @@ button.nav-button.active:hover:not(:disabled) {
 .capability-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.compact-capability-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+.compact-capability-list span {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 8px 10px;
+}
 .capability-row.ok {
   border-left: 3px solid var(--accent);
 }

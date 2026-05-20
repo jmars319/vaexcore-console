@@ -142,6 +142,15 @@ async function runSmoke() {
 
   const bundle = await json("/api/bot/support-bundle");
   assert(bundle.ok === true, "bot support bundle route returns ok");
+  assert(bundle.setup.mode === "relay-assisted", "bot support includes mode");
+  assert(
+    Array.isArray(bundle.setup.modeCapabilities),
+    "bot support includes setup capabilities",
+  );
+  assert(
+    bundle.discordSetup.templateName === "Streamer Community Baseline",
+    "bot support includes Discord template summary",
+  );
   assert(
     bundle.queuedDiscordActions.length === 1,
     "support bundle includes queued Discord announcement actions",
