@@ -556,6 +556,14 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/local-rehearsal/run"
+  ) {
+    sendJson(response, 200, await runFullLocalRehearsalRoute());
+    return;
+  }
+
   if (request.method === "GET" && url.pathname === "/api/twitch/creator-ops") {
     sendJson(response, 200, getTwitchCreatorOpsState());
     return;
@@ -1719,6 +1727,13 @@ const getSetupMode = (secrets = readLocalSecrets()): SetupMode => {
     ? "relay-assisted"
     : "local-only";
 };
+
+const setupModeDisplayLabel = (mode: SetupMode) =>
+  mode === "relay-assisted"
+    ? "Relay Assisted"
+    : mode === "advanced"
+      ? "Advanced"
+      : "Local Console";
 
 const parseSetupMode = (value: unknown, fallback: SetupMode): SetupMode =>
   typeof value === "string" && setupModes.includes(value as SetupMode)
@@ -3348,6 +3363,166 @@ const runBotSetupRehearsalRoute = async () => {
     completion,
     nextActions: completion.nextActions,
   };
+};
+
+const runFullLocalRehearsalRoute = async () => {
+  const secrets = readLocalSecrets();
+  const setupMode = getSetupMode(secrets);
+  const generatedAt = new Date().toISOString();
+  const [
+    completion,
+    botRehearsal,
+    relayStatus,
+    discordPreview,
+    diagnostics,
+    supportBundle,
+  ] = await Promise.all([
+    getBotCompletionRoute(),
+    runBotSetupRehearsalRoute(),
+    getRelayStatusRoute(),
+    previewDiscordSetup({ includeRoles: true }),
+    Promise.resolve(getDiagnosticsReport()),
+    Promise.resolve(getSupportBundle()),
+  ]);
+  const giveawayState = getGiveawayState();
+  const giveawayExport = giveawaysService.exportResults();
+  const supportBundleSafe = supportBundleExcludesSecrets(
+    supportBundle,
+    secrets,
+  );
+  const discordPlan = discordPreview.plan;
+  const discordActions = Array.isArray(discordPlan?.actions)
+    ? discordPlan.actions.length
+    : 0;
+  const activeTimers = supportBundle.recent.timers.filter(
+    (timer) => timer.enabled,
+  ).length;
+  const relayOptional = setupMode === "local-only";
+  const relayReady = relayStatus.ok && (relayStatus.connected || relayOptional);
+  const steps = [
+    dryRunStep(
+      "setup-mode",
+      "Resolve operating mode",
+      true,
+      `${setupModeDisplayLabel(setupMode)} contract loaded with ${completion.modeCapabilities.length} capability note(s).`,
+    ),
+    dryRunStep(
+      "bot-completion",
+      "Refresh bot completion",
+      completion.ok === true,
+      `${completion.completed}/${completion.total} checks complete; status is ${completion.statusLabel}.`,
+    ),
+    dryRunStep(
+      "relay-status",
+      "Check Relay status contract",
+      relayReady,
+      relayStatus.connected
+        ? "Relay status responded with installation/readiness metadata."
+        : relayOptional
+          ? "Local Console mode does not require Relay to be paired."
+          : relayStatus.error || "Relay status was not available.",
+    ),
+    dryRunStep(
+      "discord-baseline-preview",
+      "Preview Discord baseline setup",
+      discordPreview.ok === true,
+      discordPreview.connected
+        ? `Preview loaded from Discord with ${discordActions} planned action(s).`
+        : `${discordActions} local template action(s) can be previewed without applying changes.`,
+    ),
+    dryRunStep(
+      "giveaway-state",
+      "Read giveaway operator state",
+      giveawayState.ok === true,
+      `${giveawayState.summary.status} giveaway state, ${giveawayState.summary.entryCount} entrant(s), ${giveawayState.summary.pendingConfirmationCount} pending winner(s), ${giveawayState.summary.expiredWinnerCount} expired winner(s).`,
+    ),
+    dryRunStep(
+      "giveaway-export",
+      "Build redacted giveaway export",
+      Boolean(giveawayExport),
+      "Giveaway export built from local audit/history data without game keys.",
+    ),
+    dryRunStep(
+      "timers",
+      "Inspect timer readiness",
+      true,
+      `${activeTimers} enabled timer(s) found; rehearsal does not send timer messages.`,
+    ),
+    dryRunStep(
+      "diagnostics",
+      "Run diagnostics",
+      diagnostics.ok === true,
+      diagnostics.readiness.nextAction,
+    ),
+    dryRunStep(
+      "support-bundle-redaction",
+      "Verify support export redaction",
+      supportBundleSafe,
+      supportBundleSafe
+        ? "Support bundle excludes saved token, secret, and bot token values."
+        : "Support bundle contained a saved secret value and must not be shared.",
+    ),
+  ];
+
+  return {
+    ok: steps.every((step) => step.ok),
+    dryRun: true,
+    generatedAt,
+    setupMode,
+    status: steps.every((step) => step.ok) ? "ready" : "attention",
+    steps,
+    completion,
+    botRehearsal,
+    relayStatus,
+    discordPreview: {
+      ok: discordPreview.ok,
+      connected: discordPreview.connected,
+      message: "message" in discordPreview ? discordPreview.message : "",
+      template: discordPreview.template,
+      plan: discordPreview.plan,
+    },
+    giveaway: {
+      summary: giveawayState.summary,
+      assurance: giveawayState.assurance,
+      export: giveawayExport,
+    },
+    diagnostics: {
+      ok: diagnostics.ok,
+      readiness: diagnostics.readiness,
+      generatedAt: diagnostics.generatedAt,
+    },
+    supportBundle: {
+      ok: supportBundle.ok,
+      generatedAt: supportBundle.generatedAt,
+      setup: supportBundle.setup,
+      discordSetup: supportBundle.discordSetup,
+      recentCounts: {
+        outbound: supportBundle.recent.outbound.length,
+        audit: supportBundle.recent.audit.length,
+        timers: supportBundle.recent.timers.length,
+        customCommandInvocations:
+          supportBundle.recent.customCommandInvocations.length,
+      },
+      redacted: supportBundleSafe,
+    },
+    nextActions: completion.nextActions,
+  };
+};
+
+const supportBundleExcludesSecrets = (
+  supportBundle: unknown,
+  secrets: LocalSecrets,
+) => {
+  const serialized = JSON.stringify(supportBundle);
+  const forbidden = [
+    secrets.twitch.clientSecret,
+    secrets.twitch.accessToken,
+    secrets.twitch.refreshToken,
+    secrets.discord.botToken,
+    secrets.relay.consoleToken,
+  ].filter((value): value is string => Boolean(value && value.length > 3));
+
+  return forbidden.every((value) => !serialized.includes(value));
 };
 
 const dryRunStep = (

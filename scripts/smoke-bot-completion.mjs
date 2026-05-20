@@ -31,8 +31,13 @@ try {
 async function runSmoke() {
   const appJs = await text("/ui/app.js");
   assert(appJs.includes("Bot Completion"), "Bot Completion card is present");
+  assert(appJs.includes("Ready for Stream"), "dashboard ready card is present");
   assert(appJs.includes("Last checked"), "bot completion shows last checked");
   assert(appJs.includes("Run dry-run rehearsal"), "rehearsal UI is present");
+  assert(
+    appJs.includes("Run full local rehearsal"),
+    "full local rehearsal UI is present",
+  );
   assert(
     appJs.includes("Copy bot support bundle"),
     "bot-only support copy action is present",
@@ -133,6 +138,25 @@ async function runSmoke() {
     rehearsal.steps.some((step) => step.key === "discord-commands"),
     "Discord command rehearsal step is included",
   );
+
+  const fullRehearsal = await post("/api/local-rehearsal/run", {});
+  assert(
+    fullRehearsal.dryRun === true,
+    "full local rehearsal is a dry-run flow",
+  );
+  assert(
+    fullRehearsal.steps.some((step) => step.key === "support-bundle-redaction"),
+    "full local rehearsal verifies support-bundle redaction",
+  );
+  assert(
+    fullRehearsal.steps.some((step) => step.key === "giveaway-export"),
+    "full local rehearsal checks giveaway export",
+  );
+  assert(
+    fullRehearsal.supportBundle.redacted === true,
+    "full local rehearsal reports redacted support export",
+  );
+  assertSafePayload(fullRehearsal);
 
   const events = await json("/api/discord/relay/events");
   assert(
