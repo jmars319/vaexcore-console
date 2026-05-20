@@ -53,11 +53,15 @@ async function runSmoke() {
     "validation checklist is complete",
   );
   assert(
+    clean.setupMode === "local-only",
+    "clean completion uses Local Console mode",
+  );
+  assert(
     clean.sections.some(
       (section) =>
-        section.title === "Local pairing" && section.state === "blocked",
+        section.title === "Local Console" && section.state === "blocked",
     ),
-    "bot completion route groups blocked local pairing",
+    "bot completion route groups blocked Local Console setup",
   );
   assertSafePayload(clean);
 
@@ -68,6 +72,7 @@ async function runSmoke() {
     clientSecret: "relay-client-secret",
     broadcasterLogin: "vaexcore",
     botLogin: "vaexcorebot",
+    setupMode: "relay-assisted",
     twitchTransportMode: "relay-chatbot",
     relayBaseUrl: `${fakeRelay.url}/`,
     relayInstallationId,
@@ -99,6 +104,14 @@ async function runSmoke() {
   assert(
     completion.checks.some((check) => check.key === "discord-worker-config"),
     "Discord Worker checks are included",
+  );
+  assert(
+    completion.sections.some(
+      (section) =>
+        section.title === "Relay pairing" &&
+        ["ready", "blocked"].includes(section.state),
+    ),
+    "bot completion route groups Relay pairing",
   );
   assert(
     completion.sections.some(

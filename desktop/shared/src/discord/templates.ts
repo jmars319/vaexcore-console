@@ -30,6 +30,7 @@ export type DiscordSetupTemplate = {
   id: string;
   name: string;
   description: string;
+  recommendedFor?: string;
   roles: DiscordSetupRoleTemplate[];
   channels: DiscordSetupChannelTemplate[];
   recommended: {
@@ -40,12 +41,14 @@ export type DiscordSetupTemplate = {
   };
 };
 
-export const minimalStreamerDiscordTemplate: DiscordSetupTemplate = {
+export const streamerCommunityDiscordTemplate: DiscordSetupTemplate = {
   schemaVersion: 1,
-  id: "minimal-streamer",
-  name: "Minimal Streamer Server",
+  id: "streamer-community-baseline",
+  name: "Streamer Community Baseline",
   description:
     "A lean streamer Discord layout with start-here, stream, community, voice, and staff sections.",
+  recommendedFor:
+    "Small-to-mid streamer communities that need clear live notices, clips, suggestions, general chat, voice, and private staff coordination without a sprawling channel list.",
   roles: [
     {
       id: "stream-alerts",
@@ -123,11 +126,11 @@ export const minimalStreamerDiscordTemplate: DiscordSetupTemplate = {
       topic: "Game-specific chat, queue talk, and party coordination.",
     },
     {
-      id: "memes",
-      name: "memes",
+      id: "off-topic",
+      name: "off-topic",
       kind: "text",
       parentId: "category-community",
-      topic: "Memes and casual community posts.",
+      topic: "Casual community conversation that does not fit the main chat.",
     },
     { id: "category-voice", name: "VOICE", kind: "category" },
     {
@@ -137,8 +140,8 @@ export const minimalStreamerDiscordTemplate: DiscordSetupTemplate = {
       parentId: "category-voice",
     },
     {
-      id: "voice-community",
-      name: "Community VC",
+      id: "voice-gaming",
+      name: "Gaming",
       kind: "voice",
       parentId: "category-voice",
       userLimit: 10,
@@ -180,6 +183,18 @@ export const minimalStreamerDiscordTemplate: DiscordSetupTemplate = {
     streamAlertsRoleId: "stream-alerts",
   },
 };
+
+export const discordSetupTemplates = [
+  streamerCommunityDiscordTemplate,
+] as const;
+
+export const [defaultDiscordSetupTemplate] = discordSetupTemplates;
+
+export const getDiscordSetupTemplate = (templateId?: string) =>
+  discordSetupTemplates.find((template) => template.id === templateId) ??
+  defaultDiscordSetupTemplate;
+
+export const [minimalStreamerDiscordTemplate] = discordSetupTemplates;
 
 export const discordAnnouncementKinds = [
   "live",

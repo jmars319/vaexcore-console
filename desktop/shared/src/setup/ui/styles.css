@@ -555,6 +555,51 @@ button.nav-button.active:hover:not(:disabled) {
   color: #dffaff;
   border-color: rgba(90, 215, 232, 0.26);
 }
+.mode-cards,
+.capability-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.mode-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.mode-card,
+.capability-row {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-3);
+  padding: 10px 12px;
+}
+.mode-card.active {
+  border-color: rgba(90, 215, 232, 0.54);
+  background: var(--accent-soft);
+}
+.mode-card strong,
+.capability-row strong {
+  color: var(--text);
+  font-size: 13px;
+}
+.mode-card span,
+.capability-row span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.capability-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.capability-row.ok {
+  border-left: 3px solid var(--accent);
+}
+.capability-row.warn {
+  border-left: 3px solid var(--warn);
+}
+.capability-row.info {
+  border-left: 3px solid var(--blue);
+}
 .template-list {
   display: grid;
   gap: 12px;
@@ -735,6 +780,10 @@ button.nav-button.active:hover:not(:disabled) {
 .state-banner.bad {
   border-color: rgba(255, 143, 159, 0.42);
   background: var(--danger-soft);
+}
+.state-banner.info {
+  border-color: rgba(85, 117, 255, 0.42);
+  background: rgba(85, 117, 255, 0.12);
 }
 .state-banner.muted {
   border-color: var(--line);

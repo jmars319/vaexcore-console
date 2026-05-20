@@ -358,9 +358,19 @@ Common setup errors:
 
 The setup UI never displays tokens after OAuth, never logs tokens, and never stores giveaway prizes.
 
+### Console Operating Modes
+
+The `Operating Mode` panel in `Settings` supports three operator-facing modes:
+
+- `Local Console`: chat sends, Discord announcements, Discord layout setup, giveaways, and the OBS overlay run from this machine.
+- `Relay Assisted`: hosted Relay handles public callbacks, Discord slash commands/suggestions, and the Twitch Chat Bot identity path while Console remains the operator surface.
+- `Advanced`: local and Relay readiness are shown side by side for operators who intentionally use both.
+
+The low-level Twitch transport is still stored as `local-user-token` or `relay-chatbot` for backward compatibility, but the setup UI uses the operator-facing labels above.
+
 ### Twitch Chat Bot Identity Through Relay
 
-The `Twitch Chat Transport` panel in `Settings` supports `local-user-token` and `relay-chatbot` modes. Local mode is the fallback and can send chat, but Twitch may show the bot account as a normal user. Relay mode is required for the server-side app-token path that can make `vaexcorebot` appear as a Twitch Chat Bot.
+Local Console mode can send chat, but Twitch may show the bot account as a normal user. Relay Assisted mode is required for the server-side app-token path that can make `vaexcorebot` appear as a Twitch Chat Bot.
 
 After Relay is deployed and paired, save the Relay URL, installation ID, and console token in Console. Relay readiness confirms config and authorization state, but Console keeps a separate `Chat Bot identity live test` field until a human validates Twitch’s user list in the real channel. Click `Mark Chat Bot identity live-tested` only after Twitch shows `vaexcorebot` as a Chat Bot.
 
@@ -382,11 +392,12 @@ Every live Twitch creator-ops action requires an explicit browser confirmation b
 
 ## Configuring Discord
 
-The `Discord` section in Console can prepare a minimal streamer Discord server layout and send stream status announcements. It is intentionally local-first: the bot token is stored only in `config/local.secrets.json`, the setup API never returns the token, and setup can be previewed before anything is created.
+The `Discord` section in Console can prepare the `Streamer Community Baseline` server layout and send stream status announcements. It is intentionally local-first: the bot token is stored only in `config/local.secrets.json`, the setup API never returns the token, and setup can be previewed before anything is created.
 
 Recommended Discord bot permissions:
 
 - `Manage Channels` for server layout creation.
+- `Manage Channels` for optional Staff category privacy.
 - `Send Messages`, `View Channels`, `Read Message History`, and `Embed Links` for announcements.
 - `Manage Roles` only if you enable the optional `Stream Alerts` role creation.
 
@@ -396,12 +407,12 @@ Recommended operator flow:
 2. Copy the bot token and the target server ID.
 3. Open Console, go to `Discord`, paste the bot token and server ID, then save Discord settings.
 4. Click `Validate bot`.
-5. Click `Preview setup` and review the categories, text channels, voice channels, and optional role.
+5. Click `Preview setup` and review the categories, text channels, voice channels, optional role, and optional Staff privacy action.
 6. Click `Apply setup`.
 7. Use `Stream Announcements` to send live, late, cancelled, or scheduled stream notices.
 8. If Relay is deployed, copy the `Relay Slash Commands And Suggestions` interaction URL into the Discord application Interactions Endpoint URL, then click `Register slash commands`.
 
-The default streamer layout creates `START HERE`, `STREAM`, `COMMUNITY`, `VOICE`, and `STAFF` sections with channels for rules, announcements, live notices, schedule, clips/highlights, suggestions, general chat, game chat, common voice rooms, and staff notes. Existing channels with matching names are reused, so applying setup again should not duplicate the layout.
+The default streamer layout creates `START HERE`, `STREAM`, `COMMUNITY`, `VOICE`, and `STAFF` sections with channels for rules, announcements, live notices, schedule, clips/highlights, suggestions, general chat, game chat, off-topic chat, common voice rooms, and staff notes. Existing channels with matching names are reused, so applying setup again should not duplicate the layout. Staff privacy is explicit: enter a Staff role ID and enable `Lock Staff category` before Console applies permission overwrites to the `STAFF` category.
 
 Relay-backed Discord slash commands are optional until Relay is deployed. Relay receives Discord interactions at `/webhooks/discord/interactions`, verifies Discord signatures, and exposes suggestions plus queued announcement commands for Console review. The supported commands are `/suggest`, `/live`, `/late`, `/cancelled`, `/scheduled`, and `/setup-status`. Announcement commands only queue operator-visible actions; they do not directly post public announcements without Console-side operator action.
 

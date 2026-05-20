@@ -274,6 +274,7 @@ const api = {
     }),
   config: () => api.get("/api/config"),
   saveConfig: (body) => api.post("/api/config", body),
+  checkSetupMode: (mode) => api.post("/api/setup-mode/check", { mode }),
   disconnectTwitch: () => api.post("/api/auth/twitch/disconnect"),
   validate: () => api.post("/api/validate"),
   testSend: () => api.post("/api/test-send"),
@@ -880,10 +881,15 @@ function renderBotCompletionCard(context = "default") {
         completion.completionPercent === 100,
       ],
       [
+        "Mode",
+        setupModeLabel(completion.setupMode || state.config?.setupMode),
+        Boolean(completion.setupMode || state.config?.setupMode),
+      ],
+      [
         "Transport",
-        completion.transportMode ||
-          state.config?.relay?.twitchTransportMode ||
-          "unknown",
+        transportModeLabel(
+          completion.transportMode || state.config?.relay?.twitchTransportMode,
+        ),
         completion.transportMode === "relay-chatbot",
       ],
       ["State", statusLabel || "not checked", completion.status === "ready"],
@@ -1093,6 +1099,7 @@ function botCompletionStatusLabel(status) {
       ready: "ready",
       blocked: "blocked",
       "needs-credentials": "needs credentials",
+      "needs-setup": "needs setup",
       "live-validation-required": "live validation required",
       "pending-live-validation": "live validation required",
       "needs-review": "needs review",
@@ -1106,6 +1113,133 @@ function botCompletionTone(stateLabel = "") {
   if (stateLabel === "live validation required") return "info";
   if (stateLabel === "needs review") return "warn";
   return "warn";
+}
+
+function currentSetupMode(config = state.config || {}) {
+  return (
+    config.setupMode ||
+    (config.relay?.twitchTransportMode === "relay-chatbot"
+      ? "relay-assisted"
+      : "local-only")
+  );
+}
+
+function setupModeLabel(mode = "local-only") {
+  return (
+    {
+      "local-only": "Local Console",
+      "relay-assisted": "Relay Assisted",
+      advanced: "Advanced",
+    }[mode] || "Local Console"
+  );
+}
+
+function setupModeSummary(mode = "local-only") {
+  return (
+    {
+      "local-only":
+        "Everything runs from this machine; best for users who prefer no hosted Relay.",
+      "relay-assisted":
+        "Hosted Relay handles public callbacks, Discord slash commands, suggestions, and Chat Bot identity.",
+      advanced:
+        "Shows local and hosted paths side by side for operators who want both.",
+    }[mode] || ""
+  );
+}
+
+function transportModeLabel(mode = "local-user-token") {
+  return mode === "relay-chatbot"
+    ? "Relay Chat Bot identity"
+    : "Local OAuth user token";
+}
+
+function setupModeCapabilities(mode = "local-only") {
+  const local = [
+    {
+      label: "Twitch chat send",
+      detail: "Uses the local OAuth user token while Console is running.",
+      tone: "ok",
+    },
+    {
+      label: "Twitch Chat Bot identity",
+      detail:
+        "Not available in Local Console mode; chat appears as the authorized user.",
+      tone: "warn",
+    },
+    {
+      label: "Discord announcements",
+      detail:
+        "Console can send direct announcements with the local Discord bot token.",
+      tone: "ok",
+    },
+    {
+      label: "Discord slash commands and suggestions",
+      detail: "Not available without Relay; use local admin controls instead.",
+      tone: "warn",
+    },
+    {
+      label: "Discord server layout",
+      detail: "Local Console can preview and apply the baseline server layout.",
+      tone: "ok",
+    },
+    {
+      label: "Giveaways",
+      detail:
+        "Local giveaway controls and OBS overlay work while Console is running.",
+      tone: "ok",
+    },
+  ];
+  const relay = [
+    {
+      label: "Twitch chat send",
+      detail:
+        "Hosted Relay sends via the paired installation and keeps Console as the operator surface.",
+      tone: "ok",
+    },
+    {
+      label: "Twitch Chat Bot identity",
+      detail:
+        "Available through Relay Assisted mode after hosted validation records are complete.",
+      tone: "ok",
+    },
+    {
+      label: "Discord announcements",
+      detail:
+        "Relay queues slash-command announcement actions for Console review.",
+      tone: "ok",
+    },
+    {
+      label: "Discord slash commands and suggestions",
+      detail: "Available through the public Relay interactions endpoint.",
+      tone: "ok",
+    },
+    {
+      label: "Discord server layout",
+      detail:
+        "Still applied locally from Console; Relay does not restructure servers.",
+      tone: "info",
+    },
+    {
+      label: "Giveaways",
+      detail:
+        "Console remains the live giveaway operator surface and OBS overlay host.",
+      tone: "ok",
+    },
+  ];
+
+  if (mode === "advanced") {
+    return [
+      {
+        label: "Mode contract",
+        detail: "Advanced displays local and Relay readiness separately.",
+        tone: "info",
+      },
+      ...local.slice(0, 3),
+      ...relay.slice(1, 4),
+    ];
+  }
+
+  return mode === "relay-assisted" ? relay : local;
 }
 
 function dashboardStep({
@@ -4246,9 +4380,17 @@ function renderDiscord() {
             onInput: updateDiscordDraft,
           }),
         ),
+        formRow(
+          "Staff role ID",
+          h("input", {
+            id: "discordStaffRoleId",
+            placeholder: "role that can view STAFF",
+            onInput: updateDiscordDraft,
+          }),
+        ),
       ]),
       callout(
-        "The bot token stays in the local secrets file and is never returned by the setup API. The bot needs Manage Channels to create the layout, Send Messages and Embed Links to announce, and Manage Roles only if you create the optional Stream Alerts role.",
+        "The bot token stays in the local secrets file and is never returned by the setup API. The bot needs Manage Channels to create the layout, Send Messages and Embed Links to announce, Manage Roles only if you create the optional Stream Alerts role, and Manage Channels to apply Staff privacy.",
         "info",
       ),
       h("div", { className: "actions" }, [
@@ -4259,6 +4401,16 @@ function renderDiscord() {
       ]),
     ]),
     card("Local Server Layout", [
+      discord.config?.setupTemplate
+        ? h("div", { className: "state-banner compact info" }, [
+            h("strong", { text: discord.config.setupTemplate.name }),
+            h("span", {
+              text:
+                discord.config.setupTemplate.recommendedFor ||
+                discord.config.setupTemplate.description,
+            }),
+          ])
+        : null,
       h("label", { className: "inline-check" }, [
         h("input", {
           id: "discordCreateStreamAlertsRole",
@@ -4267,6 +4419,18 @@ function renderDiscord() {
         }),
         "Create optional Stream Alerts role",
       ]),
+      h("label", { className: "inline-check" }, [
+        h("input", {
+          id: "discordLockStaffCategory",
+          type: "checkbox",
+          onChange: updateDiscordDraft,
+        }),
+        "Lock Staff category to the selected Staff role",
+      ]),
+      callout(
+        "Baseline: START HERE, STREAM, COMMUNITY, VOICE, and STAFF. Preview shows exactly what will be created, reused, or blocked before anything is applied.",
+        "info",
+      ),
       h("div", { className: "actions" }, [
         actionButton("Preview setup", {
           id: "discordPreviewSetup",
@@ -4535,6 +4699,12 @@ function renderDiscordPlan(result) {
       ["Existing channels", summary.existingChannels || 0],
       ["Roles to create", summary.rolesToCreate || 0],
       ["Skipped roles", summary.skippedRoles || 0],
+      ["Permission actions", summary.permissionOverwrites || 0],
+      [
+        "Blocked privacy",
+        summary.blockedPermissions || 0,
+        !summary.blockedPermissions,
+      ],
     ]),
     result.message ? callout(result.message, "warn") : null,
     h(
@@ -4545,9 +4715,13 @@ function renderDiscordPlan(result) {
           className:
             action.type === "create_channel" || action.type === "create_role"
               ? "warn"
-              : action.type === "skip_role"
-                ? "muted"
-                : "ok",
+              : action.type === "blocked_permission"
+                ? "bad"
+                : action.type === "apply_permission_overwrite"
+                  ? "warn"
+                  : action.type === "skip_role"
+                    ? "muted"
+                    : "ok",
           text: `${action.name}: ${action.detail}`,
         }),
       ),
@@ -4715,19 +4889,111 @@ function renderTesting() {
   ];
 }
 
+function renderOperatingModeCard(config = state.config || {}) {
+  const mode = currentSetupMode(config);
+  const checks = config.setupChecks || {};
+  const selectedCapabilities = setupModeCapabilities(mode);
+
+  return card("Operating Mode", [
+    h("div", { className: "grid" }, [
+      formRow(
+        "Console mode",
+        h("select", { id: "setupMode", onChange: updateSettingsDraft }, [
+          option("local-only", "Local Console"),
+          option("relay-assisted", "Relay Assisted"),
+          option("advanced", "Advanced"),
+        ]),
+      ),
+      formRow(
+        "Low-level Twitch transport",
+        h(
+          "select",
+          { id: "twitchTransportMode", onChange: updateSettingsDraft },
+          [
+            option("local-user-token", "Local OAuth user token"),
+            option("relay-chatbot", "Relay Chat Bot identity"),
+          ],
+        ),
+      ),
+    ]),
+    h("div", { className: "mode-cards" }, [
+      ...["local-only", "relay-assisted", "advanced"].map((item) =>
+        h("div", { className: `mode-card${mode === item ? " active" : ""}` }, [
+          h("strong", { text: setupModeLabel(item) }),
+          h("span", { text: setupModeSummary(item) }),
+        ]),
+      ),
+    ]),
+    h(
+      "div",
+      { className: "capability-grid" },
+      selectedCapabilities.map((item) =>
+        h("div", { className: `capability-row ${item.tone}` }, [
+          h("strong", { text: item.label }),
+          h("span", { text: item.detail }),
+        ]),
+      ),
+    ),
+    statusGrid([
+      [
+        "Selected mode",
+        setupModeLabel(mode),
+        ["local-only", "relay-assisted", "advanced"].includes(mode),
+      ],
+      [
+        "Local check",
+        checks.local?.checkedAt || "not checked",
+        checks.local?.status === "ready",
+      ],
+      [
+        "Relay check",
+        checks.relay?.checkedAt || "not checked",
+        checks.relay?.status === "ready",
+      ],
+      [
+        "Transport",
+        transportModeLabel(config.relay?.twitchTransportMode),
+        true,
+      ],
+    ]),
+    checks.local?.message
+      ? callout(`Local check: ${checks.local.message}`)
+      : null,
+    checks.relay?.message
+      ? callout(`Relay check: ${checks.relay.message}`)
+      : null,
+    h("div", { className: "actions" }, [
+      actionButton("Save settings", { id: "saveMode", onClick: saveSettings }),
+      actionButton("Check Local Setup", {
+        id: "checkLocalSetupMode",
+        variant: "secondary",
+        onClick: () => checkSetupMode("local-only"),
+      }),
+      actionButton("Check Relay Setup", {
+        id: "checkRelaySetupMode",
+        variant: "secondary",
+        onClick: () => checkSetupMode("relay-assisted"),
+      }),
+    ]),
+  ]);
+}
+
 function renderSettings() {
   const config = state.config || {};
   const relay = config.relay || {};
   const relayMode = isRelayChatbotMode(config);
+  const setupMode = currentSetupMode(config);
   const required = missingConfigFields(config);
   const validationChecks = visibleValidationChecks();
   return [
     sectionHeader(
       "Console Settings",
-      relayMode
-        ? "Configure hosted Relay chatbot identity, Discord interactions, and local fallback settings."
-        : "Configure local mode, Twitch OAuth, and automatic launch validation.",
-      relayMode
+      setupMode === "relay-assisted"
+        ? "Configure hosted Relay for Twitch Chat Bot identity and Discord interactions while keeping local tools available."
+        : setupMode === "advanced"
+          ? "Configure local and hosted paths side by side for advanced operators."
+          : "Configure local Twitch OAuth, local Discord setup, and automatic launch validation.",
+      setupMode === "relay-assisted"
         ? actionButton("Check Relay", {
             id: "settingsRelayStatus",
             variant: "secondary",
@@ -4740,6 +5006,7 @@ function renderSettings() {
     renderWindowsSetupPromptNotice(),
     renderSettingsLaunchNotice(),
     renderSetupGuide(),
+    renderOperatingModeCard(config),
     renderBotCompletionCard("settings"),
     relayMode
       ? renderRelaySetupCompletion(relay)
@@ -4845,7 +5112,7 @@ function renderSettings() {
           "Mode",
           relay.twitchTransportMode === "relay-chatbot"
             ? "Relay Chat Bot"
-            : "local user token",
+            : "Local OAuth user token",
           relay.twitchTransportMode === "relay-chatbot",
         ],
         [
@@ -4874,17 +5141,6 @@ function renderSettings() {
         ],
       ]),
       h("div", { className: "grid" }, [
-        formRow(
-          "Transport",
-          h(
-            "select",
-            { id: "twitchTransportMode", onChange: updateSettingsDraft },
-            [
-              option("local-user-token", "local-user-token"),
-              option("relay-chatbot", "relay-chatbot"),
-            ],
-          ),
-        ),
         formRow(
           "Relay URL",
           h("input", {
@@ -4916,13 +5172,13 @@ function renderSettings() {
       ]),
       callout(
         relay.identityNotice ||
-          "Local user-token mode will appear as a normal Twitch user. Relay chatbot mode is required for Twitch Chat Bot identity.",
+          "Local Console chat sends appear as the authorized Twitch user. Relay Assisted mode is required for hosted Twitch Chat Bot identity.",
         relay.twitchTransportMode === "relay-chatbot" ? "warn" : "muted",
       ),
       callout(
         relay.twitchTransportMode === "relay-chatbot"
-          ? "relay-chatbot sends through hosted Relay with Twitch app-token authorization; complete the OAuth grants and live user-list check before calling Chat Bot identity complete."
-          : "local-user-token is the fallback path for local testing and direct OAuth chat. It can send messages, but it is not the Twitch Chat Bot identity path.",
+          ? "Relay Chat Bot identity sends through hosted Relay with app-token authorization."
+          : "Local Console sends through direct OAuth chat. It can send messages, but Twitch will not label it as the hosted Chat Bot identity.",
         relay.twitchTransportMode === "relay-chatbot" ? "info" : "muted",
       ),
       relay.readiness?.checks?.length
@@ -5038,7 +5294,7 @@ function renderRelaySetupCompletion(relay = {}) {
     relay.chatbotIdentityValidatedAt,
   );
   const blockers = [
-    relayMode ? null : "Select relay-chatbot transport.",
+    relayMode ? null : "Select Relay Assisted mode.",
     configured ? null : "Save Relay URL, installation ID, and console token.",
     setup.twitchCallbackUrl
       ? null
@@ -5124,7 +5380,7 @@ function renderWindowsSetupPromptNotice() {
 
   if (isRelayChatbotMode()) {
     return callout(
-      "Relay chatbot mode is selected. Complete the hosted Relay Setup Guide in this window; local Twitch OAuth warnings only apply if you switch back to local-user-token mode.",
+      "Relay Assisted mode is selected. Complete the hosted Relay Setup Guide in this window; local Twitch OAuth warnings only apply if you switch back to Local Console mode.",
       "info",
     );
   }
@@ -5184,7 +5440,7 @@ function renderHostedRelaySetup(relay = {}) {
           "ok",
         )
       : callout(
-          "Select relay-chatbot and save settings before live Chat Bot validation.",
+          "Select Relay Assisted mode and save settings before live Chat Bot validation.",
           "warn",
         ),
     h("div", { className: "template-list" }, [
@@ -5784,7 +6040,7 @@ function renderRelaySetupGuide() {
         complete: progress.relayMode && progress.relayPaired,
         children: [
           h("p", {
-            text: "Save relay-chatbot transport, the hosted Relay URL, the installation ID, and the Console token.",
+            text: "Save Relay Assisted mode, the hosted Relay URL, the installation ID, and the Console token.",
           }),
           h("div", { className: "field-ref-row" }, [
             fieldRef("Transport", "twitchTransportMode", !progress.relayMode),
@@ -8754,6 +9010,21 @@ async function checkRelayStatus() {
   );
 }
 
+async function checkSetupMode(mode) {
+  await runAction(
+    mode === "relay-assisted" ? "checkRelaySetupMode" : "checkLocalSetupMode",
+    async () => {
+      const result = await api.checkSetupMode(mode);
+      state.config = result.config || state.config;
+      return result;
+    },
+    {
+      skipRefresh: true,
+      success: `${setupModeLabel(mode)} checked.`,
+    },
+  );
+}
+
 async function registerRelayEventSub() {
   if (
     !confirm(
@@ -9065,6 +9336,8 @@ async function previewDiscordSetup() {
     async () => {
       const result = await api.previewDiscordSetup({
         includeRoles: Boolean(field("discordCreateStreamAlertsRole")?.checked),
+        lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
+        staffRoleId: field("discordStaffRoleId")?.value || "",
       });
       state.discordSetupPreview = result;
       state.discord = {
@@ -9091,6 +9364,8 @@ async function applyDiscordSetup() {
     async () => {
       const result = await api.applyDiscordSetup({
         includeRoles: Boolean(field("discordCreateStreamAlertsRole")?.checked),
+        lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
+        staffRoleId: field("discordStaffRoleId")?.value || "",
       });
       state.discordSetupPreview = result;
       state.discord = await api.discordStatus();
@@ -9238,7 +9513,24 @@ async function disconnectTwitch() {
 }
 
 function updateSettingsDraft(event) {
-  state.settingsDraft[event.target.id] = event.target.value;
+  const { id, value } = event.target;
+  state.settingsDraft[id] = value;
+  if (id === "setupMode" && value === "local-only") {
+    state.settingsDraft.twitchTransportMode = "local-user-token";
+    setValue("twitchTransportMode", "local-user-token");
+  }
+  if (id === "setupMode" && value === "relay-assisted") {
+    state.settingsDraft.twitchTransportMode = "relay-chatbot";
+    setValue("twitchTransportMode", "relay-chatbot");
+  }
+  if (id === "twitchTransportMode") {
+    const currentMode = settingsValue("setupMode", currentSetupMode());
+    if (currentMode !== "advanced") {
+      state.settingsDraft.setupMode =
+        value === "relay-chatbot" ? "relay-assisted" : "local-only";
+      setValue("setupMode", state.settingsDraft.setupMode);
+    }
+  }
 }
 
 function updateDiscordDraft(event) {
@@ -9246,6 +9538,7 @@ function updateDiscordDraft(event) {
     event.target.type === "checkbox"
       ? event.target.checked
       : event.target.value;
+  updateDisabledState();
 }
 
 function updateTwitchOpsDraft(event) {
@@ -9393,6 +9686,10 @@ function restoreSavedCredentialMask(event) {
 function readSettingsPayload() {
   return {
     mode: fieldValue("mode", state.config?.mode || "live"),
+    setupMode: fieldValue(
+      "setupMode",
+      state.config?.setupMode || currentSetupMode(state.config),
+    ),
     redirectUri: fieldValue(
       "redirectUri",
       state.config?.redirectUri || defaultRedirectUri,
@@ -9443,6 +9740,8 @@ function readDiscordConfigPayload() {
       field("discordStreamAlertsRoleId")?.value ||
       config.streamAlertsRoleId ||
       "",
+    staffRoleId: field("discordStaffRoleId")?.value || config.staffRoleId || "",
+    lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
   };
 }
 
@@ -10185,6 +10484,7 @@ function syncFormValues() {
   const selectedCommand = selectedCustomCommand();
   const currentTimer = selectedTimer();
   const moderationSettings = state.moderation?.settings || {};
+  setValue("setupMode", settingsValue("setupMode", currentSetupMode(config)));
   setValue("mode", settingsValue("mode", config.mode || "live"));
   setValue(
     "redirectUri",
@@ -10289,9 +10589,22 @@ function syncFormValues() {
       discordConfig.streamAlertsRoleId || "",
     ),
   );
+  setValue(
+    "discordStaffRoleId",
+    discordValue("discordStaffRoleId", discordConfig.staffRoleId || ""),
+  );
   setChecked(
     "discordCreateStreamAlertsRole",
     Boolean(discordValue("discordCreateStreamAlertsRole", true)),
+  );
+  setChecked(
+    "discordLockStaffCategory",
+    Boolean(
+      discordValue(
+        "discordLockStaffCategory",
+        discordConfig.lockStaffCategory || false,
+      ),
+    ),
   );
   setValue(
     "discordAnnouncementKind",
@@ -11193,6 +11506,14 @@ function updateDisabledState() {
     "Save Relay URL, installation ID, and console token before loading suggestions.",
   );
   setDisabled(
+    "discordLockStaffCategory",
+    !(
+      discordValue("discordStaffRoleId", discordConfig.staffRoleId || "") ||
+      field("discordStaffRoleId")?.value
+    ),
+    "Save or enter a Staff role ID before enabling Staff category privacy.",
+  );
+  setDisabled(
     "relayStatus",
     !relayConfig.readiness?.ready,
     "Save Relay URL, installation ID, and console token before checking Relay.",
@@ -11226,28 +11547,28 @@ function updateDisabledState() {
     "relayTestSend",
     relayConfig.twitchTransportMode !== "relay-chatbot" ||
       !relayConfig.readiness?.ready,
-    "Select relay-chatbot and save Relay settings before sending a Relay test message.",
+    "Select Relay Assisted mode and save Relay settings before sending a Relay test message.",
   );
   setDisabled(
     "guideRelayTestSend",
     relayConfig.twitchTransportMode !== "relay-chatbot" ||
       !relayConfig.readiness?.ready,
-    "Select relay-chatbot and save Relay settings before sending a Relay test message.",
+    "Select Relay Assisted mode and save Relay settings before sending a Relay test message.",
   );
   setDisabled(
     "relayValidateChatbotIdentity",
     config.relay?.twitchTransportMode !== "relay-chatbot",
-    "Select relay-chatbot transport before recording live Chat Bot validation.",
+    "Select Relay Assisted mode before recording live Chat Bot validation.",
   );
   setDisabled(
     "relayValidateChatbotIdentityHosted",
     config.relay?.twitchTransportMode !== "relay-chatbot",
-    "Select relay-chatbot transport before recording live Chat Bot validation.",
+    "Select Relay Assisted mode before recording live Chat Bot validation.",
   );
   setDisabled(
     "guideRelayValidateChatbotIdentity",
     config.relay?.twitchTransportMode !== "relay-chatbot",
-    "Select relay-chatbot transport before recording live Chat Bot validation.",
+    "Select Relay Assisted mode before recording live Chat Bot validation.",
   );
 
   const connectLinks = [

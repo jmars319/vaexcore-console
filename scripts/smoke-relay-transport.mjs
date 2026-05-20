@@ -32,6 +32,9 @@ try {
 async function runSmoke() {
   const appJs = await text("/ui/app.js");
   assert(appJs.includes("Twitch Chat Transport"), "Relay transport UI exists");
+  assert(appJs.includes("Operating Mode"), "Console mode selector exists");
+  assert(appJs.includes("Local Console"), "Local Console mode is labeled");
+  assert(appJs.includes("Relay Assisted"), "Relay Assisted mode is labeled");
   assert(
     appJs.includes("Hosted Relay Bot Setup"),
     "hosted Relay setup UI exists",
@@ -48,19 +51,25 @@ async function runSmoke() {
   );
   assert(appJs.includes("Relay Chat Bot"), "Relay Chat Bot mode is labeled");
   assert(
-    appJs.includes("will appear as a normal Twitch user"),
+    appJs.includes(
+      "Local Console chat sends appear as the authorized Twitch user",
+    ),
     "local fallback identity warning is visible",
   );
   assert(
-    appJs.includes("local-user-token is the fallback path"),
-    "settings UI explains local-user-token fallback",
+    appJs.includes("Local Console sends through direct OAuth chat"),
+    "settings UI explains Local Console transport",
   );
   assert(
-    appJs.includes("relay-chatbot sends through hosted Relay"),
-    "settings UI explains Relay Chat Bot transport",
+    appJs.includes("Relay Chat Bot identity sends through hosted Relay"),
+    "settings UI explains Relay Assisted transport",
   );
 
   const clean = await json("/api/config");
+  assert(
+    clean.setupMode === "local-only",
+    "clean install defaults to Local Console mode",
+  );
   assert(
     clean.relay.twitchTransportMode === "local-user-token",
     "clean install defaults to local user-token transport",
@@ -82,6 +91,7 @@ async function runSmoke() {
     clientSecret: "relay-client-secret",
     broadcasterLogin: "vaexcore",
     botLogin: "vaexcorebot",
+    setupMode: "relay-assisted",
     twitchTransportMode: "relay-chatbot",
     relayBaseUrl: `${fakeRelay.url}/`,
     relayInstallationId,
@@ -89,6 +99,10 @@ async function runSmoke() {
   });
   const saved = saveResult.config;
 
+  assert(
+    saved.setupMode === "relay-assisted",
+    "Relay Assisted setup mode is saved",
+  );
   assert(
     saved.relay.twitchTransportMode === "relay-chatbot",
     "Relay chatbot mode is saved",
@@ -131,6 +145,19 @@ async function runSmoke() {
     "Relay Discord interaction URL is surfaced",
   );
   assertSafePayload(saved);
+
+  const setupModeCheck = await post("/api/setup-mode/check", {
+    mode: "relay-assisted",
+  });
+  assert(
+    setupModeCheck.check.status === "ready",
+    "Relay Assisted setup check stores ready status",
+  );
+  assert(
+    setupModeCheck.config.setupChecks.relay.checkedAt,
+    "Relay Assisted setup check stores a timestamp",
+  );
+  assertSafePayload(setupModeCheck);
 
   const relayStatus = await json("/api/relay/status");
   assert(relayStatus.ok === true, "Relay status route returns ok");

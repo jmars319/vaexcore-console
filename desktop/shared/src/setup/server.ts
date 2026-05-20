@@ -116,8 +116,9 @@ import {
   type DiscordAnnouncementInput,
 } from "../discord/setup";
 import {
+  defaultDiscordSetupTemplate,
   discordAnnouncementKinds,
-  minimalStreamerDiscordTemplate,
+  getDiscordSetupTemplate,
 } from "../discord/templates";
 import {
   DiscordRelayClient,
@@ -370,6 +371,12 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     const saved = saveConfig(body);
     void queueLaunchPreparation("settings_saved");
     sendJson(response, 200, { ok: true, config: saved });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/setup-mode/check") {
+    const body = await readJson(request);
+    sendJson(response, 200, checkSetupModeRoute(body));
     return;
   }
 
@@ -1670,6 +1677,8 @@ const getSafeConfig = () => {
 
   return {
     mode: secrets.mode,
+    setupMode: getSetupMode(secrets),
+    setupChecks: getSafeSetupChecks(secrets),
     hasClientId: Boolean(twitch.clientId),
     hasClientSecret: Boolean(twitch.clientSecret),
     hasAccessToken: Boolean(twitch.accessToken),
@@ -1689,6 +1698,138 @@ const getSafeConfig = () => {
     discord: getSafeDiscordConfig(secrets),
     relay: getSafeRelayConfig(secrets),
     botValidation: getSafeBotValidation(secrets),
+  };
+};
+
+type SetupMode = "local-only" | "relay-assisted" | "advanced";
+
+const setupModes: SetupMode[] = ["local-only", "relay-assisted", "advanced"];
+
+const getSetupMode = (secrets = readLocalSecrets()): SetupMode => {
+  if (setupModes.includes(secrets.setupMode as SetupMode)) {
+    return secrets.setupMode as SetupMode;
+  }
+
+  return secrets.relay.twitchTransportMode === "relay-chatbot"
+    ? "relay-assisted"
+    : "local-only";
+};
+
+const parseSetupMode = (value: unknown, fallback: SetupMode): SetupMode =>
+  typeof value === "string" && setupModes.includes(value as SetupMode)
+    ? (value as SetupMode)
+    : fallback;
+
+const getSafeSetupChecks = (secrets = readLocalSecrets()) => ({
+  local: safeSetupCheck(secrets.setupChecks.local),
+  relay: safeSetupCheck(secrets.setupChecks.relay),
+});
+
+const safeSetupCheck = (
+  check: LocalSecrets["setupChecks"]["local"] | undefined,
+) => ({
+  checkedAt: check?.checkedAt ?? "",
+  status: check?.status ?? "",
+  message: check?.message ?? "",
+});
+
+const checkSetupModeRoute = (body: unknown) => {
+  const input = objectInput(body);
+  const existing = readLocalSecrets();
+  const mode = parseSetupMode(input.mode, getSetupMode(existing));
+  const key = mode === "relay-assisted" ? "relay" : "local";
+  const check =
+    key === "relay"
+      ? buildRelaySetupCheck(existing)
+      : buildLocalSetupCheck(existing);
+  const record = {
+    checkedAt: new Date().toISOString(),
+    status: check.status,
+    message: check.message,
+  };
+
+  writeLocalSecrets({
+    ...existing,
+    setupMode: mode,
+    setupChecks: {
+      ...existing.setupChecks,
+      [key]: record,
+    },
+  });
+
+  return {
+    ok: true,
+    mode,
+    check: record,
+    setupChecks: getSafeSetupChecks(),
+    config: getSafeConfig(),
+  };
+};
+
+const buildLocalSetupCheck = (secrets: LocalSecrets) => {
+  const twitch = secrets.twitch;
+  const missing = [
+    twitch.clientId ? null : "Client ID",
+    twitch.clientSecret ? null : "Client Secret",
+    twitch.redirectUri ? null : "Redirect URI",
+    twitch.broadcasterLogin ? null : "Broadcaster Login",
+    twitch.botLogin ? null : "Bot Login",
+    twitch.accessToken ? null : "OAuth token",
+  ].filter(Boolean) as string[];
+  const discordReady = getDiscordReadiness(secrets).ready;
+
+  if (missing.length) {
+    return {
+      status: "blocked" as const,
+      message: `Local Console needs ${missing.join(", ")} before local chat validation can pass.`,
+    };
+  }
+
+  if (!discordReady) {
+    return {
+      status: "degraded" as const,
+      message:
+        "Local Twitch setup has required fields. Local Discord announcements/layout are not configured yet.",
+    };
+  }
+
+  return {
+    status: "ready" as const,
+    message:
+      "Local Console setup has Twitch OAuth fields and local Discord announcement/layout settings.",
+  };
+};
+
+const buildRelaySetupCheck = (secrets: LocalSecrets) => {
+  const readiness = relayConfigReadiness({
+    baseUrl: secrets.relay.baseUrl,
+    installationId: secrets.relay.installationId,
+    consoleToken: secrets.relay.consoleToken,
+  });
+
+  if (!readiness.ready) {
+    return {
+      status: "blocked" as const,
+      message:
+        readiness.checks
+          .filter((check) => !check.ok)
+          .map((check) => check.detail)
+          .join(" ") || "Relay pairing is incomplete.",
+    };
+  }
+
+  if (secrets.relay.twitchTransportMode !== "relay-chatbot") {
+    return {
+      status: "degraded" as const,
+      message:
+        "Relay pairing is saved, but Twitch transport is still set to Local Console.",
+    };
+  }
+
+  return {
+    status: "ready" as const,
+    message:
+      "Relay Assisted setup has hosted Relay pairing and Twitch Chat Bot transport selected.",
   };
 };
 
@@ -1740,6 +1881,7 @@ const getSafeRelayConfig = (secrets = readLocalSecrets()) => {
 
 const getSafeDiscordConfig = (secrets = readLocalSecrets()) => {
   const discord = secrets.discord;
+  const template = defaultDiscordSetupTemplate;
   return {
     hasBotToken: Boolean(discord.botToken),
     guildId: discord.guildId ?? "",
@@ -1747,15 +1889,22 @@ const getSafeDiscordConfig = (secrets = readLocalSecrets()) => {
     generalAnnouncementChannelId:
       discord.generalAnnouncementChannelId ??
       discord.createdChannelIds?.[
-        minimalStreamerDiscordTemplate.recommended.generalAnnouncementChannelId
+        template.recommended.generalAnnouncementChannelId
       ] ??
       "",
     streamAlertsRoleId:
       discord.streamAlertsRoleId ??
-      discord.createdRoleIds?.[
-        minimalStreamerDiscordTemplate.recommended.streamAlertsRoleId
-      ] ??
+      discord.createdRoleIds?.[template.recommended.streamAlertsRoleId] ??
       "",
+    staffRoleId: discord.staffRoleId ?? "",
+    lockStaffCategory: Boolean(discord.lockStaffCategory),
+    setupTemplateId: template.id,
+    setupTemplate: {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      recommendedFor: template.recommendedFor ?? "",
+    },
     setupAppliedAt: discord.setupAppliedAt ?? "",
     createdChannelIds: discord.createdChannelIds ?? {},
     createdRoleIds: discord.createdRoleIds ?? {},
@@ -1867,7 +2016,7 @@ const getDiscordStatus = async (searchParams: URLSearchParams) => {
     ok: true,
     config: getSafeDiscordConfig(secrets),
     readiness: getDiscordReadiness(secrets),
-    template: minimalStreamerDiscordTemplate,
+    template: defaultDiscordSetupTemplate,
     bot,
     validationError,
   };
@@ -2000,6 +2149,10 @@ const createRelayChatClient = (secrets = readLocalSecrets()) =>
 const saveDiscordConfig = (body: unknown) => {
   const input = objectInput(body);
   const existing = readLocalSecrets();
+  const lockStaffCategory =
+    input.lockStaffCategory === undefined
+      ? Boolean(existing.discord.lockStaffCategory)
+      : Boolean(input.lockStaffCategory);
   const normalized = normalizeDiscordConfigInput({
     botToken: optionalInputString(input.botToken),
     guildId: optionalInputString(input.guildId),
@@ -2010,6 +2163,8 @@ const saveDiscordConfig = (body: unknown) => {
       input.generalAnnouncementChannelId,
     ),
     streamAlertsRoleId: optionalInputString(input.streamAlertsRoleId),
+    staffRoleId: optionalInputString(input.staffRoleId),
+    lockStaffCategory,
   });
   const guildChanged = Boolean(
     normalized.guildId && normalized.guildId !== existing.discord.guildId,
@@ -2029,6 +2184,10 @@ const saveDiscordConfig = (body: unknown) => {
     streamAlertsRoleId:
       normalized.streamAlertsRoleId ||
       (guildChanged ? undefined : existing.discord.streamAlertsRoleId),
+    staffRoleId:
+      normalized.staffRoleId ||
+      (guildChanged ? undefined : existing.discord.staffRoleId),
+    lockStaffCategory: Boolean(normalized.lockStaffCategory),
     setupAppliedAt: guildChanged ? undefined : existing.discord.setupAppliedAt,
     createdChannelIds: guildChanged
       ? {}
@@ -2045,8 +2204,18 @@ const saveDiscordConfig = (body: unknown) => {
 };
 
 const previewDiscordSetup = async (body: unknown) => {
-  const includeRoles = Boolean(objectInput(body).includeRoles);
+  const input = objectInput(body);
+  const includeRoles = Boolean(input.includeRoles);
   const secrets = readLocalSecrets();
+  const template = getDiscordSetupTemplate(
+    optionalInputString(input.templateId),
+  );
+  const lockStaffCategory =
+    input.lockStaffCategory === undefined
+      ? Boolean(secrets.discord.lockStaffCategory)
+      : Boolean(input.lockStaffCategory);
+  const staffRoleId =
+    optionalInputString(input.staffRoleId) ?? secrets.discord.staffRoleId;
   const connectionError = discordConnectionError({
     requireAnnouncementChannel: false,
   });
@@ -2060,10 +2229,13 @@ const previewDiscordSetup = async (body: unknown) => {
       plan: planDiscordServerSetup({
         existingChannels: [],
         existingRoles: [],
-        template: minimalStreamerDiscordTemplate,
+        template,
         includeRoles,
+        guildId: secrets.discord.guildId,
+        lockStaffCategory,
+        staffRoleId,
       }),
-      template: minimalStreamerDiscordTemplate,
+      template,
     };
   }
 
@@ -2081,18 +2253,31 @@ const previewDiscordSetup = async (body: unknown) => {
     plan: planDiscordServerSetup({
       existingChannels,
       existingRoles,
-      template: minimalStreamerDiscordTemplate,
+      template,
       includeRoles,
+      guildId,
+      lockStaffCategory,
+      staffRoleId,
     }),
-    template: minimalStreamerDiscordTemplate,
+    template,
   };
 };
 
 const applyDiscordSetup = async (body: unknown) => {
-  const includeRoles = Boolean(objectInput(body).includeRoles);
+  const input = objectInput(body);
+  const includeRoles = Boolean(input.includeRoles);
   const secrets = readLocalSecrets();
   const botToken = secrets.discord.botToken;
   const guildId = secrets.discord.guildId;
+  const template = getDiscordSetupTemplate(
+    optionalInputString(input.templateId),
+  );
+  const lockStaffCategory =
+    input.lockStaffCategory === undefined
+      ? Boolean(secrets.discord.lockStaffCategory)
+      : Boolean(input.lockStaffCategory);
+  const staffRoleId =
+    optionalInputString(input.staffRoleId) ?? secrets.discord.staffRoleId;
 
   if (!botToken || !guildId) {
     throw new SafeInputError("Discord bot token and server ID are required.");
@@ -2101,8 +2286,10 @@ const applyDiscordSetup = async (body: unknown) => {
   const result = await applyDiscordServerSetup({
     client: createDiscordClient(botToken),
     guildId,
-    template: minimalStreamerDiscordTemplate,
+    template,
     includeRoles,
+    lockStaffCategory,
+    staffRoleId,
   });
   const latest = readLocalSecrets();
   writeLocalSecrets({
@@ -2121,6 +2308,8 @@ const applyDiscordSetup = async (body: unknown) => {
       streamAlertsRoleId:
         result.recommended.streamAlertsRoleId ||
         latest.discord.streamAlertsRoleId,
+      staffRoleId: staffRoleId || latest.discord.staffRoleId,
+      lockStaffCategory,
     },
   });
 
@@ -2133,8 +2322,10 @@ const applyDiscordSetup = async (body: unknown) => {
     metadata: {
       guildId,
       includeRoles,
+      lockStaffCategory,
       createdChannelIds: Object.keys(result.channelIds),
       createdRoleIds: Object.keys(result.roleIds),
+      permissionOverwritesApplied: result.permissionOverwritesApplied,
     },
   });
 
@@ -2434,6 +2625,7 @@ const getBotCompletionRoute = async () => {
     relayReport,
     localDiscord,
     records,
+    setupMode: getSetupMode(secrets),
   });
   const sections = buildBotCompletionSections(checks);
   const nextActions = checks
@@ -2469,6 +2661,7 @@ const getBotCompletionRoute = async () => {
       localConfig: getSafeDiscordConfig(secrets),
       relay: discordStatus,
     },
+    setupMode: getSetupMode(secrets),
     transportMode: secrets.relay.twitchTransportMode,
   };
 };
@@ -2509,27 +2702,62 @@ const buildBotCompletionChecks = ({
   relayReport,
   localDiscord,
   records,
+  setupMode,
 }: {
   secrets: LocalSecrets;
   relayStatus: Awaited<ReturnType<typeof getRelayStatusRoute>>;
   relayReport: Awaited<ReturnType<typeof getRelayReadinessReport>>;
   localDiscord: ReturnType<typeof getDiscordReadiness>;
   records: Record<BotValidationKey, string>;
+  setupMode: SetupMode;
 }) => {
-  const relayChecks =
+  const relayReadinessChecks =
     relayReport.ok && relayReport.report
       ? relayReport.report.checks || []
       : relayStatus.connected
         ? relayStatus.readiness?.checks || []
         : [];
   const checkByKey = (key: string) =>
-    relayChecks.find((item) => item.key === key);
+    relayReadinessChecks.find((item) => item.key === key);
   const discordChecks =
     relayReport.ok && relayReport.report ? relayReport.report.checks || [] : [];
   const discordCheckByKey = (key: string) =>
     discordChecks.find((item) => item.key === key);
 
-  return [
+  const localMissing = [
+    secrets.twitch.clientId ? null : "Client ID",
+    secrets.twitch.clientSecret ? null : "Client Secret",
+    secrets.twitch.redirectUri ? null : "Redirect URI",
+    secrets.twitch.broadcasterLogin ? null : "Broadcaster Login",
+    secrets.twitch.botLogin ? null : "Bot Login",
+  ].filter(Boolean) as string[];
+  const localChecks = [
+    botCompletionCheck(
+      "twitch-transport-local",
+      "Twitch transport is Local Console",
+      secrets.relay.twitchTransportMode !== "relay-chatbot",
+      "Select Local Console mode when you want chat sends to use the local Twitch OAuth token.",
+    ),
+    botCompletionCheck(
+      "twitch-local-config",
+      "Local Twitch setup fields are saved",
+      localMissing.length === 0,
+      `Save ${localMissing.join(", ")} for local Twitch setup.`,
+    ),
+    botCompletionCheck(
+      "twitch-local-oauth",
+      "Local Twitch OAuth token is saved",
+      Boolean(secrets.twitch.accessToken),
+      "Use Connect Twitch as Bot Login for local chat sends.",
+    ),
+    botCompletionCheck(
+      "discord-local-setup",
+      "Local Discord announcements and layout are ready",
+      localDiscord.ready,
+      "Save Discord bot token, server ID, and announcement channel if Console should manage local Discord setup.",
+    ),
+  ];
+  const relayCompletionChecks = [
     botCompletionCheck(
       "relay-paired",
       "Console paired to Relay",
@@ -2597,12 +2825,6 @@ const buildBotCompletionChecks = ({
       "Confirm Twitch lists vaexcorebot as a Chat Bot in the channel user list.",
     ),
     botCompletionCheck(
-      "discord-local-setup",
-      "Local Discord setup is ready for channel management fallback",
-      localDiscord.ready,
-      "Save Discord bot token, server ID, and announcement channel if Console should manage local Discord setup.",
-    ),
-    botCompletionCheck(
       "discord-worker-config",
       "Discord Worker secrets are configured",
       Boolean(
@@ -2641,6 +2863,16 @@ const buildBotCompletionChecks = ({
       "Run /live, /late, /cancelled, or /scheduled and confirm Console review behavior.",
     ),
   ];
+
+  if (setupMode === "local-only") {
+    return localChecks;
+  }
+
+  if (setupMode === "advanced") {
+    return [...localChecks, ...relayCompletionChecks];
+  }
+
+  return relayCompletionChecks;
 };
 
 const botCompletionCheck = (
@@ -2662,8 +2894,32 @@ const buildBotCompletionSections = (
   const byKey = new Map(checks.map((check) => [check.key, check]));
   const sectionDefinitions = [
     {
-      key: "local-pairing",
-      title: "Local pairing",
+      key: "local-console",
+      title: "Local Console",
+      incompleteState: "blocked",
+      readyDetail:
+        "Local Twitch setup is ready to send chat through the saved OAuth user token.",
+      blockedDetail:
+        "Complete local Twitch app fields and OAuth before local chat sends can pass.",
+      checkKeys: [
+        "twitch-transport-local",
+        "twitch-local-config",
+        "twitch-local-oauth",
+      ],
+    },
+    {
+      key: "local-discord",
+      title: "Local Discord",
+      incompleteState: "needs setup",
+      readyDetail:
+        "Console can manage Discord announcements and server layout locally.",
+      blockedDetail:
+        "Save Discord bot token, server ID, and announcement channel before local Discord actions are ready.",
+      checkKeys: ["discord-local-setup"],
+    },
+    {
+      key: "relay-pairing",
+      title: "Relay pairing",
       incompleteState: "blocked",
       readyDetail:
         "Console is paired to Relay and configured for hosted Chat Bot transport.",
@@ -2688,15 +2944,14 @@ const buildBotCompletionSections = (
       ],
     },
     {
-      key: "discord-credentials",
-      title: "Discord credentials",
+      key: "discord-relay",
+      title: "Discord Relay",
       incompleteState: "needs credentials",
       readyDetail:
-        "Discord local fallback, Worker secrets, endpoint acceptance, and slash commands are ready.",
+        "Discord Worker secrets, endpoint acceptance, and slash commands are ready.",
       blockedDetail:
-        "Save Discord credentials, configure Relay Worker Discord secrets, accept the endpoint, and register commands.",
+        "Configure Relay Worker Discord secrets, accept the endpoint, and register commands.",
       checkKeys: [
-        "discord-local-setup",
         "discord-worker-config",
         "discord-interaction-endpoint",
         "discord-slash-commands",
@@ -2719,26 +2974,31 @@ const buildBotCompletionSections = (
     },
   ] as const;
 
-  const sections = sectionDefinitions.map((definition) => {
+  const sections = sectionDefinitions.flatMap((definition) => {
     const sectionChecks = definition.checkKeys
       .map((key) => byKey.get(key))
       .filter((check): check is ReturnType<typeof botCompletionCheck> =>
         Boolean(check),
       );
+    if (!sectionChecks.length) {
+      return [];
+    }
     const pending = sectionChecks.filter((check) => !check.complete);
-    return {
-      key: definition.key,
-      title: definition.title,
-      state: pending.length ? definition.incompleteState : "ready",
-      detail: pending.length
-        ? definition.blockedDetail
-        : definition.readyDetail,
-      complete: pending.length === 0,
-      completed: sectionChecks.length - pending.length,
-      total: sectionChecks.length,
-      nextAction: pending[0]?.nextAction ?? "",
-      checks: sectionChecks,
-    };
+    return [
+      {
+        key: definition.key,
+        title: definition.title,
+        state: pending.length ? definition.incompleteState : "ready",
+        detail: pending.length
+          ? definition.blockedDetail
+          : definition.readyDetail,
+        complete: pending.length === 0,
+        completed: sectionChecks.length - pending.length,
+        total: sectionChecks.length,
+        nextAction: pending[0]?.nextAction ?? "",
+        checks: sectionChecks,
+      },
+    ];
   });
 
   return [
@@ -2784,12 +3044,19 @@ const botCompletionOperatorStatus = ({
   }
 
   const credentials = sections.find(
-    (section) => section.state === "needs credentials",
+    (section) =>
+      section.state === "needs credentials" || section.state === "needs setup",
   );
   if (credentials) {
     return {
-      status: "needs-credentials",
-      label: "needs credentials",
+      status:
+        credentials.state === "needs setup"
+          ? "needs-setup"
+          : "needs-credentials",
+      label:
+        credentials.state === "needs setup"
+          ? "needs setup"
+          : "needs credentials",
       detail: credentials.nextAction || credentials.detail,
     };
   }
@@ -3049,7 +3316,7 @@ const getDiscordAnnouncementChannelId = (
 ): string | undefined =>
   discord.streamAnnouncementChannelId ||
   discord.createdChannelIds?.[
-    minimalStreamerDiscordTemplate.recommended.streamAnnouncementChannelId
+    defaultDiscordSetupTemplate.recommended.streamAnnouncementChannelId
   ];
 
 const getDiscordStreamAlertsRoleId = (
@@ -3057,7 +3324,7 @@ const getDiscordStreamAlertsRoleId = (
 ): string | undefined =>
   discord.streamAlertsRoleId ||
   discord.createdRoleIds?.[
-    minimalStreamerDiscordTemplate.recommended.streamAlertsRoleId
+    defaultDiscordSetupTemplate.recommended.streamAlertsRoleId
   ];
 
 const objectInput = (body: unknown): Record<string, unknown> =>
@@ -3847,6 +4114,7 @@ const getTwitchBroadcastReadiness = () => {
 const saveConfig = (body: unknown) => {
   const input = body as Record<string, string>;
   const existing = readLocalSecrets();
+  const setupMode = parseSetupMode(input.setupMode, getSetupMode(existing));
   const redirectUri = sanitizeRedirectUri(input.redirectUri);
   const clientId = valueOrExisting(
     sanitizeOptionalText(input.clientId, "Client ID", 120),
@@ -3918,6 +4186,7 @@ const saveConfig = (body: unknown) => {
 
   const next: LocalSecrets = {
     mode: input.mode === "local" ? "local" : "live",
+    setupMode,
     twitch,
     discord: existing.discord,
     relay: {
@@ -3932,6 +4201,7 @@ const saveConfig = (body: unknown) => {
         ? undefined
         : existing.relay.chatbotIdentityValidationNote,
     },
+    setupChecks: existing.setupChecks,
     botValidation: existing.botValidation,
   };
 

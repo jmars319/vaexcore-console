@@ -24,7 +24,9 @@ export type DiscordSetupActionType =
   | "use_existing_channel"
   | "create_role"
   | "use_existing_role"
-  | "skip_role";
+  | "skip_role"
+  | "apply_permission_overwrite"
+  | "blocked_permission";
 
 export type DiscordSetupAction = {
   type: DiscordSetupActionType;
@@ -39,6 +41,7 @@ export type DiscordSetupPlan = {
   ok: true;
   template: Pick<DiscordSetupTemplate, "id" | "name" | "description">;
   includeRoles: boolean;
+  lockStaffCategory: boolean;
   actions: DiscordSetupAction[];
   summary: {
     channelsToCreate: number;
@@ -46,6 +49,8 @@ export type DiscordSetupPlan = {
     rolesToCreate: number;
     existingRoles: number;
     skippedRoles: number;
+    permissionOverwrites: number;
+    blockedPermissions: number;
   };
 };
 
@@ -63,6 +68,7 @@ export type DiscordSetupApplyResult = {
     suggestionChannelId?: string;
     streamAlertsRoleId?: string;
   };
+  permissionOverwritesApplied: number;
 };
 
 export type DiscordAnnouncementInput = {
@@ -81,16 +87,24 @@ export type DiscordConfigInput = {
   streamAnnouncementChannelId?: string;
   generalAnnouncementChannelId?: string;
   streamAlertsRoleId?: string;
+  staffRoleId?: string;
+  lockStaffCategory?: boolean;
 };
+
+const viewChannelPermissionBit = "1024";
 
 export const planDiscordServerSetup = (options: {
   existingChannels: DiscordGuildChannel[];
   existingRoles: DiscordGuildRole[];
   template?: DiscordSetupTemplate;
   includeRoles?: boolean;
+  guildId?: string;
+  lockStaffCategory?: boolean;
+  staffRoleId?: string;
 }): DiscordSetupPlan => {
   const template = options.template ?? minimalStreamerDiscordTemplate;
   const includeRoles = options.includeRoles ?? false;
+  const lockStaffCategory = options.lockStaffCategory ?? false;
   const actions: DiscordSetupAction[] = [];
   const roleIds = new Map<string, string>();
   const channelIds = new Map<string, string>();
@@ -154,6 +168,40 @@ export const planDiscordServerSetup = (options: {
     });
   }
 
+  if (lockStaffCategory) {
+    const staffCategory = template.channels.find(
+      (channel) => channel.id === "category-staff",
+    );
+    if (!options.staffRoleId) {
+      actions.push({
+        type: "blocked_permission",
+        templateId: "category-staff-permissions",
+        name: staffCategory?.name ?? "STAFF",
+        kind: "category",
+        detail:
+          "Staff privacy is enabled, but no Staff role ID is saved. Select the role that should see Staff before applying privacy.",
+      });
+    } else if (options.staffRoleId === options.guildId) {
+      actions.push({
+        type: "blocked_permission",
+        templateId: "category-staff-permissions",
+        name: staffCategory?.name ?? "STAFF",
+        kind: "category",
+        detail:
+          "Staff privacy cannot use the @everyone role. Select a dedicated staff/moderator role.",
+      });
+    } else {
+      actions.push({
+        type: "apply_permission_overwrite",
+        templateId: "category-staff-permissions",
+        name: staffCategory?.name ?? "STAFF",
+        kind: "category",
+        detail:
+          "Locks the Staff category from @everyone and allows the selected Staff role to view it.",
+      });
+    }
+  }
+
   return {
     ok: true,
     template: {
@@ -162,6 +210,7 @@ export const planDiscordServerSetup = (options: {
       description: template.description,
     },
     includeRoles,
+    lockStaffCategory,
     actions,
     summary: {
       channelsToCreate: actions.filter(
@@ -177,6 +226,12 @@ export const planDiscordServerSetup = (options: {
       ).length,
       skippedRoles: actions.filter((action) => action.type === "skip_role")
         .length,
+      permissionOverwrites: actions.filter(
+        (action) => action.type === "apply_permission_overwrite",
+      ).length,
+      blockedPermissions: actions.filter(
+        (action) => action.type === "blocked_permission",
+      ).length,
     },
   };
 };
@@ -195,6 +250,8 @@ export const applyDiscordServerSetup = async (options: {
   guildId: string;
   template?: DiscordSetupTemplate;
   includeRoles?: boolean;
+  lockStaffCategory?: boolean;
+  staffRoleId?: string;
 }): Promise<DiscordSetupApplyResult> => {
   const template = options.template ?? minimalStreamerDiscordTemplate;
   const guildId = normalizeDiscordSnowflake(
@@ -204,12 +261,29 @@ export const applyDiscordServerSetup = async (options: {
   const existingChannels = await options.client.listGuildChannels(guildId);
   const existingRoles = await options.client.listGuildRoles(guildId);
   const includeRoles = options.includeRoles ?? false;
+  const lockStaffCategory = options.lockStaffCategory ?? false;
+  const staffRoleId = options.staffRoleId
+    ? normalizeDiscordSnowflake(options.staffRoleId, "Discord staff role ID")
+    : "";
   const workingChannels = [...existingChannels];
   const workingRoles = [...existingRoles];
   const createdChannels: DiscordGuildChannel[] = [];
   const createdRoles: DiscordGuildRole[] = [];
   const channelIds: Record<string, string> = {};
   const roleIds: Record<string, string> = {};
+  let permissionOverwritesApplied = 0;
+
+  if (lockStaffCategory && !staffRoleId) {
+    throw new SafeInputError(
+      "A Discord Staff role ID is required before locking the Staff category.",
+    );
+  }
+
+  if (lockStaffCategory && staffRoleId === guildId) {
+    throw new SafeInputError(
+      "Staff category privacy cannot use the @everyone role. Select a dedicated staff/moderator role.",
+    );
+  }
 
   if (includeRoles) {
     for (const role of template.roles) {
@@ -266,11 +340,43 @@ export const applyDiscordServerSetup = async (options: {
     channelIds[channel.id] = created.id;
   }
 
+  if (lockStaffCategory) {
+    const staffCategoryId = channelIds["category-staff"];
+    if (!staffCategoryId) {
+      throw new SafeInputError(
+        "The Staff category could not be resolved for privacy setup.",
+      );
+    }
+
+    await options.client.setChannelPermissionOverwrite(
+      staffCategoryId,
+      guildId,
+      {
+        type: 0,
+        allow: "0",
+        deny: viewChannelPermissionBit,
+      },
+    );
+    await options.client.setChannelPermissionOverwrite(
+      staffCategoryId,
+      staffRoleId,
+      {
+        type: 0,
+        allow: viewChannelPermissionBit,
+        deny: "0",
+      },
+    );
+    permissionOverwritesApplied = 2;
+  }
+
   const plan = planDiscordServerSetup({
     existingChannels: workingChannels,
     existingRoles: workingRoles,
     template,
     includeRoles,
+    guildId,
+    lockStaffCategory,
+    staffRoleId,
   });
 
   return {
@@ -289,6 +395,7 @@ export const applyDiscordServerSetup = async (options: {
       suggestionChannelId: channelIds[template.recommended.suggestionChannelId],
       streamAlertsRoleId: roleIds[template.recommended.streamAlertsRoleId],
     },
+    permissionOverwritesApplied,
   };
 };
 
@@ -380,6 +487,11 @@ export const normalizeDiscordConfigInput = (
     input.streamAlertsRoleId,
     "Discord Stream Alerts role ID",
   ),
+  staffRoleId: normalizeOptionalDiscordSnowflake(
+    input.staffRoleId,
+    "Discord staff role ID",
+  ),
+  lockStaffCategory: Boolean(input.lockStaffCategory),
 });
 
 export const normalizeDiscordSnowflake = (value: unknown, field: string) => {

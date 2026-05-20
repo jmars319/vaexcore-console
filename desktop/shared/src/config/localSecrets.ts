@@ -10,6 +10,7 @@ const secretsPath = resolve(configDir, "local.secrets.json");
 
 const localSecretsSchema = z.object({
   mode: z.enum(["local", "live"]).default("live"),
+  setupMode: z.enum(["local-only", "relay-assisted", "advanced"]).optional(),
   twitch: z
     .object({
       clientId: z.string().optional(),
@@ -35,6 +36,8 @@ const localSecretsSchema = z.object({
       streamAnnouncementChannelId: z.string().optional(),
       generalAnnouncementChannelId: z.string().optional(),
       streamAlertsRoleId: z.string().optional(),
+      staffRoleId: z.string().optional(),
+      lockStaffCategory: z.boolean().default(false),
       setupAppliedAt: z.string().optional(),
       createdChannelIds: z.record(z.string()).default({}),
       createdRoleIds: z.record(z.string()).default({}),
@@ -50,6 +53,24 @@ const localSecretsSchema = z.object({
       consoleToken: z.string().optional(),
       chatbotIdentityValidatedAt: z.string().optional(),
       chatbotIdentityValidationNote: z.string().optional(),
+    })
+    .default({}),
+  setupChecks: z
+    .object({
+      local: z
+        .object({
+          checkedAt: z.string().optional(),
+          status: z.enum(["ready", "degraded", "blocked"]).optional(),
+          message: z.string().optional(),
+        })
+        .default({}),
+      relay: z
+        .object({
+          checkedAt: z.string().optional(),
+          status: z.enum(["ready", "degraded", "blocked"]).optional(),
+          message: z.string().optional(),
+        })
+        .default({}),
     })
     .default({}),
   botValidation: z
@@ -74,9 +95,15 @@ export const readLocalSecrets = (): LocalSecrets => {
   if (!existsSync(secretsPath)) {
     return {
       mode: "live",
+      setupMode: "local-only",
       twitch: { redirectUri: defaultRedirectUri, scopes: [] },
-      discord: { createdChannelIds: {}, createdRoleIds: {} },
+      discord: {
+        lockStaffCategory: false,
+        createdChannelIds: {},
+        createdRoleIds: {},
+      },
       relay: { twitchTransportMode: "local-user-token" },
+      setupChecks: { local: {}, relay: {} },
       botValidation: {},
     };
   }
@@ -102,6 +129,11 @@ export const defaultRedirectUri = "http://localhost:3434/auth/twitch/callback";
 
 const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
   mode: secrets.mode,
+  setupMode:
+    secrets.setupMode ??
+    (secrets.relay.twitchTransportMode === "relay-chatbot"
+      ? "relay-assisted"
+      : "local-only"),
   twitch: {
     ...secrets.twitch,
     clientId: sanitizeOptional(secrets.twitch.clientId, "Client ID", 120),
@@ -141,6 +173,12 @@ const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
       "Discord Stream Alerts role ID",
       32,
     ),
+    staffRoleId: sanitizeOptional(
+      secrets.discord.staffRoleId,
+      "Discord staff role ID",
+      32,
+    ),
+    lockStaffCategory: Boolean(secrets.discord.lockStaffCategory),
     createdChannelIds: secrets.discord.createdChannelIds ?? {},
     createdRoleIds: secrets.discord.createdRoleIds ?? {},
   },
@@ -177,6 +215,10 @@ const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
           240,
         )
       : undefined,
+  },
+  setupChecks: {
+    local: normalizeSetupCheck(secrets.setupChecks?.local, "local setup check"),
+    relay: normalizeSetupCheck(secrets.setupChecks?.relay, "Relay setup check"),
   },
   botValidation: {
     twitchCallbackAddedAt: sanitizeOptional(
@@ -230,6 +272,17 @@ const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
       80,
     ),
   },
+});
+
+const normalizeSetupCheck = (
+  check: LocalSecrets["setupChecks"]["local"] | undefined,
+  label: string,
+) => ({
+  checkedAt: sanitizeOptional(check?.checkedAt, `${label} timestamp`, 80),
+  status: ["ready", "degraded", "blocked"].includes(check?.status ?? "")
+    ? check?.status
+    : undefined,
+  message: sanitizeOptional(check?.message, `${label} message`, 240),
 });
 
 const sanitizeOptional = (

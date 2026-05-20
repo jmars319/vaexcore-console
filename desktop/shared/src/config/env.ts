@@ -157,6 +157,7 @@ const bootstrapLocalOAuthStore = (
 
   const next: LocalSecrets = {
     mode: "live",
+    setupMode: existing.setupMode,
     twitch: {
       ...existing.twitch,
       clientId: env.TWITCH_CLIENT_ID,
@@ -169,6 +170,7 @@ const bootstrapLocalOAuthStore = (
     },
     discord: existing.discord,
     relay: existing.relay,
+    setupChecks: existing.setupChecks,
     botValidation: existing.botValidation,
   };
 

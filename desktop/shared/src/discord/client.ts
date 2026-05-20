@@ -57,6 +57,12 @@ export type DiscordCreateMessageInput = {
   allowed_mentions?: Record<string, unknown>;
 };
 
+export type DiscordPermissionOverwriteInput = {
+  type: 0 | 1;
+  allow: string;
+  deny: string;
+};
+
 export type DiscordApiClientOptions = {
   botToken: string;
   apiBaseUrl?: string;
@@ -128,6 +134,20 @@ export class DiscordApiClient {
       `/channels/${encodeURIComponent(channelId)}/messages`,
       {
         method: "POST",
+        body: cleanJson(input),
+      },
+    );
+  }
+
+  setChannelPermissionOverwrite(
+    channelId: string,
+    overwriteId: string,
+    input: DiscordPermissionOverwriteInput,
+  ) {
+    return this.request<void>(
+      `/channels/${encodeURIComponent(channelId)}/permissions/${encodeURIComponent(overwriteId)}`,
+      {
+        method: "PUT",
         body: cleanJson(input),
       },
     );

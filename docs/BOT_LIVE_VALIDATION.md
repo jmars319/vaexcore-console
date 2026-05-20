@@ -16,7 +16,7 @@ Expected pre-credential blockers:
 
 - Twitch bot grant is pending.
 - Twitch broadcaster grant is pending.
-- Twitch transport may still be `local-user-token`.
+- Console may still be in `Local Console` mode.
 - Chat Bot identity live test is not recorded.
 - Discord Worker secrets may be missing.
 - Discord slash commands may not be registered.
@@ -58,7 +58,7 @@ https://relay.vaexil.tv/oauth/twitch/start?installationId=35d25f86-db02-4613-971
 
 8. Open Console `Settings`.
 9. Confirm Relay URL, installation ID, and console token are saved.
-10. Set `Twitch Chat Transport` to `relay-chatbot`.
+10. Set `Operating Mode` to `Relay Assisted`.
 11. Click `Check Relay`.
 12. Confirm Relay readiness shows bot grant, broadcaster grant, and separate bot account checks as passing.
 13. Register or refresh the Twitch EventSub chat subscription from Console if the action is available.
@@ -136,7 +136,7 @@ Relay slash commands do not replace local Discord setup. Use local setup when Co
 3. Save the local bot token and server ID.
 4. Click `Validate bot`.
 5. Click `Preview setup`.
-6. Review the planned categories, channels, and optional stream alerts role.
+6. Review the planned categories, channels, optional stream alerts role, and optional Staff privacy action.
 7. Click `Apply setup`.
 8. Save or verify the stream announcement channel.
 9. Send a late/cancelled/scheduled test announcement if the server is ready for it.
@@ -161,5 +161,5 @@ The bot work is functionally complete when all of these are true:
 - Never commit `config/local.secrets.json`.
 - Never paste Worker secrets into docs or issue comments.
 - Do not mark Chat Bot identity complete until Twitch visually confirms the Chat Bot label.
-- Keep `local-user-token` available only as a fallback; it is not the Twitch Chat Bot identity path.
+- Keep `Local Console` available for users who prefer local-only operation; it is not the Twitch Chat Bot identity path.
 - Treat `/live`, `/late`, `/cancelled`, and `/scheduled` as guarded operator actions, not public auto-post shortcuts.

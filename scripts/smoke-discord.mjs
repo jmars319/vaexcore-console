@@ -8,6 +8,7 @@ const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-discord-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
 const guildId = "123456789012345678";
 const botToken = "smoke.discord.bot-token";
+const staffRoleId = "888888888888888888";
 
 process.env.VAEXCORE_CONFIG_DIR = tempDir;
 process.env.DATABASE_URL = `file:${smokeDbPath}`;
@@ -36,6 +37,10 @@ async function runSmoke() {
   assert(appJs.includes('["discord", "Discord"]'), "Discord tab is registered");
   assert(appJs.includes("Server Layout"), "Discord setup UI is present");
   assert(
+    appJs.includes("Lock Staff category"),
+    "Discord Staff privacy toggle is present",
+  );
+  assert(
     appJs.includes("Stream Announcements"),
     "Discord announcement UI is present",
   );
@@ -49,6 +54,10 @@ async function runSmoke() {
   assert(
     cleanStatus.readiness.ready === false,
     "Discord readiness starts blocked",
+  );
+  assert(
+    cleanStatus.config.setupTemplate.name === "Streamer Community Baseline",
+    "Discord baseline template is surfaced",
   );
 
   const saved = await post("/api/discord/config", {
@@ -71,23 +80,76 @@ async function runSmoke() {
   });
   assert(preview.connected === true, "setup preview connects to Discord");
   assert(
-    preview.plan.summary.channelsToCreate >= 18,
+    preview.plan.summary.channelsToCreate >= 17,
     "setup preview plans streamer text and voice channels",
   );
   assert(
     preview.plan.summary.rolesToCreate === 1,
     "setup preview plans optional Stream Alerts role",
   );
+  assert(
+    preview.plan.summary.existingChannels >= 4,
+    "setup preview reuses existing Vaexil-style channels",
+  );
+  assert(
+    preview.plan.actions.some(
+      (action) =>
+        action.type === "use_existing_channel" &&
+        ["general", "clips-and-highlights", "Lobby", "Gaming"].includes(
+          action.name,
+        ),
+    ),
+    "setup preview shows existing baseline channels are reused",
+  );
+
+  const blockedPrivacy = await post("/api/discord/setup/preview", {
+    includeRoles: true,
+    lockStaffCategory: true,
+  });
+  assert(
+    blockedPrivacy.plan.summary.blockedPermissions === 1,
+    "Staff privacy preview is blocked without a Staff role ID",
+  );
+
+  const savedStaff = await post("/api/discord/config", {
+    staffRoleId,
+    lockStaffCategory: true,
+  });
+  assert(
+    savedStaff.config.staffRoleId === staffRoleId,
+    "Discord Staff role ID is saved",
+  );
+
+  const privacyPreview = await post("/api/discord/setup/preview", {
+    includeRoles: true,
+    lockStaffCategory: true,
+    staffRoleId,
+  });
+  assert(
+    privacyPreview.plan.summary.permissionOverwrites === 1,
+    "Staff privacy preview plans a permission overwrite action",
+  );
 
   const applied = await post("/api/discord/setup/apply", {
     includeRoles: true,
+    lockStaffCategory: true,
+    staffRoleId,
   });
   assert(applied.ok === true, "Discord setup apply returns ok");
   assert(
-    applied.createdChannels.length === preview.plan.summary.channelsToCreate,
+    applied.createdChannels.length ===
+      privacyPreview.plan.summary.channelsToCreate,
     "Discord setup creates planned channels",
   );
   assert(applied.createdRoles.length === 1, "Discord setup creates alert role");
+  assert(
+    applied.permissionOverwritesApplied === 2,
+    "Discord setup applies Staff privacy overwrites",
+  );
+  assert(
+    fakeDiscord.permissionOverwrites.length === 2,
+    "fake Discord received only Staff category permission changes",
+  );
   assert(
     applied.config.streamAnnouncementChannelId,
     "Discord setup stores stream announcement channel",
@@ -103,6 +165,8 @@ async function runSmoke() {
 
   const idempotent = await post("/api/discord/setup/apply", {
     includeRoles: true,
+    lockStaffCategory: true,
+    staffRoleId,
   });
   assert(
     idempotent.createdChannels.length === 0,
@@ -143,9 +207,43 @@ async function runSmoke() {
 async function startFakeDiscord() {
   const state = {
     nextId: 200000000000000000n,
-    channels: [],
+    channels: [
+      {
+        id: "111111111111111111",
+        name: "general",
+        type: 0,
+        parent_id: null,
+        topic: null,
+        position: 0,
+      },
+      {
+        id: "111111111111111112",
+        name: "clips-and-highlights",
+        type: 0,
+        parent_id: null,
+        topic: null,
+        position: 1,
+      },
+      {
+        id: "111111111111111113",
+        name: "Lobby",
+        type: 2,
+        parent_id: null,
+        topic: null,
+        position: 2,
+      },
+      {
+        id: "111111111111111114",
+        name: "Gaming",
+        type: 2,
+        parent_id: null,
+        topic: null,
+        position: 3,
+      },
+    ],
     roles: [{ id: guildId, name: "@everyone", managed: false }],
     messages: [],
+    permissionOverwrites: [],
   };
 
   const server = createServer(async (request, response) => {
@@ -221,6 +319,19 @@ async function startFakeDiscord() {
     }
 
     if (
+      request.method === "PUT" &&
+      /^\/api\/v10\/channels\/\d+\/permissions\/\d+$/.test(url.pathname)
+    ) {
+      const body = await readBody(request);
+      state.permissionOverwrites.push({
+        path: url.pathname,
+        body,
+      });
+      send(response, 204, {});
+      return;
+    }
+
+    if (
       request.method === "POST" &&
       /^\/api\/v10\/channels\/\d+\/messages$/.test(url.pathname)
     ) {
@@ -264,6 +375,9 @@ async function startFakeDiscord() {
     },
     get messages() {
       return state.messages;
+    },
+    get permissionOverwrites() {
+      return state.permissionOverwrites;
     },
     stop: () => new Promise((resolve) => server.close(resolve)),
   };
