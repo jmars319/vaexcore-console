@@ -34,11 +34,21 @@ export const registerGiveawayCommands = ({
     );
   });
 
-  router.register("enter", PermissionLevel.Viewer, ({ message, reply }) => {
-    handleEntryCommand({ message, keyword: "enter", reply, service, messages });
-  });
+  router.register(
+    "enter",
+    PermissionLevel.Viewer,
+    async ({ message, reply }) => {
+      await handleEntryCommand({
+        message,
+        keyword: "enter",
+        reply,
+        service,
+        messages,
+      });
+    },
+  );
 
-  router.registerFallback(({ message, name, reply }) => {
+  router.registerFallback(async ({ message, name, reply }) => {
     const status = service.status();
 
     if (
@@ -49,7 +59,13 @@ export const registerGiveawayCommands = ({
       return false;
     }
 
-    handleEntryCommand({ message, keyword: name, reply, service, messages });
+    await handleEntryCommand({
+      message,
+      keyword: name,
+      reply,
+      service,
+      messages,
+    });
     return true;
   });
 
@@ -197,7 +213,7 @@ export const registerGiveawayCommands = ({
   });
 };
 
-const handleEntryCommand = (input: {
+const handleEntryCommand = async (input: {
   message: Parameters<GiveawaysService["enter"]>[0];
   keyword: string;
   reply: (message: string, metadata?: MessageQueueMetadata) => void;
@@ -208,7 +224,7 @@ const handleEntryCommand = (input: {
     return;
   }
 
-  const result = input.service.enter(input.message, input.keyword);
+  const result = await input.service.enter(input.message, input.keyword);
 
   if (result.status === "entered") {
     input.reply(
@@ -230,6 +246,14 @@ const handleEntryCommand = (input: {
         entryCount: result.entryCount,
       }),
       giveawayMessageMetadata("duplicate-entry", result.giveaway.id),
+    );
+    return;
+  }
+
+  if (result.status === "ineligible") {
+    input.reply(
+      `${result.displayName}, you are not eligible for this giveaway: ${result.reason}`,
+      giveawayMessageMetadata("entry-ineligible", result.giveaway.id),
     );
   }
 };

@@ -18,6 +18,7 @@ export const optionalCreatorOpsScopes = [
   "moderator:manage:announcements",
   "moderator:manage:shoutouts",
 ] as const;
+export const optionalGiveawayScopes = ["moderator:read:followers"] as const;
 
 export type TokenValidation = {
   client_id: string;

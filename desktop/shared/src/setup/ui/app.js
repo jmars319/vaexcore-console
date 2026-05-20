@@ -326,6 +326,7 @@ const api = {
   botStart: () => api.post("/api/bot/start"),
   botStop: () => api.post("/api/bot/stop"),
   giveaway: () => api.get("/api/giveaway"),
+  giveawayExport: () => api.get("/api/giveaway/export"),
   templates: () => api.get("/api/giveaway/templates"),
   saveTemplates: (templates) =>
     api.post("/api/giveaway/templates", { templates }),
@@ -3461,7 +3462,7 @@ function renderGiveaways() {
     renderGiveawayTemplatesCard(),
     renderGiveawayRecapCard(),
     renderGiveawayOutboundCard(),
-    card("Start Giveaway", [
+    card("Structured Game-Key Giveaway", [
       h("div", { className: "grid three" }, [
         formRow(
           "Title",
@@ -3480,11 +3481,137 @@ function renderGiveaways() {
             onInput: updateGiveawayDraft,
           }),
         ),
+        formRow(
+          "Entry window minutes",
+          h("input", {
+            id: "entryWindowMinutes",
+            type: "number",
+            min: "1",
+            onInput: updateGiveawayDraft,
+          }),
+        ),
+        formRow(
+          "Item name",
+          h("input", { id: "itemName", onInput: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Game name",
+          h("input", { id: "gameName", onInput: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Item edition",
+          h("input", { id: "itemEdition", onInput: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Prize type",
+          h("select", { id: "prizeType", onChange: updateGiveawayDraft }, [
+            option("standard_game_key", "standard game key"),
+            option("deluxe_game_key", "deluxe game key"),
+            option("dlc_key", "dlc key"),
+            option("other", "other"),
+          ]),
+        ),
+        formRow(
+          "Platform mode",
+          h("select", { id: "platformMode", onChange: updateGiveawayDraft }, [
+            option("winner_selects_after_win", "winner selects after win"),
+            option("fixed_platform", "fixed platform"),
+          ]),
+        ),
+        formRow(
+          "Supported platforms",
+          h("input", {
+            id: "supportedPlatforms",
+            onInput: updateGiveawayDraft,
+          }),
+        ),
+        formRow(
+          "Minimum follow age days",
+          h("input", {
+            id: "minimumFollowAgeDays",
+            type: "number",
+            min: "0",
+            onInput: updateGiveawayDraft,
+          }),
+        ),
+        formRow(
+          "Response window minutes",
+          h("input", {
+            id: "responseWindowMinutes",
+            type: "number",
+            min: "1",
+            onInput: updateGiveawayDraft,
+          }),
+        ),
+        formRow(
+          "Previous winner restriction",
+          h(
+            "select",
+            {
+              id: "previousWinnerRestrictionMode",
+              onChange: updateGiveawayDraft,
+            },
+            [
+              option("base_game_blocks_deluxe", "base game blocks deluxe"),
+              option("exact_item_only", "exact item only"),
+              option("none", "none"),
+            ],
+          ),
+        ),
+        formRow(
+          "Marketplace",
+          h("input", { id: "marketplaceName", onInput: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Marketplace note",
+          h("input", { id: "marketplaceNote", onInput: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Age guidance",
+          h("input", { id: "ageGuidanceText", onInput: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Region availability note",
+          h("input", {
+            id: "regionAvailabilityDisclaimer",
+            onInput: updateGiveawayDraft,
+          }),
+        ),
       ]),
+      callout(
+        "Marketplace disclosure stays neutral: Marketplace: Eneba. Key purchased after winner confirms platform/region. Not sponsored. No affiliate link.",
+        "muted",
+      ),
       h("div", { className: "actions" }, [
         actionButton("Start giveaway", {
           id: "gstart",
           onClick: startGiveaway,
+        }),
+        actionButton("Save config", {
+          id: "gconfig",
+          variant: "secondary",
+          onClick: saveGiveawayConfig,
+        }),
+        actionButton("Start/reset timer", {
+          id: "gtimerStart",
+          variant: "secondary",
+          onClick: () =>
+            runGiveawayAction("timer", {
+              action: "reset",
+              minutes: Number(field("entryWindowMinutes").value || 10),
+            }),
+        }),
+        actionButton("Stop timer", {
+          id: "gtimerStop",
+          variant: "secondary",
+          onClick: () => runGiveawayAction("timer", { action: "stop" }),
+        }),
+        h("a", {
+          className: "button secondary",
+          href: "/giveaway-overlay",
+          target: "_blank",
+          rel: "noreferrer",
+          text: "Open OBS overlay",
         }),
         actionButton("Send last call", {
           id: "glastcall",
@@ -3522,6 +3649,50 @@ function renderGiveaways() {
           "Deliver winner",
           h("select", { id: "deliverSelect", onChange: updateGiveawayDraft }),
         ),
+        formRow(
+          "Confirm winner",
+          h("select", { id: "confirmSelect", onChange: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Expire winner",
+          h("select", { id: "expireSelect", onChange: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Purchase winner",
+          h("select", {
+            id: "purchaseStatusWinnerSelect",
+            onChange: updateGiveawayDraft,
+          }),
+        ),
+        formRow(
+          "Selected platform",
+          h("input", { id: "selectedPlatform", onInput: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Region/country",
+          h("input", { id: "regionCountry", onInput: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Delivery method",
+          h("input", { id: "deliveryMethod", onInput: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Marketplace used",
+          h("input", { id: "marketplaceUsed", onInput: updateGiveawayDraft }),
+        ),
+        formRow(
+          "Purchase status",
+          h("select", { id: "purchaseStatus", onChange: updateGiveawayDraft }, [
+            option("not_purchased", "not purchased"),
+            option("pending_purchase", "pending purchase"),
+            option("purchased", "purchased"),
+            option("delivered", "delivered"),
+            option(
+              "activation_confirmed_optional",
+              "activation confirmed optional",
+            ),
+          ]),
+        ),
       ]),
       h("div", { className: "actions" }, [
         actionButton("Draw winners", {
@@ -3544,6 +3715,24 @@ function renderGiveaways() {
               "Reroll this winner?",
             ),
         }),
+        actionButton("Confirm winner", {
+          id: "gconfirm",
+          variant: "secondary",
+          onClick: confirmWinner,
+        }),
+        actionButton("Mark expired", {
+          id: "gexpire",
+          variant: "secondary",
+          onClick: () =>
+            runGiveawayAction("expire", {
+              username: field("expireSelect").value,
+            }),
+        }),
+        actionButton("Set purchase status", {
+          id: "gpurchaseStatus",
+          variant: "secondary",
+          onClick: setWinnerPurchaseStatus,
+        }),
         actionButton("Mark claimed", {
           id: "gclaim",
           variant: "secondary",
@@ -3564,6 +3753,11 @@ function renderGiveaways() {
           id: "copyWinners",
           variant: "secondary",
           onClick: copyWinnerList,
+        }),
+        actionButton("Copy/export results", {
+          id: "exportGiveawayResults",
+          variant: "secondary",
+          onClick: exportGiveawayResults,
         }),
         actionButton("Mark all delivered", {
           id: "gdeliverAll",
@@ -6337,10 +6531,20 @@ function renderEntrantsTable() {
       }),
     ]),
     dataTable(
-      ["User", "Entered"],
+      ["User", "Eligibility", "Follow age", "Entered", "Action"],
       filtered.map((entry) => [
         `${entry.display_name} @${entry.login}`,
+        entry.eligibility_status || "eligible",
+        entry.follow_age_days
+          ? `${entry.follow_age_days} day(s)`
+          : entry.followed_at
+            ? "verified"
+            : "",
         entry.entered_at,
+        actionButton("Remove", {
+          variant: "secondary",
+          onClick: () => removeEntrant(entry.login),
+        }),
       ]),
     ),
   ]);
@@ -6372,14 +6576,25 @@ function renderWinnersTable() {
       h("span", { className: "count", text: `${winners.length} visible` }),
     ]),
     dataTable(
-      ["User", "Status", "Drawn", "Claimed", "Delivered", "Rerolled"],
+      [
+        "User",
+        "Status",
+        "Response deadline",
+        "Platform",
+        "Region",
+        "Purchase",
+        "Drawn",
+        "Delivered",
+      ],
       winners.map((winner) => [
         `${winner.display_name} @${winner.login}`,
-        winnerStatus(winner),
+        winner.status || winnerStatus(winner),
+        winner.response_expires_at || "",
+        winner.selected_platform || "",
+        winner.region_country || "",
+        winner.purchase_status || "not_purchased",
         winner.drawn_at,
-        winner.claimed_at || "",
         winner.delivered_at || "",
-        winner.rerolled_at || "",
       ]),
     ),
   ]);
@@ -6431,12 +6646,26 @@ function option(value, label) {
 }
 
 function giveawayRows(summary = {}) {
+  const config = summary.config || {};
+  const timer = summary.timer || {};
   return [
     ["Status", summary.status || "none"],
     ["Title", summary.title || "none"],
+    [
+      "Prize",
+      [config.gameName, config.itemEdition].filter(Boolean).join(" - ") ||
+        config.itemName ||
+        "none",
+    ],
     ["Keyword", summary.keyword || "enter"],
     ["Winners", `${summary.winnersDrawn || 0}/${summary.winnerCount || 0}`],
     ["Entries", summary.entryCount || 0],
+    [
+      "Timer",
+      timer.running ? formatRemaining(timer.remainingMs) : "not running",
+    ],
+    ["Pending", summary.pendingConfirmationCount || 0],
+    ["Expired", summary.expiredWinnerCount || 0],
     [
       "Enough Entrants",
       summary.enoughEntrantsForFullDraw ? "yes" : "no",
@@ -6449,6 +6678,11 @@ function giveawayRows(summary = {}) {
     ],
     ["Rerolled", summary.rerolledCount || 0],
   ];
+}
+
+function formatRemaining(ms = 0) {
+  const seconds = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
+  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 function currentLaunchPreparation() {
@@ -7673,11 +7907,36 @@ async function runAction(key, fn, options = {}) {
 }
 
 async function startGiveaway() {
-  await runGiveawayAction("start", {
+  await runGiveawayAction("start", giveawayConfigBody());
+}
+
+async function saveGiveawayConfig() {
+  await runGiveawayAction("config", giveawayConfigBody());
+}
+
+function giveawayConfigBody() {
+  return {
     title: field("giveawayTitle").value,
     keyword: field("giveawayKeyword").value || "enter",
     winnerCount: Number(field("winnerCount").value || 1),
-  });
+    entryWindowMinutes: Number(field("entryWindowMinutes").value || 10),
+    itemName: field("itemName").value,
+    gameName: field("gameName").value,
+    itemEdition: field("itemEdition").value,
+    prizeType: field("prizeType").value,
+    platformMode: field("platformMode").value,
+    supportedPlatforms: String(field("supportedPlatforms").value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+    minimumFollowAgeDays: Number(field("minimumFollowAgeDays").value || 7),
+    responseWindowMinutes: Number(field("responseWindowMinutes").value || 7),
+    previousWinnerRestrictionMode: field("previousWinnerRestrictionMode").value,
+    marketplaceName: field("marketplaceName").value,
+    marketplaceNote: field("marketplaceNote").value,
+    ageGuidanceText: field("ageGuidanceText").value,
+    regionAvailabilityDisclaimer: field("regionAvailabilityDisclaimer").value,
+  };
 }
 
 async function runGiveawayAction(name, body = {}, confirmation) {
@@ -7713,6 +7972,48 @@ async function endGiveaway() {
     return;
   }
   await runGiveawayAction("end");
+}
+
+async function confirmWinner() {
+  await runGiveawayAction("confirm", {
+    username: field("confirmSelect").value,
+    selectedPlatform: field("selectedPlatform").value,
+    regionCountry: field("regionCountry").value,
+    deliveryMethod: field("deliveryMethod").value,
+    marketplaceUsed: field("marketplaceUsed").value,
+    purchaseStatus: field("purchaseStatus").value,
+  });
+}
+
+async function setWinnerPurchaseStatus() {
+  await runGiveawayAction("purchase-status", {
+    username: field("purchaseStatusWinnerSelect").value,
+    purchaseStatus: field("purchaseStatus").value,
+  });
+}
+
+async function removeEntrant(login) {
+  if (!confirm(`Remove ${login} from this giveaway?`)) {
+    return;
+  }
+  await runGiveawayAction("remove-entrant", {
+    username: login,
+    reason: "Removed by operator",
+  });
+}
+
+async function exportGiveawayResults() {
+  await runAction(
+    "exportGiveawayResults",
+    async () => {
+      const result = await api.giveawayExport();
+      const text = JSON.stringify(result.export || {}, null, 2);
+      await navigator.clipboard?.writeText(text);
+      state.lastGiveawayExport = result.export;
+      return result;
+    },
+    { success: "Redacted giveaway results copied." },
+  );
 }
 
 async function runSimulatedCommand() {
@@ -10362,6 +10663,121 @@ function syncFormValues() {
     "winnerCount",
     giveawayValue("winnerCount", summary.winnerCount || 3),
   );
+  const giveawayConfig = summary.config || {};
+  setValue(
+    "entryWindowMinutes",
+    giveawayValue(
+      "entryWindowMinutes",
+      giveawayConfig.entryWindowMinutes || 10,
+    ),
+  );
+  setValue(
+    "itemName",
+    giveawayValue("itemName", giveawayConfig.itemName || summary.title || ""),
+  );
+  setValue(
+    "gameName",
+    giveawayValue("gameName", giveawayConfig.gameName || ""),
+  );
+  setValue(
+    "itemEdition",
+    giveawayValue(
+      "itemEdition",
+      giveawayConfig.itemEdition || "Standard Edition",
+    ),
+  );
+  setValue(
+    "prizeType",
+    giveawayValue("prizeType", giveawayConfig.prizeType || "standard_game_key"),
+  );
+  setValue(
+    "platformMode",
+    giveawayValue(
+      "platformMode",
+      giveawayConfig.platformMode || "winner_selects_after_win",
+    ),
+  );
+  setValue(
+    "supportedPlatforms",
+    giveawayValue(
+      "supportedPlatforms",
+      (
+        giveawayConfig.supportedPlatforms || [
+          "Steam",
+          "Xbox",
+          "PlayStation",
+          "Epic",
+          "Other / manual",
+        ]
+      ).join(", "),
+    ),
+  );
+  setValue(
+    "minimumFollowAgeDays",
+    giveawayValue(
+      "minimumFollowAgeDays",
+      giveawayConfig.minimumFollowAgeDays || 7,
+    ),
+  );
+  setValue(
+    "responseWindowMinutes",
+    giveawayValue(
+      "responseWindowMinutes",
+      giveawayConfig.responseWindowMinutes || 7,
+    ),
+  );
+  setValue(
+    "previousWinnerRestrictionMode",
+    giveawayValue(
+      "previousWinnerRestrictionMode",
+      giveawayConfig.previousWinnerRestrictionMode || "base_game_blocks_deluxe",
+    ),
+  );
+  setValue(
+    "marketplaceName",
+    giveawayValue("marketplaceName", giveawayConfig.marketplaceName || "Eneba"),
+  );
+  setValue(
+    "marketplaceNote",
+    giveawayValue(
+      "marketplaceNote",
+      giveawayConfig.marketplaceNote ||
+        "Key sourced after winner confirms platform/region.",
+    ),
+  );
+  setValue(
+    "ageGuidanceText",
+    giveawayValue(
+      "ageGuidanceText",
+      giveawayConfig.ageGuidanceText ||
+        "Game is rated Mature. Please only enter if this is appropriate for you.",
+    ),
+  );
+  setValue(
+    "regionAvailabilityDisclaimer",
+    giveawayValue(
+      "regionAvailabilityDisclaimer",
+      giveawayConfig.regionAvailabilityDisclaimer ||
+        "Prize availability depends on platform, region, and legitimate purchasable key availability.",
+    ),
+  );
+  setValue(
+    "selectedPlatform",
+    giveawayValue(
+      "selectedPlatform",
+      giveawayConfig.supportedPlatforms?.[0] || "Steam",
+    ),
+  );
+  setValue("regionCountry", giveawayValue("regionCountry", ""));
+  setValue(
+    "deliveryMethod",
+    giveawayValue("deliveryMethod", "manual after stream"),
+  );
+  setValue(
+    "marketplaceUsed",
+    giveawayValue("marketplaceUsed", config.marketplaceName || "Eneba"),
+  );
+  setValue("purchaseStatus", giveawayValue("purchaseStatus", "not_purchased"));
   setValue("drawCount", giveawayValue("drawCount", suggestedDrawCount()));
   for (const template of state.templates || []) {
     setValue(
@@ -10486,6 +10902,15 @@ function syncWinnerSelects() {
     "deliverSelect",
     activeWinners.filter((winner) => !winner.delivered_at),
   );
+  setOptions(
+    "confirmSelect",
+    activeWinners.filter((winner) => winner.status !== "confirmed"),
+  );
+  setOptions(
+    "expireSelect",
+    activeWinners.filter((winner) => winner.status !== "expired"),
+  );
+  setOptions("purchaseStatusWinnerSelect", activeWinners);
 }
 
 function setOptions(id, winners) {
@@ -10546,6 +10971,21 @@ function updateDisabledState() {
     "Start is disabled because a giveaway already exists.",
   );
   setDisabled(
+    "gconfig",
+    !hasGiveaway,
+    "Save config is disabled until a giveaway exists.",
+  );
+  setDisabled(
+    "gtimerStart",
+    status !== "open",
+    "Timer controls are disabled unless entries are open.",
+  );
+  setDisabled(
+    "gtimerStop",
+    status !== "open" || !summary.timer?.running,
+    "Stop timer is disabled unless the entry timer is running.",
+  );
+  setDisabled(
     "glastcall",
     status !== "open",
     "Last call is disabled unless entries are open.",
@@ -10576,6 +11016,22 @@ function updateDisabledState() {
     "Claim is disabled until an unclaimed winner exists.",
   );
   setDisabled(
+    "gconfirm",
+    activeWinners.filter((winner) => winner.status !== "confirmed").length ===
+      0,
+    "Confirm is disabled until a pending or expired winner exists.",
+  );
+  setDisabled(
+    "gexpire",
+    activeWinners.filter((winner) => winner.status !== "expired").length === 0,
+    "Expire is disabled until a pending winner exists.",
+  );
+  setDisabled(
+    "gpurchaseStatus",
+    activeWinners.length === 0,
+    "Purchase status is disabled until winners exist.",
+  );
+  setDisabled(
     "gdeliver",
     undelivered.length === 0,
     "Deliver is disabled until an undelivered winner exists.",
@@ -10589,6 +11045,11 @@ function updateDisabledState() {
     "copyWinners",
     activeWinners.length === 0,
     "Copy winners is disabled until winners exist.",
+  );
+  setDisabled(
+    "exportGiveawayResults",
+    !hasGiveaway && !hasRecap,
+    "Export is disabled until a giveaway or recap exists.",
   );
   setDisabled(
     "dashboardSendGiveawayStatus",

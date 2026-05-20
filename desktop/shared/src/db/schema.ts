@@ -298,6 +298,191 @@ export const initializeSchema = (db: DbClient) => {
   );
   ensureColumn(db, "outbound_messages", "retry_after_ms", "INTEGER");
   ensureColumn(db, "outbound_messages", "next_attempt_at", "TEXT");
+  ensureColumn(db, "giveaways", "item_name", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "giveaways", "item_edition", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "giveaways", "game_name", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(
+    db,
+    "giveaways",
+    "marketplace_name",
+    "TEXT NOT NULL DEFAULT 'Eneba'",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "marketplace_note",
+    "TEXT NOT NULL DEFAULT 'Key sourced after winner confirms platform/region.'",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "platform_mode",
+    "TEXT NOT NULL DEFAULT 'winner_selects_after_win'",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "supported_platforms_json",
+    'TEXT NOT NULL DEFAULT \'["Steam","Xbox","PlayStation","Epic","Other / manual"]\'',
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "prize_type",
+    "TEXT NOT NULL DEFAULT 'standard_game_key'",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "minimum_follow_age_days",
+    "INTEGER NOT NULL DEFAULT 7",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "must_be_present_to_win",
+    "INTEGER NOT NULL DEFAULT 1",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "response_window_minutes",
+    "INTEGER NOT NULL DEFAULT 7",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "one_entry_per_person",
+    "INTEGER NOT NULL DEFAULT 1",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "allow_extra_entries",
+    "INTEGER NOT NULL DEFAULT 0",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "previous_winner_restriction_mode",
+    "TEXT NOT NULL DEFAULT 'base_game_blocks_deluxe'",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "age_guidance_text",
+    "TEXT NOT NULL DEFAULT 'Game is rated Mature. Please only enter if this is appropriate for you.'",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "region_availability_disclaimer",
+    "TEXT NOT NULL DEFAULT 'Prize availability depends on platform, region, and legitimate purchasable key availability.'",
+  );
+  ensureColumn(
+    db,
+    "giveaways",
+    "entry_window_minutes",
+    "INTEGER NOT NULL DEFAULT 10",
+  );
+  ensureColumn(db, "giveaways", "entries_close_at", "TEXT");
+  ensureColumn(db, "giveaways", "timer_started_at", "TEXT");
+  ensureColumn(
+    db,
+    "giveaways",
+    "operator_twitch_user_id",
+    "TEXT NOT NULL DEFAULT ''",
+  );
+  ensureColumn(db, "giveaways", "operator_login", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "giveaways", "draw_seed", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "giveaways", "draw_result_json", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "giveaways", "last_draw_at", "TEXT");
+  ensureColumn(
+    db,
+    "giveaway_entries",
+    "eligibility_status",
+    "TEXT NOT NULL DEFAULT 'eligible'",
+  );
+  ensureColumn(
+    db,
+    "giveaway_entries",
+    "eligibility_reason",
+    "TEXT NOT NULL DEFAULT ''",
+  );
+  ensureColumn(db, "giveaway_entries", "followed_at", "TEXT");
+  ensureColumn(db, "giveaway_entries", "follow_checked_at", "TEXT");
+  ensureColumn(
+    db,
+    "giveaway_entries",
+    "follow_age_days",
+    "INTEGER NOT NULL DEFAULT 0",
+  );
+  ensureColumn(
+    db,
+    "giveaway_entries",
+    "is_operator",
+    "INTEGER NOT NULL DEFAULT 0",
+  );
+  ensureColumn(db, "giveaway_entries", "is_mod", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "giveaway_entries", "removed_at", "TEXT");
+  ensureColumn(
+    db,
+    "giveaway_entries",
+    "removed_reason",
+    "TEXT NOT NULL DEFAULT ''",
+  );
+  ensureColumn(
+    db,
+    "giveaway_winners",
+    "status",
+    "TEXT NOT NULL DEFAULT 'pending_confirmation'",
+  );
+  ensureColumn(db, "giveaway_winners", "response_expires_at", "TEXT");
+  ensureColumn(db, "giveaway_winners", "expired_at", "TEXT");
+  ensureColumn(db, "giveaway_winners", "confirmed_at", "TEXT");
+  ensureColumn(
+    db,
+    "giveaway_winners",
+    "selected_platform",
+    "TEXT NOT NULL DEFAULT ''",
+  );
+  ensureColumn(
+    db,
+    "giveaway_winners",
+    "region_country",
+    "TEXT NOT NULL DEFAULT ''",
+  );
+  ensureColumn(
+    db,
+    "giveaway_winners",
+    "delivery_method",
+    "TEXT NOT NULL DEFAULT ''",
+  );
+  ensureColumn(
+    db,
+    "giveaway_winners",
+    "marketplace_used",
+    "TEXT NOT NULL DEFAULT ''",
+  );
+  ensureColumn(
+    db,
+    "giveaway_winners",
+    "purchase_status",
+    "TEXT NOT NULL DEFAULT 'not_purchased'",
+  );
+  ensureColumn(
+    db,
+    "giveaway_winners",
+    "fulfillment_status",
+    "TEXT NOT NULL DEFAULT 'not_fulfilled'",
+  );
+  ensureColumn(
+    db,
+    "giveaway_winners",
+    "confirmation_notes",
+    "TEXT NOT NULL DEFAULT ''",
+  );
+  ensureColumn(db, "giveaway_winners", "draw_seed", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "timers", "min_chat_messages", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(
     db,

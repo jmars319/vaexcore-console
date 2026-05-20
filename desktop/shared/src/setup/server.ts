@@ -70,7 +70,11 @@ import {
 import { createDbClient, resolveDatabasePath } from "../db/client";
 import { registerGiveawayCommands } from "../modules/giveaways/giveaways.commands";
 import { formatWinnerNames } from "../modules/giveaways/giveaways.messages";
-import { GiveawaysService } from "../modules/giveaways/giveaways.service";
+import {
+  GiveawaysService,
+  parseSupportedPlatforms,
+  type GiveawayFollowAgeResolver,
+} from "../modules/giveaways/giveaways.service";
 import { createGiveawayTemplateStore } from "../modules/giveaways/giveaways.templates";
 import { ModerationService } from "../modules/moderation/moderation.module";
 import { TimersService, timerMetadata } from "../modules/timers/timers.module";
@@ -127,6 +131,7 @@ import {
   updateDiscordRelayActionStatus,
 } from "../discord/relayActions";
 import { TwitchChatSender } from "../twitch/sendMessage";
+import { getChannelFollower } from "../twitch/followers";
 import {
   TwitchCreatorOpsClient,
   TwitchCreatorOpsError,
@@ -222,7 +227,11 @@ const botValidationLabels: Record<BotValidationKey, string> = {
   discordAnnouncementCommandTestedAt: "Discord announcement command tested",
 };
 
-const giveawaysService = new GiveawaysService({ db, logger });
+const giveawaysService = new GiveawaysService({
+  db,
+  logger,
+  followAgeResolver: resolveGiveawayFollowAge,
+});
 const featureGates = createFeatureGateStore(db);
 const customCommandsService = new CustomCommandsService(db, { featureGates });
 const timersService = new TimersService(db);
@@ -333,6 +342,11 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
 
   if (request.method === "GET" && url.pathname === "/") {
     sendHtml(response, setupShellHtml);
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/giveaway-overlay") {
+    sendHtml(response, giveawayOverlayHtml);
     return;
   }
 
@@ -983,6 +997,19 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/giveaway/overlay") {
+    sendJson(response, 200, getGiveawayOverlayState());
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/giveaway/export") {
+    sendJson(response, 200, {
+      ok: true,
+      export: giveawaysService.exportResults(),
+    });
+    return;
+  }
+
   if (
     request.method === "POST" &&
     url.pathname === "/api/giveaway/announcement/resend"
@@ -1052,6 +1079,26 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
       title?: string;
       keyword?: string;
       winnerCount?: number;
+      itemName?: string;
+      itemEdition?: string;
+      gameName?: string;
+      marketplaceName?: string;
+      marketplaceNote?: string;
+      platformMode?: "winner_selects_after_win" | "fixed_platform";
+      supportedPlatforms?: string[];
+      prizeType?: "standard_game_key" | "deluxe_game_key" | "dlc_key" | "other";
+      minimumFollowAgeDays?: number;
+      mustBePresentToWin?: boolean;
+      responseWindowMinutes?: number;
+      oneEntryPerPerson?: boolean;
+      allowExtraEntries?: boolean;
+      previousWinnerRestrictionMode?:
+        | "exact_item_only"
+        | "base_game_blocks_deluxe"
+        | "none";
+      ageGuidanceText?: string;
+      regionAvailabilityDisclaimer?: string;
+      entryWindowMinutes?: number;
       echoToChat?: boolean;
     };
     const title = sanitizeGiveawayTitle(body.title);
@@ -1065,13 +1112,30 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     sendJson(
       response,
       200,
-      runGiveawayAction(
+      await runGiveawayAction(
         () => {
           const giveaway = giveawaysService.start({
             actor: localUiActor,
             title,
             keyword,
             winnerCount,
+            itemName: body.itemName,
+            itemEdition: body.itemEdition,
+            gameName: body.gameName,
+            marketplaceName: body.marketplaceName,
+            marketplaceNote: body.marketplaceNote,
+            platformMode: body.platformMode,
+            supportedPlatforms: body.supportedPlatforms,
+            prizeType: body.prizeType,
+            minimumFollowAgeDays: body.minimumFollowAgeDays,
+            mustBePresentToWin: body.mustBePresentToWin,
+            responseWindowMinutes: body.responseWindowMinutes,
+            oneEntryPerPerson: body.oneEntryPerPerson,
+            allowExtraEntries: body.allowExtraEntries,
+            previousWinnerRestrictionMode: body.previousWinnerRestrictionMode,
+            ageGuidanceText: body.ageGuidanceText,
+            regionAvailabilityDisclaimer: body.regionAvailabilityDisclaimer,
+            entryWindowMinutes: body.entryWindowMinutes,
           });
           return { giveaway };
         },
@@ -1099,12 +1163,60 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/giveaway/config") {
+    const body = await readJson(request);
+    sendJson(
+      response,
+      200,
+      await runGiveawayAction(() => ({
+        giveaway: giveawaysService.updateConfig(
+          localUiActor,
+          body as Parameters<GiveawaysService["updateConfig"]>[1],
+        ),
+      })),
+    );
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/giveaway/timer") {
+    const body = (await readJson(request)) as {
+      action?: "start" | "stop" | "reset";
+      minutes?: number;
+    };
+    sendJson(
+      response,
+      200,
+      await runGiveawayAction(() => {
+        if (body.action === "stop") {
+          return { giveaway: giveawaysService.stopEntryTimer(localUiActor) };
+        }
+
+        if (body.action === "reset") {
+          return {
+            giveaway: giveawaysService.resetEntryTimer(
+              localUiActor,
+              body.minutes,
+            ),
+          };
+        }
+
+        return {
+          giveaway: giveawaysService.startEntryTimer(
+            localUiActor,
+            body.minutes,
+          ),
+        };
+      }),
+    );
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/giveaway/close") {
     const body = (await readJson(request)) as { echoToChat?: boolean };
     sendJson(
       response,
       200,
-      runGiveawayAction(
+      await runGiveawayAction(
         () => ({
           giveaway: giveawaysService.close(localUiActor),
         }),
@@ -1140,7 +1252,7 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     sendJson(
       response,
       200,
-      runGiveawayAction(
+      await runGiveawayAction(
         () => {
           const status = giveawaysService.status();
 
@@ -1190,7 +1302,7 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     sendJson(
       response,
       200,
-      runGiveawayAction(
+      await runGiveawayAction(
         () => ({
           result: giveawaysService.draw(localUiActor, count),
         }),
@@ -1228,7 +1340,7 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     sendJson(
       response,
       200,
-      runGiveawayAction(
+      await runGiveawayAction(
         () => ({
           result: giveawaysService.reroll(
             localUiActor,
@@ -1273,7 +1385,7 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     sendJson(
       response,
       200,
-      runGiveawayAction(
+      await runGiveawayAction(
         () => ({
           result: giveawaysService.claim(
             localUiActor,
@@ -1291,6 +1403,77 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/giveaway/confirm") {
+    const body = (await readJson(request)) as {
+      username?: string;
+      selectedPlatform?: string;
+      regionCountry?: string;
+      deliveryMethod?: string;
+      marketplaceUsed?: string;
+      purchaseStatus?:
+        | "not_purchased"
+        | "pending_purchase"
+        | "purchased"
+        | "delivered"
+        | "activation_confirmed_optional";
+      notes?: string;
+    };
+    sendJson(
+      response,
+      200,
+      await runGiveawayAction(() => ({
+        result: giveawaysService.confirm(
+          localUiActor,
+          requireUsername(body.username),
+          body,
+        ),
+      })),
+    );
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/giveaway/expire") {
+    const body = (await readJson(request)) as { username?: string };
+    sendJson(
+      response,
+      200,
+      await runGiveawayAction(() => ({
+        result: giveawaysService.expireWinner(
+          localUiActor,
+          requireUsername(body.username),
+        ),
+      })),
+    );
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/giveaway/purchase-status"
+  ) {
+    const body = (await readJson(request)) as {
+      username?: string;
+      purchaseStatus?:
+        | "not_purchased"
+        | "pending_purchase"
+        | "purchased"
+        | "delivered"
+        | "activation_confirmed_optional";
+    };
+    sendJson(
+      response,
+      200,
+      await runGiveawayAction(() => ({
+        result: giveawaysService.setPurchaseStatus(
+          localUiActor,
+          requireUsername(body.username),
+          body.purchaseStatus,
+        ),
+      })),
+    );
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/giveaway/deliver") {
     const body = (await readJson(request)) as {
       username?: string;
@@ -1299,7 +1482,7 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     sendJson(
       response,
       200,
-      runGiveawayAction(
+      await runGiveawayAction(
         () => ({
           result: giveawaysService.deliver(
             localUiActor,
@@ -1324,7 +1507,7 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     sendJson(
       response,
       200,
-      runGiveawayAction(() => ({
+      await runGiveawayAction(() => ({
         result: giveawaysService.deliverAll(localUiActor),
       })),
     );
@@ -1336,7 +1519,7 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     sendJson(
       response,
       200,
-      runGiveawayAction(
+      await runGiveawayAction(
         () => ({
           giveaway: giveawaysService.end(localUiActor),
         }),
@@ -1375,14 +1558,17 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     const body = (await readJson(request)) as {
       login?: string;
       displayName?: string;
+      role?: LocalChatRole;
+      followAgeDays?: number;
+      followVerified?: boolean;
       echoToChat?: boolean;
     };
     sendJson(
       response,
       200,
-      runGiveawayAction(
-        () => ({
-          result: giveawaysService.addSimulatedEntrant(
+      await runGiveawayAction(
+        async () => ({
+          result: await giveawaysService.addSimulatedEntrant(
             simulatedChatActor,
             createLocalChatMessage({
               login: requireUsername(body.login),
@@ -1390,8 +1576,10 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
                 body.displayName,
                 requireUsername(body.login),
               ),
-              role: "viewer",
+              role: body.role ?? "viewer",
               text: "!enter",
+              followAgeDays: body.followAgeDays,
+              followVerified: body.followVerified,
             }),
           ),
         }),
@@ -1416,6 +1604,28 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/giveaway/remove-entrant"
+  ) {
+    const body = (await readJson(request)) as {
+      username?: string;
+      reason?: string;
+    };
+    sendJson(
+      response,
+      200,
+      await runGiveawayAction(() => ({
+        result: giveawaysService.removeEntrant(
+          localUiActor,
+          requireUsername(body.username),
+          body.reason,
+        ),
+      })),
+    );
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/command/simulate") {
     const body = (await readJson(request)) as {
       actor?: string;
@@ -1435,7 +1645,7 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     sendJson(
       response,
       200,
-      runLocalLifecycleTest({
+      await runLocalLifecycleTest({
         echoToChat: Boolean(body.echoToChat),
         confirmed: Boolean(body.confirmed),
       }),
@@ -8186,6 +8396,47 @@ const getGiveawayState = () => {
   };
 };
 
+const getGiveawayOverlayState = () => {
+  const state = getGiveawayState();
+  const activeWinners = (state.winners || []).filter(
+    (winner) => !winner.rerolled_at,
+  );
+  const latestWinner = activeWinners[activeWinners.length - 1];
+  return {
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    summary: state.summary,
+    giveaway: state.giveaway
+      ? {
+          id: state.giveaway.id,
+          title: state.giveaway.title,
+          keyword: state.giveaway.keyword,
+          status: state.giveaway.status,
+        }
+      : undefined,
+    entrantCount: state.summary.entryCount,
+    rules: state.summary.rules,
+    marketplace: {
+      name: state.summary.config.marketplaceName,
+      note: "Key purchased after winner confirms platform/region.",
+      disclosure: "Not sponsored. No affiliate link.",
+    },
+    platformNote: state.summary.config.regionAvailabilityDisclaimer,
+    timer: state.summary.timer,
+    responseTimer: state.summary.responseTimer,
+    latestWinner: latestWinner
+      ? {
+          login: latestWinner.login,
+          displayName: latestWinner.display_name,
+          status: latestWinner.status,
+          drawnAt: latestWinner.drawn_at,
+          responseExpiresAt: latestWinner.response_expires_at,
+          selectedPlatform: latestWinner.selected_platform,
+        }
+      : undefined,
+  };
+};
+
 const summarizeGiveawayState = (
   state: ReturnType<GiveawaysService["getOperatorState"]>,
 ) => {
@@ -8205,11 +8456,42 @@ const summarizeGiveawayState = (
     title: state.giveaway?.title ?? "",
     keyword: state.giveaway?.keyword ?? "enter",
     winnerCount,
+    config: state.giveaway
+      ? giveawayConfigSummary(state.giveaway)
+      : giveawayConfigSummary(),
     entryCount: state.counts.entries,
     winnersDrawn: state.counts.activeWinners,
     rerolledCount: state.counts.rerolledWinners,
+    pendingConfirmationCount: activeWinners.filter(
+      (winner) => winner.status === "pending_confirmation",
+    ).length,
+    confirmedWinnerCount: activeWinners.filter(
+      (winner) => winner.status === "confirmed",
+    ).length,
+    expiredWinnerCount: activeWinners.filter(
+      (winner) => winner.status === "expired",
+    ).length,
     enoughEntrantsForFullDraw: state.counts.entries >= winnerCount,
     undeliveredWinnersCount,
+    eligibility: {
+      eligibleEntries: state.entries.filter(
+        (entry) => entry.eligibility_status === "eligible",
+      ).length,
+      removedEntries: state.entries.filter(
+        (entry) => entry.eligibility_status === "removed",
+      ).length,
+      minimumFollowAgeDays: state.giveaway?.minimum_follow_age_days ?? 7,
+    },
+    timer: giveawayTimerSummary(state.giveaway),
+    responseTimer: giveawayResponseTimerSummary(activeWinners),
+    rules: giveawayRuleSummary(state.giveaway),
+    draw: state.giveaway
+      ? {
+          seed: state.giveaway.draw_seed,
+          result: safeJsonObject(state.giveaway.draw_result_json),
+          lastDrawAt: state.giveaway.last_draw_at,
+        }
+      : {},
     operatorState: liveState.label,
     operatorStateDetail: liveState.detail,
     operatorStateTone: liveState.tone,
@@ -8286,6 +8568,99 @@ const giveawayLiveState = (
     tone: "ok",
     safeToEnd: true,
   };
+};
+
+const giveawayConfigSummary = (giveaway?: Giveaway) => ({
+  itemName: giveaway?.item_name ?? "",
+  itemEdition: giveaway?.item_edition ?? "Standard Edition",
+  gameName: giveaway?.game_name ?? "",
+  marketplaceName: giveaway?.marketplace_name ?? "Eneba",
+  marketplaceNote:
+    giveaway?.marketplace_note ??
+    "Key sourced after winner confirms platform/region.",
+  platformMode: giveaway?.platform_mode ?? "winner_selects_after_win",
+  supportedPlatforms: giveaway
+    ? parseSupportedPlatforms(giveaway)
+    : ["Steam", "Xbox", "PlayStation", "Epic", "Other / manual"],
+  prizeType: giveaway?.prize_type ?? "standard_game_key",
+  minimumFollowAgeDays: giveaway?.minimum_follow_age_days ?? 7,
+  mustBePresentToWin: giveaway?.must_be_present_to_win !== 0,
+  responseWindowMinutes: giveaway?.response_window_minutes ?? 7,
+  oneEntryPerPerson: giveaway?.one_entry_per_person !== 0,
+  allowExtraEntries: giveaway?.allow_extra_entries === 1,
+  previousWinnerRestrictionMode:
+    giveaway?.previous_winner_restriction_mode ?? "base_game_blocks_deluxe",
+  ageGuidanceText:
+    giveaway?.age_guidance_text ??
+    "Game is rated Mature. Please only enter if this is appropriate for you.",
+  regionAvailabilityDisclaimer:
+    giveaway?.region_availability_disclaimer ??
+    "Prize availability depends on platform, region, and legitimate purchasable key availability.",
+  entryWindowMinutes: giveaway?.entry_window_minutes ?? 10,
+});
+
+const giveawayTimerSummary = (giveaway?: Giveaway) => {
+  const entriesCloseAt = giveaway?.entries_close_at ?? "";
+  const remainingMs = entriesCloseAt
+    ? Math.max(0, Date.parse(entriesCloseAt) - Date.now())
+    : 0;
+
+  return {
+    entryWindowMinutes: giveaway?.entry_window_minutes ?? 10,
+    entriesCloseAt,
+    timerStartedAt: giveaway?.timer_started_at ?? "",
+    running: Boolean(
+      giveaway?.status === "open" && entriesCloseAt && remainingMs > 0,
+    ),
+    remainingMs,
+  };
+};
+
+const giveawayResponseTimerSummary = (winners: GiveawayWinner[]) => {
+  const pending = winners
+    .filter((winner) => winner.status === "pending_confirmation")
+    .sort((a, b) =>
+      String(a.response_expires_at).localeCompare(
+        String(b.response_expires_at),
+      ),
+    )[0];
+  const responseExpiresAt = pending?.response_expires_at ?? "";
+
+  return {
+    winnerLogin: pending?.login ?? "",
+    responseExpiresAt,
+    remainingMs: responseExpiresAt
+      ? Math.max(0, Date.parse(responseExpiresAt) - Date.now())
+      : 0,
+  };
+};
+
+const giveawayRuleSummary = (giveaway?: Giveaway) => {
+  const config = giveawayConfigSummary(giveaway);
+  return [
+    `Followed for ${config.minimumFollowAgeDays}+ days`,
+    "Must be present in chat to win",
+    "One entry per person",
+    "Platform confirmed after win",
+    "Region/platform availability may vary",
+    "No cash alternative",
+    `Winner has ${config.responseWindowMinutes} minutes to respond`,
+    config.ageGuidanceText,
+    "Previous winners cannot win duplicate/base-upgrade versions of the same game",
+  ];
+};
+
+const safeJsonObject = (value: string) => {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
 };
 
 const summarizeGiveawayAssurance = (
@@ -8678,8 +9053,8 @@ const buildGiveawayStatusMessage = (
   return `${prefix}: ${giveaway.title}. Winner${activeWinners.length === 1 ? "" : "s"}: ${winnerText}. ${deliveryText}`;
 };
 
-const runGiveawayAction = <TResult extends Record<string, unknown>>(
-  action: () => TResult,
+const runGiveawayAction = async <TResult extends Record<string, unknown>>(
+  action: () => TResult | Promise<TResult>,
   options: {
     echoToChat?: boolean;
     echoCommand?: string;
@@ -8695,7 +9070,7 @@ const runGiveawayAction = <TResult extends Record<string, unknown>>(
   } = {},
 ) => {
   try {
-    const result = action();
+    const result = await action();
     const echoQueued = maybeEchoCommand(
       options.echoToChat,
       options.echoCommand,
@@ -8816,6 +9191,10 @@ const giveawayMetadata = (giveaway: Giveaway) => ({
   keyword: giveaway.keyword,
   status: giveaway.status,
   winnerCount: giveaway.winner_count,
+  itemName: giveaway.item_name,
+  itemEdition: giveaway.item_edition,
+  gameName: giveaway.game_name,
+  prizeType: giveaway.prize_type,
   createdAt: giveaway.created_at,
   openedAt: giveaway.opened_at,
   closedAt: giveaway.closed_at,
@@ -8828,6 +9207,10 @@ const giveawayWinnerMetadata = (winner: GiveawayWinner) => ({
   login: winner.login,
   displayName: winner.display_name,
   drawnAt: winner.drawn_at,
+  status: winner.status,
+  responseExpiresAt: winner.response_expires_at,
+  confirmedAt: winner.confirmed_at,
+  expiredAt: winner.expired_at,
   claimedAt: winner.claimed_at,
   deliveredAt: winner.delivered_at,
   rerolledAt: winner.rerolled_at,
@@ -8902,6 +9285,100 @@ const canSendConfiguredChat = () => {
   );
 };
 
+async function resolveGiveawayFollowAge(
+  event: ChatMessage,
+  giveaway: Giveaway,
+): ReturnType<GiveawayFollowAgeResolver> {
+  if (event.source === "local") {
+    if (event.simulatedFollowVerified === false) {
+      return {
+        status: "unverified",
+        checkedAt: new Date().toISOString(),
+        reason: "Simulated follow age is unverified.",
+      };
+    }
+
+    const followAgeDays =
+      event.simulatedFollowAgeDays ?? giveaway.minimum_follow_age_days + 30;
+    const followedAt = new Date(
+      Date.now() - followAgeDays * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    if (followAgeDays < giveaway.minimum_follow_age_days) {
+      return {
+        status: "too_new",
+        followedAt,
+        checkedAt: new Date().toISOString(),
+        followAgeDays,
+        reason: "Simulated follow age is below the giveaway minimum.",
+      };
+    }
+
+    return {
+      status: "eligible",
+      followedAt,
+      checkedAt: new Date().toISOString(),
+      followAgeDays,
+    };
+  }
+
+  const twitch = readLocalSecrets().twitch;
+
+  if (!twitch.clientId || !twitch.accessToken || !twitch.broadcasterUserId) {
+    return {
+      status: "unverified",
+      checkedAt: new Date().toISOString(),
+      reason: "Follow age lookup is not configured.",
+    };
+  }
+
+  try {
+    const follower = await getChannelFollower(
+      { clientId: twitch.clientId, accessToken: twitch.accessToken },
+      { broadcasterId: twitch.broadcasterUserId, userId: event.userId },
+    );
+
+    if (!follower?.followed_at) {
+      return {
+        status: "unverified",
+        checkedAt: new Date().toISOString(),
+        reason: "Follow age could not be verified.",
+      };
+    }
+
+    const followAgeDays = Math.floor(
+      (Date.now() - Date.parse(follower.followed_at)) / (24 * 60 * 60 * 1000),
+    );
+
+    if (followAgeDays < giveaway.minimum_follow_age_days) {
+      return {
+        status: "too_new",
+        followedAt: follower.followed_at,
+        checkedAt: new Date().toISOString(),
+        followAgeDays,
+        reason: "Follow age is below the giveaway minimum.",
+      };
+    }
+
+    return {
+      status: "eligible",
+      followedAt: follower.followed_at,
+      checkedAt: new Date().toISOString(),
+      followAgeDays,
+    };
+  } catch (error) {
+    logger.warn(
+      { error: redactSecrets(error), userLogin: event.userLogin },
+      "Giveaway follow age lookup failed",
+    );
+    return {
+      status: "unverified",
+      checkedAt: new Date().toISOString(),
+      reason: "Follow age lookup failed.",
+    };
+  }
+}
+
 const maybeEchoCommand = (
   echoToChat: boolean | undefined,
   command: string | undefined,
@@ -8963,6 +9440,8 @@ const createLocalChatMessage = (input: {
   displayName?: string;
   role: LocalChatRole;
   text: string;
+  followAgeDays?: number;
+  followVerified?: boolean;
 }): ChatMessage => {
   const login = requireUsername(input.login);
   const isBroadcaster = input.role === "broadcaster";
@@ -8992,6 +9471,8 @@ const createLocalChatMessage = (input: {
     isSubscriber,
     source: "local",
     receivedAt: new Date(),
+    simulatedFollowAgeDays: input.followAgeDays,
+    simulatedFollowVerified: input.followVerified,
   };
 };
 
@@ -9083,7 +9564,7 @@ const runLocalLifecycleTest = (options: {
   echoToChat: boolean;
   confirmed: boolean;
 }) =>
-  runGiveawayAction(() => {
+  runGiveawayAction(async () => {
     if (!options.confirmed) {
       throw new Error("Confirm before running the local lifecycle test.");
     }
@@ -9102,7 +9583,7 @@ const runLocalLifecycleTest = (options: {
     });
 
     for (const login of ["alice", "bob", "carol", "dave", "erin", "frank"]) {
-      giveawaysService.addSimulatedEntrant(
+      await giveawaysService.addSimulatedEntrant(
         simulatedChatActor,
         createLocalChatMessage({
           login,
@@ -10068,6 +10549,268 @@ const setupShellHtml = String.raw`<!doctype html>
   <body>
     <div id="app"></div>
     <script type="module" src="/ui/app.js"></script>
+  </body>
+</html>`;
+
+const giveawayOverlayHtml = String.raw`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vaexcore giveaway overlay</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #050711;
+        --panel: rgba(13, 16, 32, 0.92);
+        --panel-soft: rgba(18, 22, 42, 0.88);
+        --line: rgba(138, 174, 255, 0.18);
+        --cyan: #39d9ff;
+        --magenta: #ff3bf4;
+        --violet: #8f5cff;
+        --text: #f4f8ff;
+        --muted: #aeb8d4;
+        --amber: #ffd27a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          linear-gradient(135deg, rgba(57, 217, 255, 0.08), transparent 25%),
+          linear-gradient(225deg, rgba(255, 59, 244, 0.07), transparent 25%),
+          linear-gradient(180deg, rgba(143, 92, 255, 0.08), transparent 40%),
+          var(--bg);
+        color: var(--text);
+      }
+      .overlay {
+        width: 1920px;
+        height: 1080px;
+        transform-origin: top left;
+        padding: 56px;
+        display: grid;
+        grid-template-columns: 1.45fr 0.9fr;
+        grid-template-rows: auto 1fr auto;
+        gap: 24px;
+      }
+      .hero, .panel {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+        border-radius: 8px;
+      }
+      .hero {
+        grid-column: 1 / -1;
+        padding: 34px 38px;
+        position: relative;
+      }
+      .hero::before {
+        position: absolute;
+        inset: 0 0 auto;
+        height: 3px;
+        content: "";
+        background: linear-gradient(90deg, var(--cyan), var(--magenta));
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 58px;
+        line-height: 1;
+        letter-spacing: 0;
+      }
+      .prize {
+        margin: 0;
+        color: var(--muted);
+        font-size: 28px;
+      }
+      .panel {
+        padding: 28px;
+        min-width: 0;
+      }
+      .status-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+        margin-bottom: 24px;
+      }
+      .metric {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 20px;
+      }
+      .label {
+        color: var(--muted);
+        font-size: 18px;
+        margin-bottom: 8px;
+      }
+      .value {
+        font-size: 34px;
+        font-weight: 750;
+      }
+      .winner {
+        min-height: 365px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        background:
+          radial-gradient(circle at 50% 42%, rgba(57, 217, 255, 0.16), transparent 34%),
+          var(--panel-soft);
+        border: 1px solid rgba(57, 217, 255, 0.22);
+        border-radius: 8px;
+      }
+      .winner-name {
+        font-size: 72px;
+        font-weight: 800;
+        text-shadow: 0 0 24px rgba(57, 217, 255, 0.26);
+      }
+      .winner-state {
+        color: var(--amber);
+        font-size: 24px;
+        margin-top: 14px;
+      }
+      .spinner {
+        width: 138px;
+        height: 138px;
+        border: 3px solid rgba(57, 217, 255, 0.22);
+        border-top-color: var(--cyan);
+        border-right-color: var(--magenta);
+        border-radius: 50%;
+        animation: spin 1.8s linear infinite;
+        margin: 0 auto 24px;
+      }
+      .drawing .spinner { display: block; }
+      .spinner { display: none; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      h2 {
+        margin: 0 0 18px;
+        font-size: 28px;
+      }
+      ul {
+        margin: 0;
+        padding-left: 23px;
+        display: grid;
+        gap: 11px;
+        color: var(--muted);
+        font-size: 20px;
+        line-height: 1.28;
+      }
+      .source {
+        display: grid;
+        gap: 14px;
+        color: var(--muted);
+        font-size: 22px;
+      }
+      .source strong { color: var(--text); }
+      .footer {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      .note {
+        color: var(--muted);
+        font-size: 21px;
+        line-height: 1.35;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="overlay" id="overlay">
+      <section class="hero">
+        <h1 id="title">Giveaway</h1>
+        <p class="prize" id="prize">Waiting for giveaway config</p>
+      </section>
+      <section class="panel">
+        <div class="status-grid">
+          <div class="metric"><div class="label">Status</div><div class="value" id="status">Closed</div></div>
+          <div class="metric"><div class="label">Countdown</div><div class="value" id="countdown">--:--</div></div>
+          <div class="metric"><div class="label">Entrants</div><div class="value" id="entrants">0</div></div>
+        </div>
+        <div class="winner" id="winnerPanel">
+          <div>
+            <div class="spinner"></div>
+            <div class="winner-name" id="winnerName">No winner yet</div>
+            <div class="winner-state" id="winnerState">Entries not drawn</div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Rules</h2>
+        <ul id="rules"></ul>
+      </section>
+      <section class="footer">
+        <div class="panel source">
+          <div><strong id="marketplace">Marketplace: Eneba</strong></div>
+          <div id="marketplaceNote">Key purchased after winner confirms platform/region.</div>
+          <div>Not sponsored. No affiliate link.</div>
+        </div>
+        <div class="panel">
+          <h2>Platform Availability</h2>
+          <div class="note" id="platformNote">Prize availability depends on platform, region, and legitimate purchasable key availability.</div>
+          <div class="note" id="responseTimer" style="margin-top:18px;">Response timer starts after draw.</div>
+        </div>
+      </section>
+    </main>
+    <script>
+      const overlay = document.getElementById("overlay");
+      let lastWinnerKey = "";
+      function scaleOverlay() {
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        overlay.style.transform = "scale(" + scale + ")";
+      }
+      window.addEventListener("resize", scaleOverlay);
+      scaleOverlay();
+      function mmss(ms) {
+        if (!ms) return "--:--";
+        const seconds = Math.max(0, Math.ceil(ms / 1000));
+        return String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
+      }
+      function statusLabel(summary) {
+        if (!summary || summary.status === "none") return "Closed";
+        if (summary.operatorState === "ready to draw") return "Drawing Ready";
+        if (summary.pendingConfirmationCount > 0) return "Winner Pending";
+        if (summary.confirmedWinnerCount > 0) return "Confirmed";
+        if (summary.expiredWinnerCount > 0) return "Reroll Ready";
+        return summary.status === "open" ? "Open" : summary.status === "closed" ? "Closed" : "Rerolled";
+      }
+      async function refresh() {
+        const response = await fetch("/api/giveaway/overlay", { cache: "no-store" });
+        const data = await response.json();
+        const summary = data.summary || {};
+        const config = summary.config || {};
+        const winner = data.latestWinner;
+        document.getElementById("title").textContent = summary.title || "Giveaway";
+        document.getElementById("prize").textContent = [config.gameName, config.itemEdition].filter(Boolean).join(" - ") || config.itemName || "Prize";
+        document.getElementById("status").textContent = statusLabel(summary);
+        document.getElementById("countdown").textContent = mmss(summary.timer?.remainingMs || 0);
+        document.getElementById("entrants").textContent = String(data.entrantCount || 0);
+        document.getElementById("marketplace").textContent = "Marketplace: " + (data.marketplace?.name || "Eneba");
+        document.getElementById("marketplaceNote").textContent = data.marketplace?.note || "Key purchased after winner confirms platform/region.";
+        document.getElementById("platformNote").textContent = data.platformNote || "";
+        document.getElementById("responseTimer").textContent = summary.responseTimer?.winnerLogin
+          ? "Response timer: " + mmss(summary.responseTimer.remainingMs || 0)
+          : "Response timer starts after draw.";
+        const rules = document.getElementById("rules");
+        rules.replaceChildren(...(data.rules || []).slice(0, 8).map((rule) => {
+          const li = document.createElement("li");
+          li.textContent = rule;
+          return li;
+        }));
+        const key = winner ? winner.login + ":" + winner.drawnAt + ":" + winner.status : "";
+        if (key && key !== lastWinnerKey) {
+          document.getElementById("winnerPanel").classList.add("drawing");
+          setTimeout(() => document.getElementById("winnerPanel").classList.remove("drawing"), 1400);
+          lastWinnerKey = key;
+        }
+        document.getElementById("winnerName").textContent = winner?.displayName || "No winner yet";
+        document.getElementById("winnerState").textContent = winner ? winner.status.replace(/_/g, " ") : "Entries not drawn";
+      }
+      refresh();
+      setInterval(refresh, 1000);
+    </script>
   </body>
 </html>`;
 

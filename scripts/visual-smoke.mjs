@@ -8,11 +8,12 @@ const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const baseUrl = "http://127.0.0.1:3434";
 const outputDir = join(root, ".local", "visual-smoke");
 const targets = [
-  ["live-ops", "/?tab=dashboard"],
-  ["stream-control", "/?tab=live-mode"],
-  ["suite", "/?tab=suite"],
-  ["diagnostics", "/?tab=diagnostics"],
-  ["settings", "/?window=settings"],
+  ["live-ops", "/?tab=dashboard", "1440,1000"],
+  ["stream-control", "/?tab=live-mode", "1440,1000"],
+  ["suite", "/?tab=suite", "1440,1000"],
+  ["diagnostics", "/?tab=diagnostics", "1440,1000"],
+  ["settings", "/?window=settings", "1440,1000"],
+  ["giveaway-overlay", "/giveaway-overlay", "1920,1080"],
 ];
 
 const chrome = findChrome();
@@ -29,9 +30,9 @@ if (!(await isReachable(baseUrl))) {
 
 try {
   await waitFor(baseUrl);
-  for (const [name, path] of targets) {
+  for (const [name, path, windowSize] of targets) {
     const screenshot = join(outputDir, `console-${name}.png`);
-    await capture(`${baseUrl}${path}`, screenshot);
+    await capture(`${baseUrl}${path}`, screenshot, windowSize);
     assertScreenshot(screenshot);
     console.log(`visual smoke: wrote ${screenshot}`);
   }
@@ -72,7 +73,7 @@ async function waitFor(url) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
-async function capture(url, screenshot) {
+async function capture(url, screenshot, windowSize) {
   const userDataDir = join(tmpdir(), `vaexcore-console-smoke-${Date.now()}`);
   if (existsSync(screenshot)) unlinkSync(screenshot);
   const child = spawn(
@@ -85,7 +86,7 @@ async function capture(url, screenshot) {
       "--hide-scrollbars",
       "--run-all-compositor-stages-before-draw",
       "--virtual-time-budget=2000",
-      "--window-size=1440,1000",
+      `--window-size=${windowSize}`,
       `--user-data-dir=${userDataDir}`,
       `--screenshot=${screenshot}`,
       url,

@@ -44,6 +44,15 @@ async function verifyUiAndSafetyCopy() {
   assert(appJs.includes("Readiness Checklist"), "readiness checklist renders");
   assert(appJs.includes("Entrants"), "entrants table renders");
   assert(appJs.includes("Winners"), "winners table renders");
+  assert(
+    appJs.includes("Structured Game-Key Giveaway"),
+    "structured giveaway config renders",
+  );
+  assert(appJs.includes("Open OBS overlay"), "OBS overlay link renders");
+  assert(
+    appJs.includes("Not sponsored. No affiliate link."),
+    "marketplace disclosure avoids sponsorship framing",
+  );
   assert(appJs.includes("End giveaway?"), "end giveaway requires confirmation");
   assert(appJs.includes("Reroll this winner?"), "reroll requires confirmation");
   assert(
@@ -53,9 +62,32 @@ async function verifyUiAndSafetyCopy() {
     "UI states manual prize delivery",
   );
   assert(
-    appJs.includes('setDisabled("gstart"'),
+    appJs.includes("Start is disabled because a giveaway already exists."),
     "giveaway controls have disabled-state handling",
   );
+  assert(
+    appJs.includes(
+      "Confirm is disabled until a pending or expired winner exists.",
+    ),
+    "winner confirmation controls have disabled-state handling",
+  );
+  const overlayHtml = await text("/giveaway-overlay");
+  assert(
+    overlayHtml.includes("Marketplace: Eneba"),
+    "overlay displays marketplace disclosure source",
+  );
+  assert(
+    overlayHtml.includes(
+      "Key purchased after winner confirms platform/region.",
+    ),
+    "overlay displays source timing disclosure",
+  );
+  assert(
+    overlayHtml.includes("Not sponsored. No affiliate link."),
+    "overlay displays non-sponsored disclosure",
+  );
+  const overlayState = await json("/api/giveaway/overlay");
+  assert(overlayState.ok === true, "overlay state route returns ok");
 }
 
 function verifyPrizeSchema() {
@@ -69,9 +101,15 @@ function verifyPrizeSchema() {
         .all()
         .map((column) => column.name);
       assert(columns.length > 0, `${table} exists`);
+      if (table === "giveaways") {
+        assert(columns.includes("prize_type"), "safe prize metadata is stored");
+      }
+      const unsafeColumns = columns.filter((name) =>
+        /(^|_)(key|code|secret|token|payment|card)($|_)/i.test(name),
+      );
       assert(
-        !columns.some((name) => /prize|code|secret|token/i.test(name)),
-        `${table} has no prize/code columns`,
+        unsafeColumns.length === 0,
+        `${table} has no key/code/secret/payment columns`,
       );
     }
   } finally {

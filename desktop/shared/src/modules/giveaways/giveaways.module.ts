@@ -3,7 +3,10 @@ import type { Logger } from "../../core/logger";
 import type { RuntimeStatus } from "../../core/runtimeStatus";
 import type { DbClient } from "../../db/client";
 import { registerGiveawayCommands } from "./giveaways.commands";
-import { GiveawaysService } from "./giveaways.service";
+import {
+  GiveawaysService,
+  type GiveawayFollowAgeResolver,
+} from "./giveaways.service";
 import { createGiveawayTemplateStore } from "./giveaways.templates";
 
 type GiveawaysModuleOptions = {
@@ -11,6 +14,7 @@ type GiveawaysModuleOptions = {
   db: DbClient;
   logger: Logger;
   runtimeStatus?: RuntimeStatus;
+  followAgeResolver?: GiveawayFollowAgeResolver;
 };
 
 export const registerGiveawaysModule = ({
@@ -18,8 +22,9 @@ export const registerGiveawaysModule = ({
   db,
   logger,
   runtimeStatus,
+  followAgeResolver,
 }: GiveawaysModuleOptions) => {
-  const service = new GiveawaysService({ db, logger });
+  const service = new GiveawaysService({ db, logger, followAgeResolver });
   const templates = createGiveawayTemplateStore(db);
   registerGiveawayCommands({
     router,

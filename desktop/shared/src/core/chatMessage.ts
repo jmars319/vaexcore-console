@@ -14,4 +14,6 @@ export type ChatMessage = {
   isSubscriber: boolean;
   source: ChatSource;
   receivedAt: Date;
+  simulatedFollowAgeDays?: number;
+  simulatedFollowVerified?: boolean;
 };

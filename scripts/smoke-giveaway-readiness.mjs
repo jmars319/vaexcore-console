@@ -74,6 +74,18 @@ async function runSmoke() {
     "start command announces entry instructions",
   );
 
+  const operatorEntry = await simulate({
+    actor: "broadcaster",
+    role: "broadcaster",
+    command: "!raffle",
+  });
+  assert(
+    operatorEntry.replies.some((reply) =>
+      reply.toLowerCase().includes("operator cannot enter"),
+    ),
+    "giveaway operator cannot enter their own giveaway",
+  );
+
   const commandEntry = await simulate({
     actor: "alice",
     role: "viewer",
@@ -131,10 +143,67 @@ async function runSmoke() {
   const openDraw = await post("/api/giveaway/draw", { count: 1 });
   assert(openDraw.ok === false, "draw is rejected when no giveaway exists");
 
+  const timerSmoke = await expectOk("/api/giveaway/start", {
+    title: "Entry Timer Smoke",
+    keyword: "timer",
+    winnerCount: 1,
+    entryWindowMinutes: 1,
+  });
+  await expectOk("/api/giveaway/add-entrant", {
+    login: "invalid",
+    displayName: "Invalid Entrant",
+  });
+  const removed = await expectOk("/api/giveaway/remove-entrant", {
+    username: "invalid",
+    reason: "manual smoke removal",
+  });
+  assert(removed.result.removed === "invalid", "entrant can be removed");
+  let timerState = await json("/api/giveaway");
+  assert(
+    timerState.entries.some(
+      (entry) =>
+        entry.login === "invalid" && entry.eligibility_status === "removed",
+    ),
+    "removed entrant remains visible with removed status",
+  );
+  assert(timerState.summary.entryCount === 0, "removed entrant is not counted");
+  assert(
+    timerState.summary.eligibility.removedEntries === 1,
+    "removed entrant is counted in eligibility summary",
+  );
+  forceEntryTimerExpired(timerSmoke.state.giveaway.id);
+  timerState = await json("/api/giveaway");
+  assert(
+    timerState.summary.status === "closed",
+    "entry timer auto-closes entries",
+  );
+  assert(
+    timerState.summary.timer.running === false,
+    "entry timer stops after auto-close",
+  );
+  await expectOk("/api/giveaway/end");
+
   await expectOk("/api/giveaway/start", {
-    title: "Tonight Readiness",
+    title: "Sniper Elite: Resistance Giveaway",
     keyword: "raid",
     winnerCount: 2,
+    itemName: "Sniper Elite: Resistance",
+    itemEdition: "Standard Edition",
+    gameName: "Sniper Elite: Resistance",
+    marketplaceName: "Eneba",
+    marketplaceNote: "Key sourced after winner confirms platform/region.",
+    platformMode: "winner_selects_after_win",
+    supportedPlatforms: [
+      "Steam",
+      "Xbox",
+      "PlayStation",
+      "Epic",
+      "Other / manual",
+    ],
+    prizeType: "standard_game_key",
+    minimumFollowAgeDays: 7,
+    responseWindowMinutes: 7,
+    entryWindowMinutes: 10,
   });
   const started = await json("/api/giveaway");
   assert(started.summary.status === "open", "API start opens giveaway");
@@ -144,6 +213,32 @@ async function runSmoke() {
   );
   assert(started.summary.keyword === "raid", "keyword is stored");
   assert(started.summary.winnerCount === 2, "winner count is stored");
+  assert(
+    started.summary.config.gameName === "Sniper Elite: Resistance",
+    "structured game name is stored",
+  );
+  assert(
+    started.summary.config.marketplaceName === "Eneba",
+    "marketplace disclosure source is stored",
+  );
+  assert(
+    started.summary.timer.running === true,
+    "entry timer starts with the giveaway",
+  );
+  assert(
+    started.summary.rules.some((rule) => rule.includes("Followed for 7+ days")),
+    "rule summary includes follow-age requirement",
+  );
+  const overlayState = await json("/api/giveaway/overlay");
+  assert(overlayState.ok === true, "giveaway overlay state route exists");
+  assert(
+    overlayState.marketplace.name === "Eneba",
+    "overlay exposes marketplace disclosure source",
+  );
+  assert(
+    overlayState.marketplace.disclosure === "Not sponsored. No affiliate link.",
+    "overlay includes non-sponsored disclosure",
+  );
   assert(
     started.assurance.available === true,
     "chat assurance is available for open giveaway",
@@ -205,14 +300,46 @@ async function runSmoke() {
     "draw is rejected until giveaway is closed",
   );
 
-  await expectOk("/api/giveaway/add-entrant", {
+  const tooNew = await expectOk("/api/giveaway/add-entrant", {
+    login: "too_new",
+    displayName: "Too New",
+    followAgeDays: 1,
+  });
+  assert(
+    tooNew.result.status === "ineligible",
+    "under-minimum follow age is rejected",
+  );
+  assert(
+    tooNew.result.reason.includes("below 7"),
+    "under-minimum follow rejection explains the 7-day rule",
+  );
+
+  const unverified = await expectOk("/api/giveaway/add-entrant", {
+    login: "unverified",
+    displayName: "Unverified",
+    followVerified: false,
+  });
+  assert(
+    unverified.result.status === "ineligible",
+    "unverified follow age is rejected",
+  );
+  assert(
+    unverified.result.reason.toLowerCase().includes("unverified"),
+    "unverified follow rejection is explicit",
+  );
+
+  const aliceEntry = await expectOk("/api/giveaway/add-entrant", {
     login: "alice",
     displayName: "Alice",
   });
-  await expectOk("/api/giveaway/add-entrant", {
+  assert(aliceEntry.result.status === "entered", "7+ day follower can enter");
+  const bobEntry = await expectOk("/api/giveaway/add-entrant", {
     login: "bob",
     displayName: "Bob",
+    role: "mod",
+    followAgeDays: 8,
   });
+  assert(bobEntry.result.status === "entered", "mods can enter");
   await expectOk("/api/giveaway/add-entrant", {
     login: "carol",
     displayName: "Carol",
@@ -226,6 +353,7 @@ async function runSmoke() {
     withEntrants.entries.length === 3,
     "duplicate entrants do not inflate entry count",
   );
+  assert(withEntrants.summary.entryCount === 3, "entry count is eligible-only");
 
   await expectOk("/api/giveaway/last-call");
   await expectOk("/api/giveaway/close");
@@ -250,6 +378,15 @@ async function runSmoke() {
     drawn.winners.filter((winner) => !winner.rerolled_at).length === 2,
     "active winners render after draw",
   );
+  assert(Boolean(drawn.summary.draw.seed), "draw seed is exposed for audit");
+  assert(
+    Array.isArray(drawn.summary.draw.result?.candidateLogins),
+    "draw candidate log is exposed for audit",
+  );
+  assert(
+    Array.isArray(drawn.summary.draw.result?.selectedLogins),
+    "draw selected log is exposed for audit",
+  );
   assert(
     drawn.summary.operatorState === "delivery pending",
     "drawn giveaway requires delivery",
@@ -261,8 +398,55 @@ async function runSmoke() {
   assert(Boolean(firstWinner), "first winner login is available");
   assert(Boolean(secondWinner), "second winner login is available");
 
+  const confirmed = await expectOk("/api/giveaway/confirm", {
+    username: firstWinner,
+    selectedPlatform: "Steam",
+    regionCountry: "US",
+    deliveryMethod: "Discord DM",
+    marketplaceUsed: "Eneba",
+    purchaseStatus: "pending_purchase",
+  });
+  assert(
+    confirmed.result.winner.status === "confirmed",
+    "admin confirmation marks winner confirmed",
+  );
+  assert(
+    confirmed.result.winner.selected_platform === "Steam",
+    "admin confirmation records platform",
+  );
+  assert(
+    confirmed.result.winner.region_country === "US",
+    "admin confirmation records region",
+  );
+  assert(
+    confirmed.result.winner.delivery_method === "Discord DM",
+    "admin confirmation records delivery method",
+  );
+  assert(
+    confirmed.result.winner.marketplace_used === "Eneba",
+    "admin confirmation records marketplace used",
+  );
+  await expectOk("/api/giveaway/purchase-status", {
+    username: firstWinner,
+    purchaseStatus: "purchased",
+  });
   await expectOk("/api/giveaway/claim", { username: firstWinner });
   await expectOk("/api/giveaway/deliver", { username: firstWinner });
+
+  forceWinnerResponseExpired(drawn.giveaway.id, secondWinner);
+  const expiredState = await json("/api/giveaway");
+  const expiredWinner = expiredState.winners.find(
+    (winner) => winner.login === secondWinner && !winner.rerolled_at,
+  );
+  assert(
+    expiredWinner?.status === "expired",
+    "response timer marks pending winner expired",
+  );
+  assert(
+    expiredState.summary.expiredWinnerCount === 1,
+    "expired winner is counted in summary",
+  );
+
   const reroll = await expectOk("/api/giveaway/reroll", {
     username: secondWinner,
   });
@@ -309,6 +493,51 @@ async function runSmoke() {
     ended.recap.pendingDeliveryCount === 0,
     "recap records clean delivery state",
   );
+
+  await expectOk("/api/giveaway/start", {
+    title: "Unrelated Game Giveaway",
+    keyword: "other",
+    winnerCount: 1,
+    itemName: "Different Game",
+    itemEdition: "Standard Edition",
+    gameName: "Different Game",
+    previousWinnerRestrictionMode: "base_game_blocks_deluxe",
+  });
+  const unrelatedEntry = await expectOk("/api/giveaway/add-entrant", {
+    login: firstWinner,
+    displayName: firstWinner,
+    followAgeDays: 90,
+  });
+  assert(
+    unrelatedEntry.result.status === "entered",
+    "previous winner can enter unrelated item giveaway",
+  );
+  await expectOk("/api/giveaway/end");
+
+  await expectOk("/api/giveaway/start", {
+    title: "Sniper Elite: Resistance Deluxe",
+    keyword: "deluxe",
+    winnerCount: 1,
+    itemName: "Sniper Elite: Resistance",
+    itemEdition: "Digital Deluxe Edition",
+    gameName: "Sniper Elite: Resistance",
+    prizeType: "deluxe_game_key",
+    previousWinnerRestrictionMode: "base_game_blocks_deluxe",
+  });
+  const blockedUpgrade = await expectOk("/api/giveaway/add-entrant", {
+    login: firstWinner,
+    displayName: firstWinner,
+    followAgeDays: 90,
+  });
+  assert(
+    blockedUpgrade.result.status === "ineligible",
+    "standard winner is blocked from deluxe of same base game",
+  );
+  assert(
+    blockedUpgrade.result.reason.includes("base game"),
+    "duplicate base-game rejection is explicit",
+  );
+  await expectOk("/api/giveaway/end");
 
   const outbound = await json("/api/outbound-messages");
   assert(outbound.ok === true, "outbound history route remains available");
@@ -409,6 +638,38 @@ function insertOutboundFixture(record) {
     failureCategory: record.failureCategory ?? "none",
   });
   db.close();
+}
+
+function forceEntryTimerExpired(giveawayId) {
+  const db = new Database(smokeDbPath);
+  const now = new Date(Date.now() - 60_000).toISOString();
+
+  try {
+    db.prepare(
+      "UPDATE giveaways SET entries_close_at = ?, timer_started_at = COALESCE(timer_started_at, ?) WHERE id = ?",
+    ).run(now, now, giveawayId);
+  } finally {
+    db.close();
+  }
+}
+
+function forceWinnerResponseExpired(giveawayId, login) {
+  const db = new Database(smokeDbPath);
+  const now = new Date(Date.now() - 60_000).toISOString();
+
+  try {
+    db.prepare(
+      `
+        UPDATE giveaway_winners
+        SET response_expires_at = ?
+        WHERE giveaway_id = ?
+          AND lower(login) = lower(?)
+          AND rerolled_at IS NULL
+      `,
+    ).run(now, giveawayId, login);
+  } finally {
+    db.close();
+  }
 }
 
 function assert(condition, message) {

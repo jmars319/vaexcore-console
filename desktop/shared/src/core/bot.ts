@@ -5,6 +5,7 @@ import { MessageQueue, type MessageSendResult } from "./messageQueue";
 import { createOutboundHistory } from "./outboundHistory";
 import { createFeatureGateStore } from "./featureGates";
 import { TwitchEventSubClient } from "../twitch/eventsub";
+import { getChannelFollower } from "../twitch/followers";
 import { RelayChatClient, RelayEventPoller } from "../twitch/relayTransport";
 import { TwitchChatSender } from "../twitch/sendMessage";
 import {
@@ -21,6 +22,7 @@ import { StartupChecklist } from "./startupChecklist";
 import { createDbClient, type DbClient } from "../db/client";
 import { registerCommandsModule } from "../modules/commands/commands.module";
 import { registerGiveawaysModule } from "../modules/giveaways/giveaways.module";
+import type { GiveawayFollowAgeResolver } from "../modules/giveaways/giveaways.service";
 import { ModerationService } from "../modules/moderation/moderation.module";
 import {
   isTimerActivityMessage,
@@ -184,6 +186,7 @@ export class ConsoleBot {
       db: this.db,
       logger: options.logger,
       runtimeStatus: this.runtimeStatus,
+      followAgeResolver: this.createFollowAgeResolver(),
     });
     this.moderationService = new ModerationService(this.db, {
       featureGates,
@@ -579,6 +582,63 @@ export class ConsoleBot {
       timeoutUnavailableReason: hasScope(timeoutScope)
         ? undefined
         : `Reconnect Twitch with ${timeoutScope} to enable timeouts.`,
+    };
+  }
+
+  private createFollowAgeResolver(): GiveawayFollowAgeResolver {
+    return async (event, giveaway) => {
+      try {
+        const follower = await getChannelFollower(
+          {
+            clientId: this.options.env.twitchClientId,
+            accessToken: this.twitchAccessToken,
+          },
+          {
+            broadcasterId: this.options.env.twitchBroadcasterUserId,
+            userId: event.userId,
+          },
+        );
+
+        if (!follower?.followed_at) {
+          return {
+            status: "unverified",
+            checkedAt: new Date().toISOString(),
+            reason: "Follow age could not be verified.",
+          };
+        }
+
+        const followAgeDays = Math.floor(
+          (Date.now() - Date.parse(follower.followed_at)) /
+            (24 * 60 * 60 * 1000),
+        );
+
+        if (followAgeDays < giveaway.minimum_follow_age_days) {
+          return {
+            status: "too_new",
+            followedAt: follower.followed_at,
+            checkedAt: new Date().toISOString(),
+            followAgeDays,
+            reason: "Follow age is below the giveaway minimum.",
+          };
+        }
+
+        return {
+          status: "eligible",
+          followedAt: follower.followed_at,
+          checkedAt: new Date().toISOString(),
+          followAgeDays,
+        };
+      } catch (error) {
+        this.options.logger.warn(
+          { error: redactSecrets(error), userLogin: event.userLogin },
+          "Giveaway follow age lookup failed",
+        );
+        return {
+          status: "unverified",
+          checkedAt: new Date().toISOString(),
+          reason: "Follow age lookup failed.",
+        };
+      }
     };
   }
 
