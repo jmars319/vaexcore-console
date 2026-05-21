@@ -471,6 +471,32 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
 
   if (
     request.method === "POST" &&
+    url.pathname === "/api/discord/relay/install/start"
+  ) {
+    sendJson(response, 200, await startDiscordRelayInstallRoute());
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/discord/relay/setup/preview"
+  ) {
+    const body = await readJson(request);
+    sendJson(response, 200, await previewDiscordRelaySetupRoute(body));
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/discord/relay/setup/apply"
+  ) {
+    const body = await readJson(request);
+    sendJson(response, 200, await applyDiscordRelaySetupRoute(body));
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
     url.pathname === "/api/discord/relay/commands/register"
   ) {
     sendJson(response, 200, await registerDiscordRelayCommandsRoute());
@@ -2596,6 +2622,8 @@ const getDiscordRelayStatusRoute = async () => {
       connected: true,
       relay,
       readiness: status.readiness,
+      hosted: status.config,
+      templates: status.templates,
     };
   } catch (error) {
     return {
@@ -2605,6 +2633,52 @@ const getDiscordRelayStatusRoute = async () => {
       error: safeErrorMessage(error, "Discord Relay status check failed."),
     };
   }
+};
+
+const startDiscordRelayInstallRoute = async () => {
+  const secrets = readLocalSecrets();
+  const connectionError = discordRelayConnectionError(secrets);
+  if (connectionError) {
+    throw new SafeInputError(connectionError);
+  }
+  return createDiscordRelayClient(secrets).startInstall();
+};
+
+const previewDiscordRelaySetupRoute = async (body: unknown) => {
+  const secrets = readLocalSecrets();
+  const connectionError = discordRelayConnectionError(secrets);
+  if (connectionError) {
+    throw new SafeInputError(connectionError);
+  }
+  return createDiscordRelayClient(secrets).previewSetup(objectInput(body));
+};
+
+const applyDiscordRelaySetupRoute = async (body: unknown) => {
+  const secrets = readLocalSecrets();
+  const connectionError = discordRelayConnectionError(secrets);
+  if (connectionError) {
+    throw new SafeInputError(connectionError);
+  }
+  const result = await createDiscordRelayClient(secrets).applySetup(
+    objectInput(body),
+  );
+  appendSuiteTimelineEvent({
+    sourceApp: "vaexcore-console",
+    sourceAppName: "vaexcore console",
+    kind: "discord.relay.setup",
+    title: "Hosted Discord setup applied",
+    detail:
+      "Relay applied the hosted Discord server setup without exposing a bot token in Console.",
+    metadata: {
+      templateId:
+        typeof result.template === "object" &&
+        result.template &&
+        "id" in result.template
+          ? result.template.id
+          : undefined,
+    },
+  });
+  return result;
 };
 
 const registerDiscordRelayCommandsRoute = async () => {

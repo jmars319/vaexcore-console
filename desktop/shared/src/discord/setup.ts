@@ -82,11 +82,11 @@ export type DiscordSetupApplyResult = {
   createdMessageIds: Record<string, string>;
   createdStarterMessages: DiscordCreatedStarterMessage[];
   recommended: {
-    streamAnnouncementChannelId?: string;
-    generalAnnouncementChannelId?: string;
-    suggestionChannelId?: string;
-    streamAlertsRoleId?: string;
-    operatorRoleId?: string;
+    streamAnnouncementChannelId?: string | undefined;
+    generalAnnouncementChannelId?: string | undefined;
+    suggestionChannelId?: string | undefined;
+    streamAlertsRoleId?: string | undefined;
+    operatorRoleId?: string | undefined;
   };
   permissionOverwritesApplied: number;
   starterMessagesPosted: number;
@@ -104,14 +104,14 @@ export type DiscordAnnouncementInput = {
 };
 
 export type DiscordConfigInput = {
-  botToken?: string;
-  guildId?: string;
-  streamAnnouncementChannelId?: string;
-  generalAnnouncementChannelId?: string;
-  streamAlertsRoleId?: string;
-  operatorRoleId?: string;
-  staffRoleId?: string;
-  lockStaffCategory?: boolean;
+  botToken?: string | undefined;
+  guildId?: string | undefined;
+  streamAnnouncementChannelId?: string | undefined;
+  generalAnnouncementChannelId?: string | undefined;
+  streamAlertsRoleId?: string | undefined;
+  operatorRoleId?: string | undefined;
+  staffRoleId?: string | undefined;
+  lockStaffCategory?: boolean | undefined;
 };
 
 const viewChannelPermissionBit = "1024";
@@ -668,7 +668,7 @@ const planTemplatePermissionOverwrites = (options: {
   roleIds: Map<string, string>;
   channelIds: Map<string, string>;
   includeRoles: boolean;
-  guildId?: string;
+  guildId?: string | undefined;
 }): DiscordSetupAction[] => {
   const channelTemplates = new Set(
     options.template.channels.map((channel) => channel.id),
@@ -767,7 +767,7 @@ const findExistingChannel = (
   const expectedName = normalizeChannelName(template.name);
   const matches = channels.filter(
     (channel) =>
-      channel.type === expectedType &&
+      discordChannelMatchesTemplateType(channel.type, expectedType, template) &&
       normalizeChannelName(channel.name) === expectedName,
   );
 
@@ -780,6 +780,16 @@ const findExistingChannel = (
     matches[0]
   );
 };
+
+const discordChannelMatchesTemplateType = (
+  actualType: number,
+  expectedType: number,
+  template: DiscordSetupChannelTemplate,
+) =>
+  actualType === expectedType ||
+  (template.id === "announcements" &&
+    template.kind === "text" &&
+    actualType === 5);
 
 const normalizeRoleName = (name: string) =>
   name.trim().replace(/\s+/g, " ").toLowerCase();

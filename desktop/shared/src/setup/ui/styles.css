@@ -335,6 +335,14 @@ button.nav-button.active:hover:not(:disabled) {
   padding: 16px;
   margin-bottom: 14px;
 }
+.advanced-panel summary {
+  cursor: pointer;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.advanced-panel:not([open]) summary {
+  margin-bottom: 0;
+}
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -300,6 +300,12 @@ const api = {
   applyDiscordSetup: (body) => api.post("/api/discord/setup/apply", body),
   sendDiscordAnnouncement: (body) => api.post("/api/discord/announce", body),
   discordRelayStatus: () => api.get("/api/discord/relay/status"),
+  discordRelayInstallStart: () =>
+    api.post("/api/discord/relay/install/start", {}),
+  previewDiscordRelaySetup: (body) =>
+    api.post("/api/discord/relay/setup/preview", body),
+  applyDiscordRelaySetup: (body) =>
+    api.post("/api/discord/relay/setup/apply", body),
   registerDiscordRelayCommands: () =>
     api.post("/api/discord/relay/commands/register"),
   discordRelaySuggestions: (status = "") =>
@@ -667,6 +673,13 @@ function sectionHeader(title, description, right) {
 function card(title, children) {
   return h("div", { className: "panel" }, [
     title ? h("h3", { text: title }) : null,
+    ...children,
+  ]);
+}
+
+function advancedPanel(title, children) {
+  return h("details", { className: "panel advanced-panel" }, [
+    h("summary", {}, [h("strong", { text: title })]),
     ...children,
   ]);
 }
@@ -4514,7 +4527,7 @@ function renderDiscord() {
   return [
     sectionHeader(
       "Discord",
-      "Local setup creates server channels and sends direct announcements; Relay setup handles slash commands, suggestions, and public Discord interactions.",
+      "Hosted Relay setup connects Discord without exposing a bot token; Advanced self-hosted mode is still available for local Discord bots.",
       h("div", { className: "actions section-actions" }, [
         actionButton("Refresh", {
           id: "discordRefresh",
@@ -4529,7 +4542,12 @@ function renderDiscord() {
         }),
       ]),
     ),
-    card("Discord Readiness", [
+    renderDiscordHostedConnectCard(discord),
+    card("Advanced Local Discord Readiness", [
+      callout(
+        "These checks only apply when using the Advanced self-hosted bot token path. Hosted Discord setup uses the Relay status above.",
+        "info",
+      ),
       statusGrid([
         [
           "Bot token",
@@ -4565,7 +4583,7 @@ function renderDiscord() {
     ]),
     renderBotCompletionCard("discord"),
     renderDiscordRelayPanel(discord),
-    card("Local Discord Connection", [
+    advancedPanel("Advanced Self-Hosted Discord Connection", [
       h("div", { className: "grid" }, [
         formRow(
           "Bot token",
@@ -4673,7 +4691,7 @@ function renderDiscord() {
         }),
       ]),
     ]),
-    card("Local Server Layout", [
+    card(discordHostedConnected() ? "Hosted Server Layout" : "Server Layout", [
       selectedSetupTemplate
         ? h("div", { className: "state-banner compact info" }, [
             h("strong", { text: selectedSetupTemplate.name }),
@@ -4735,7 +4753,9 @@ function renderDiscord() {
         "Lock Staff category to the selected Staff role",
       ]),
       callout(
-        "Each preset is a server layout. Preview shows exactly which categories, text channels, voice channels, roles, permission overwrites, and starter messages will be created, reused, skipped, or blocked before anything is applied.",
+        discordHostedConnected()
+          ? "Hosted setup runs through Relay with the VaexCore Discord bot token stored as a Worker secret. Preview shows exactly what Relay will create, reuse, skip, or block before anything is applied."
+          : "Each preset is a server layout. Preview shows exactly which categories, text channels, voice channels, roles, permission overwrites, and starter messages will be created, reused, skipped, or blocked before anything is applied.",
         "info",
       ),
       h("div", { className: "actions" }, [
@@ -4819,6 +4839,76 @@ function renderDiscord() {
     ]),
     message(),
   ];
+}
+
+function renderDiscordHostedConnectCard() {
+  const relay =
+    state.discord?.config?.relay || state.config?.discord?.relay || {};
+  const status = state.discordRelayStatus || {};
+  const hosted = discordHostedConfig();
+  const connected = Boolean(hosted.connected || hosted.guildId);
+  const secretReady = Boolean(
+    hosted.hasApplicationId && hosted.hasClientSecret && hosted.hasBotToken,
+  );
+
+  return card("Hosted Discord Connect", [
+    statusGrid([
+      ["Relay", relay.configured ? "configured" : "missing", relay.configured],
+      [
+        "Discord app",
+        secretReady ? "ready" : "needs Worker secrets",
+        secretReady,
+      ],
+      [
+        "Server",
+        connected
+          ? hosted.guildName || hosted.guildId || "connected"
+          : "not connected",
+        connected,
+      ],
+      [
+        "Setup",
+        hosted.setupAppliedAt || "not applied",
+        Boolean(hosted.setupAppliedAt),
+      ],
+    ]),
+    callout(
+      connected
+        ? "Console is connected through Relay. Server setup and slash commands use the hosted VaexCore Discord bot; no local bot token is needed."
+        : "Connect Discord to let Relay install the VaexCore bot and remember the selected server. Console will not show or store the hosted bot token.",
+      connected ? "ok" : "info",
+    ),
+    status.readiness?.checks?.some(
+      (check) =>
+        !check.ok &&
+        [
+          "discord-bot-token",
+          "discord-application-id",
+          "discord-client-secret",
+        ].includes(check.key),
+    )
+      ? callout(
+          "Relay needs DISCORD_APPLICATION_ID, DISCORD_CLIENT_SECRET, DISCORD_BOT_TOKEN, and DISCORD_PUBLIC_KEY before hosted Discord setup can run.",
+          "warn",
+        )
+      : null,
+    h("div", { className: "actions" }, [
+      actionButton(connected ? "Reconnect Discord" : "Connect Discord", {
+        id: "discordRelayInstallStart",
+        onClick: startDiscordRelayInstall,
+      }),
+      actionButton("Refresh hosted status", {
+        id: "discordRelayHostedRefresh",
+        variant: "secondary",
+        onClick: checkDiscordRelayStatus,
+      }),
+      actionButton("Register slash commands", {
+        id: "discordRelayRegisterCommandsHosted",
+        variant: "secondary",
+        onClick: registerDiscordRelayCommands,
+      }),
+    ]),
+  ]);
 }
 
 function renderDiscordRelayPanel(discord) {
@@ -4987,6 +5077,20 @@ function discordRelayActionOptions(action) {
     .slice(0, 3)
     .map(([key, value]) => `${key}: ${value}`)
     .join(", ")}`;
+}
+
+function discordHostedConfig() {
+  return (
+    state.discordRelayStatus?.hosted ||
+    state.discordRelayStatus?.config ||
+    state.discord?.relay?.hosted ||
+    {}
+  );
+}
+
+function discordHostedConnected() {
+  const hosted = discordHostedConfig();
+  return Boolean(hosted.connected || hosted.guildId);
 }
 
 function renderDiscordPlan(result) {
@@ -9736,25 +9840,50 @@ async function saveDiscordSettings() {
   );
 }
 
+function readDiscordSetupPayload() {
+  return {
+    templateId: field("discordSetupTemplateId")?.value || "",
+    includeRoles: Boolean(field("discordCreateStreamAlertsRole")?.checked),
+    applyPermissions: Boolean(field("discordApplyPermissions")?.checked),
+    postStarterMessages: Boolean(field("discordPostStarterMessages")?.checked),
+    lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
+    staffRoleId: field("discordStaffRoleId")?.value || "",
+  };
+}
+
+async function startDiscordRelayInstall() {
+  await runAction(
+    "discordRelayInstallStart",
+    async () => {
+      const result = await api.discordRelayInstallStart();
+      openExternalSetupUrl(result.authorizeUrl);
+      state.discordRelayInstall = result;
+      return result;
+    },
+    {
+      skipRefresh: true,
+      success: "Discord authorization opened. Return here after approving it.",
+    },
+  );
+}
+
 async function previewDiscordSetup() {
   await runAction(
     "discordPreviewSetup",
     async () => {
-      const result = await api.previewDiscordSetup({
-        templateId: field("discordSetupTemplateId")?.value || "",
-        includeRoles: Boolean(field("discordCreateStreamAlertsRole")?.checked),
-        applyPermissions: Boolean(field("discordApplyPermissions")?.checked),
-        postStarterMessages: Boolean(
-          field("discordPostStarterMessages")?.checked,
-        ),
-        lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
-        staffRoleId: field("discordStaffRoleId")?.value || "",
-      });
+      const payload = readDiscordSetupPayload();
+      const result = discordHostedConnected()
+        ? await api.previewDiscordRelaySetup(payload)
+        : await api.previewDiscordSetup(payload);
       state.discordSetupPreview = result;
-      state.discord = {
-        ...(state.discord || {}),
-        config: result.config || state.discord?.config,
-      };
+      if (discordHostedConnected()) {
+        state.discordRelayStatus = await api.discordRelayStatus();
+      } else {
+        state.discord = {
+          ...(state.discord || {}),
+          config: result.config || state.discord?.config,
+        };
+      }
       return result;
     },
     { skipRefresh: true, success: "Discord setup preview updated." },
@@ -9773,18 +9902,16 @@ async function applyDiscordSetup() {
   await runAction(
     "discordApplySetup",
     async () => {
-      const result = await api.applyDiscordSetup({
-        templateId: field("discordSetupTemplateId")?.value || "",
-        includeRoles: Boolean(field("discordCreateStreamAlertsRole")?.checked),
-        applyPermissions: Boolean(field("discordApplyPermissions")?.checked),
-        postStarterMessages: Boolean(
-          field("discordPostStarterMessages")?.checked,
-        ),
-        lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
-        staffRoleId: field("discordStaffRoleId")?.value || "",
-      });
+      const payload = readDiscordSetupPayload();
+      const result = discordHostedConnected()
+        ? await api.applyDiscordRelaySetup(payload)
+        : await api.applyDiscordSetup(payload);
       state.discordSetupPreview = result;
-      state.discord = await api.discordStatus();
+      if (discordHostedConnected()) {
+        state.discordRelayStatus = await api.discordRelayStatus();
+      } else {
+        state.discord = await api.discordStatus();
+      }
       return result;
     },
     { skipRefresh: true, success: "Discord server setup applied." },
@@ -11724,6 +11851,12 @@ function updateDisabledState() {
   const config = state.config || {};
   const discordConfig = state.discord?.config || config.discord || {};
   const discordRelayConfig = discordConfig.relay || {};
+  const hostedDiscord = discordHostedConfig();
+  const hostedDiscordReady =
+    discordRelayConfig.configured && Boolean(hostedDiscord.guildId);
+  const localDiscordReady = Boolean(
+    discordConfig.hasBotToken && discordConfig.guildId,
+  );
   const relayConfig = config.relay || {};
   const runtime = state.status?.runtime || {};
   const botProcess = runtime.botProcess || {};
@@ -11942,13 +12075,13 @@ function updateDisabledState() {
   );
   setDisabled(
     "discordPreviewSetup",
-    !(discordConfig.hasBotToken && discordConfig.guildId),
-    "Save a Discord bot token and server ID before previewing setup.",
+    !(hostedDiscordReady || localDiscordReady),
+    "Connect Discord through Relay or save a local bot token and server ID before previewing setup.",
   );
   setDisabled(
     "discordApplySetup",
-    !(discordConfig.hasBotToken && discordConfig.guildId),
-    "Save a Discord bot token and server ID before applying setup.",
+    !(hostedDiscordReady || localDiscordReady),
+    "Connect Discord through Relay or save a local bot token and server ID before applying setup.",
   );
   setDisabled(
     "discordSendAnnouncement",
@@ -11961,9 +12094,24 @@ function updateDisabledState() {
     "Save Relay URL, installation ID, and console token before checking Discord Relay.",
   );
   setDisabled(
-    "discordRelayRegisterCommands",
+    "discordRelayHostedRefresh",
     !discordRelayConfig.configured,
-    "Save Relay URL, installation ID, and console token before registering slash commands.",
+    "Save Relay URL, installation ID, and console token before checking hosted Discord status.",
+  );
+  setDisabled(
+    "discordRelayInstallStart",
+    !discordRelayConfig.configured,
+    "Save Relay URL, installation ID, and console token before connecting Discord.",
+  );
+  setDisabled(
+    "discordRelayRegisterCommands",
+    !(discordRelayConfig.configured && hostedDiscordReady),
+    "Connect Discord through Relay before registering slash commands.",
+  );
+  setDisabled(
+    "discordRelayRegisterCommandsHosted",
+    !(discordRelayConfig.configured && hostedDiscordReady),
+    "Connect Discord through Relay before registering slash commands.",
   );
   setDisabled(
     "discordRelayLoadSuggestions",

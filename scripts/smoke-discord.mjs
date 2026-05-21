@@ -37,6 +37,18 @@ async function runSmoke() {
   assert(appJs.includes('["discord", "Discord"]'), "Discord tab is registered");
   assert(appJs.includes("Server Layout"), "Discord setup UI is present");
   assert(
+    appJs.includes("Hosted Discord Connect"),
+    "Hosted Discord connect UI is present",
+  );
+  assert(
+    appJs.includes("Advanced Self-Hosted Discord Connection"),
+    "Local bot token setup is kept behind Advanced self-hosted UI",
+  );
+  assert(
+    appJs.includes("discordRelayInstallStart"),
+    "Hosted Discord connect action is wired",
+  );
+  assert(
     appJs.includes("Layout preset"),
     "Discord layout preset picker is present",
   );
@@ -191,9 +203,13 @@ async function runSmoke() {
     preview.plan.actions.some(
       (action) =>
         action.type === "use_existing_channel" &&
-        ["general", "clips-and-highlights", "Lobby", "Gaming"].includes(
-          action.name,
-        ),
+        [
+          "general",
+          "announcements",
+          "clips-and-highlights",
+          "Lobby",
+          "Gaming",
+        ].includes(action.name),
     ),
     "setup preview shows existing baseline channels are reused",
   );
@@ -378,11 +394,19 @@ async function startFakeDiscord() {
       },
       {
         id: "111111111111111112",
+        name: "announcements",
+        type: 5,
+        parent_id: null,
+        topic: null,
+        position: 1,
+      },
+      {
+        id: "111111111111111115",
         name: "clips-and-highlights",
         type: 0,
         parent_id: null,
         topic: null,
-        position: 1,
+        position: 2,
       },
       {
         id: "111111111111111113",
@@ -390,7 +414,7 @@ async function startFakeDiscord() {
         type: 2,
         parent_id: null,
         topic: null,
-        position: 2,
+        position: 3,
       },
       {
         id: "111111111111111114",
@@ -398,7 +422,7 @@ async function startFakeDiscord() {
         type: 2,
         parent_id: null,
         topic: null,
-        position: 3,
+        position: 4,
       },
     ],
     roles: [

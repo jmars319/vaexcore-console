@@ -10,6 +10,44 @@ export type DiscordRelayReadiness = {
 export type DiscordRelayStatus = {
   ok: boolean;
   readiness?: DiscordRelayReadiness;
+  config?: DiscordRelayHostedConfig;
+  templates?: DiscordRelaySetupTemplateSummary[];
+};
+
+export type DiscordRelayHostedConfig = {
+  connected: boolean;
+  guildId: string;
+  guildName: string;
+  installedAt: string;
+  setupTemplateId: string;
+  setupAppliedAt: string;
+  starterMessagesAppliedAt: string;
+  streamAnnouncementChannelId: string;
+  generalAnnouncementChannelId: string;
+  suggestionChannelId: string;
+  streamAlertsRoleId: string;
+  operatorRoleId: string;
+  createdChannelIds: Record<string, string>;
+  createdRoleIds: Record<string, string>;
+  createdMessageIds: Record<string, string>;
+  interactionUrl: string;
+  redirectUri: string;
+  permissions: string;
+  hasApplicationId: boolean;
+  hasClientSecret: boolean;
+  hasBotToken: boolean;
+};
+
+export type DiscordRelaySetupTemplateSummary = {
+  id: string;
+  name: string;
+  description: string;
+  recommendedFor: string;
+  channelCount: number;
+  categoryCount: number;
+  roleCount: number;
+  starterMessageCount: number;
+  postStarterMessagesByDefault: boolean;
 };
 
 export type DiscordRelaySuggestionStatus =
@@ -58,6 +96,39 @@ export class DiscordRelayClient {
 
   status() {
     return this.request<DiscordRelayStatus>("/api/console/discord/status");
+  }
+
+  startInstall() {
+    return this.request<{
+      ok: true;
+      authorizeUrl: string;
+      expiresAt: string;
+      permissions: string;
+      redirectUri: string;
+    }>("/api/console/discord/install/start", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
+
+  previewSetup(input: Record<string, unknown>) {
+    return this.request<Record<string, unknown>>(
+      "/api/console/discord/setup/preview",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    );
+  }
+
+  applySetup(input: Record<string, unknown>) {
+    return this.request<Record<string, unknown>>(
+      "/api/console/discord/setup/apply",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    );
   }
 
   registerCommands() {

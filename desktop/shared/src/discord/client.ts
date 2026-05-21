@@ -37,19 +37,19 @@ export type DiscordMessage = {
 export type DiscordCreateChannelInput = {
   name: string;
   type: DiscordChannelType;
-  parent_id?: string;
-  topic?: string;
-  bitrate?: number;
-  user_limit?: number;
-  nsfw?: boolean;
+  parent_id?: string | undefined;
+  topic?: string | undefined;
+  bitrate?: number | undefined;
+  user_limit?: number | undefined;
+  nsfw?: boolean | undefined;
 };
 
 export type DiscordCreateRoleInput = {
   name: string;
-  permissions?: string;
-  color?: number;
-  hoist?: boolean;
-  mentionable?: boolean;
+  permissions?: string | undefined;
+  color?: number | undefined;
+  hoist?: boolean | undefined;
+  mentionable?: boolean | undefined;
 };
 
 export type DiscordCreateMessageInput = {
@@ -66,8 +66,8 @@ export type DiscordPermissionOverwriteInput = {
 
 export type DiscordApiClientOptions = {
   botToken: string;
-  apiBaseUrl?: string;
-  fetchImpl?: typeof fetch;
+  apiBaseUrl?: string | undefined;
+  fetchImpl?: typeof fetch | undefined;
 };
 
 export class DiscordHttpError extends Error {
@@ -158,7 +158,7 @@ export class DiscordApiClient {
     path: string,
     options: { method?: string; body?: string } = {},
   ): Promise<T> {
-    const response = await this.fetchImpl(`${this.apiBaseUrl}${path}`, {
+    const init: RequestInit = {
       method: options.method ?? "GET",
       headers: {
         Authorization: `Bot ${this.botToken}`,
@@ -166,7 +166,12 @@ export class DiscordApiClient {
         "User-Agent":
           "VaexCore Console (https://github.com/jmars319/vaexcore-console)",
       },
-      body: options.body,
+    };
+    if (options.body !== undefined) {
+      init.body = options.body;
+    }
+    const response = await this.fetchImpl(`${this.apiBaseUrl}${path}`, {
+      ...init,
     });
 
     if (!response.ok) {

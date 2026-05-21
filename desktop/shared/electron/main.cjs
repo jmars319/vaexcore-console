@@ -276,7 +276,10 @@ const createWindow = async (url) => {
 
 const configureWindowOpenHandler = (window) => {
   window.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
-    if (targetUrl.startsWith("https://id.twitch.tv/")) {
+    if (
+      targetUrl.startsWith("https://id.twitch.tv/") ||
+      targetUrl.startsWith("https://discord.com/")
+    ) {
       void shell.openExternal(targetUrl);
       return { action: "deny" };
     }
