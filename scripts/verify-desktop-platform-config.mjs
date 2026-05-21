@@ -39,6 +39,22 @@ assert(
     "node scripts/verify-desktop-platform-config.mjs",
   "desktop platform smoke script is registered",
 );
+assert(
+  packageJson.build?.productName === "vaexcore console",
+  "macOS app bundle product name remains space-separated",
+);
+assert(
+  packageJson.build?.executableName === undefined,
+  "top-level executableName stays unset so macOS bundle remains vaexcore console.app",
+);
+assert(
+  packageJson.build?.mac?.executableName === undefined,
+  "macOS executableName stays unset so app bundle naming follows productName",
+);
+assert(
+  packageJson.build?.win?.executableName === "vaexcore-console",
+  "Windows keeps the hyphenated executable name without changing macOS bundle naming",
+);
 
 const files = packageJson.build?.files ?? [];
 assert(

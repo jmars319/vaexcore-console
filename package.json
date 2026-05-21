@@ -83,7 +83,6 @@
   "build": {
     "appId": "com.vaexil.vaexcore.console",
     "productName": "vaexcore console",
-    "executableName": "vaexcore-console",
     "toolsets": {
       "winCodeSign": "1.1.0"
     },
@@ -118,6 +117,7 @@
       ]
     },
     "win": {
+      "executableName": "vaexcore-console",
       "icon": "desktop/windows/assets/icon.ico",
       "signAndEditExecutable": true,
       "target": [
