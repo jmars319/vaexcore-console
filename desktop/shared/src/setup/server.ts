@@ -111,14 +111,14 @@ import {
   applyDiscordServerSetup,
   normalizeDiscordConfigInput,
   planDiscordServerSetup,
-  previewDiscordSetupTemplate,
   sendDiscordAnnouncement,
   type DiscordAnnouncementInput,
 } from "../discord/setup";
 import {
-  defaultDiscordSetupTemplate,
   discordAnnouncementKinds,
+  discordSetupTemplates,
   getDiscordSetupTemplate,
+  type DiscordSetupTemplate,
 } from "../discord/templates";
 import {
   DiscordRelayClient,
@@ -1908,7 +1908,7 @@ const getSafeRelayConfig = (secrets = readLocalSecrets()) => {
 
 const getSafeDiscordConfig = (secrets = readLocalSecrets()) => {
   const discord = secrets.discord;
-  const template = defaultDiscordSetupTemplate;
+  const template = getDiscordSetupTemplate(discord.setupTemplateId);
   return {
     hasBotToken: Boolean(discord.botToken),
     guildId: discord.guildId ?? "",
@@ -1926,18 +1926,27 @@ const getSafeDiscordConfig = (secrets = readLocalSecrets()) => {
     staffRoleId: discord.staffRoleId ?? "",
     lockStaffCategory: Boolean(discord.lockStaffCategory),
     setupTemplateId: template.id,
-    setupTemplate: {
-      id: template.id,
-      name: template.name,
-      description: template.description,
-      recommendedFor: template.recommendedFor ?? "",
-    },
+    setupTemplate: safeDiscordTemplateSummary(template),
+    setupTemplates: discordSetupTemplates.map(safeDiscordTemplateSummary),
     setupAppliedAt: discord.setupAppliedAt ?? "",
     createdChannelIds: discord.createdChannelIds ?? {},
     createdRoleIds: discord.createdRoleIds ?? {},
     relay: getSafeDiscordRelayConfig(secrets),
   };
 };
+
+const safeDiscordTemplateSummary = (template: DiscordSetupTemplate) => ({
+  id: template.id,
+  name: template.name,
+  description: template.description,
+  recommendedFor: template.recommendedFor ?? "",
+  channelCount: template.channels.filter(
+    (channel) => channel.kind !== "category",
+  ).length,
+  categoryCount: template.channels.filter(
+    (channel) => channel.kind === "category",
+  ).length,
+});
 
 const getSafeDiscordRelayConfig = (secrets = readLocalSecrets()) => {
   const relay = secrets.relay;
@@ -2043,7 +2052,8 @@ const getDiscordStatus = async (searchParams: URLSearchParams) => {
     ok: true,
     config: getSafeDiscordConfig(secrets),
     readiness: getDiscordReadiness(secrets),
-    template: defaultDiscordSetupTemplate,
+    template: getDiscordSetupTemplate(secrets.discord.setupTemplateId),
+    templates: discordSetupTemplates,
     bot,
     validationError,
   };
@@ -2226,6 +2236,10 @@ const saveDiscordConfig = (body: unknown) => {
     input.lockStaffCategory === undefined
       ? Boolean(existing.discord.lockStaffCategory)
       : Boolean(input.lockStaffCategory);
+  const setupTemplateId =
+    normalizeDiscordSetupTemplateId(
+      optionalInputString(input.setupTemplateId),
+    ) ?? existing.discord.setupTemplateId;
   const normalized = normalizeDiscordConfigInput({
     botToken: optionalInputString(input.botToken),
     guildId: optionalInputString(input.guildId),
@@ -2261,6 +2275,7 @@ const saveDiscordConfig = (body: unknown) => {
       normalized.staffRoleId ||
       (guildChanged ? undefined : existing.discord.staffRoleId),
     lockStaffCategory: Boolean(normalized.lockStaffCategory),
+    setupTemplateId,
     setupAppliedAt: guildChanged ? undefined : existing.discord.setupAppliedAt,
     createdChannelIds: guildChanged
       ? {}
@@ -2281,7 +2296,8 @@ const previewDiscordSetup = async (body: unknown) => {
   const includeRoles = Boolean(input.includeRoles);
   const secrets = readLocalSecrets();
   const template = getDiscordSetupTemplate(
-    optionalInputString(input.templateId),
+    normalizeDiscordSetupTemplateId(optionalInputString(input.templateId)) ??
+      secrets.discord.setupTemplateId,
   );
   const lockStaffCategory =
     input.lockStaffCategory === undefined
@@ -2343,7 +2359,8 @@ const applyDiscordSetup = async (body: unknown) => {
   const botToken = secrets.discord.botToken;
   const guildId = secrets.discord.guildId;
   const template = getDiscordSetupTemplate(
-    optionalInputString(input.templateId),
+    normalizeDiscordSetupTemplateId(optionalInputString(input.templateId)) ??
+      secrets.discord.setupTemplateId,
   );
   const lockStaffCategory =
     input.lockStaffCategory === undefined
@@ -2383,6 +2400,7 @@ const applyDiscordSetup = async (body: unknown) => {
         latest.discord.streamAlertsRoleId,
       staffRoleId: staffRoleId || latest.discord.staffRoleId,
       lockStaffCategory,
+      setupTemplateId: template.id,
     },
   });
 
@@ -3595,19 +3613,25 @@ const createDiscordClient = (botToken: string) =>
 
 const getDiscordAnnouncementChannelId = (
   discord: LocalSecrets["discord"],
-): string | undefined =>
-  discord.streamAnnouncementChannelId ||
-  discord.createdChannelIds?.[
-    defaultDiscordSetupTemplate.recommended.streamAnnouncementChannelId
-  ];
+): string | undefined => {
+  const template = getDiscordSetupTemplate(discord.setupTemplateId);
+  return (
+    discord.streamAnnouncementChannelId ||
+    discord.createdChannelIds?.[
+      template.recommended.streamAnnouncementChannelId
+    ]
+  );
+};
 
 const getDiscordStreamAlertsRoleId = (
   discord: LocalSecrets["discord"],
-): string | undefined =>
-  discord.streamAlertsRoleId ||
-  discord.createdRoleIds?.[
-    defaultDiscordSetupTemplate.recommended.streamAlertsRoleId
-  ];
+): string | undefined => {
+  const template = getDiscordSetupTemplate(discord.setupTemplateId);
+  return (
+    discord.streamAlertsRoleId ||
+    discord.createdRoleIds?.[template.recommended.streamAlertsRoleId]
+  );
+};
 
 const objectInput = (body: unknown): Record<string, unknown> =>
   body && typeof body === "object" && !Array.isArray(body)
@@ -3616,6 +3640,17 @@ const objectInput = (body: unknown): Record<string, unknown> =>
 
 const optionalInputString = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+const normalizeDiscordSetupTemplateId = (
+  value?: string,
+): string | undefined => {
+  if (!value) return undefined;
+  const template = discordSetupTemplates.find((item) => item.id === value);
+  if (!template) {
+    throw new SafeInputError("Select a valid Discord server layout preset.");
+  }
+  return template.id;
+};
 
 const getTwitchCreatorOpsState = () => {
   const secrets = readLocalSecrets();

@@ -4499,6 +4499,17 @@ function renderDiscord() {
   const config = discord.config || state.config?.discord || {};
   const readiness = discord.readiness || { ready: false, checks: [] };
   const preview = state.discordSetupPreview;
+  const setupTemplates = config.setupTemplates || discord.templates || [];
+  const selectedSetupTemplateId = discordValue(
+    "discordSetupTemplateId",
+    config.setupTemplateId || setupTemplates[0]?.id || "",
+  );
+  const selectedSetupTemplate =
+    setupTemplates.find(
+      (template) => template.id === selectedSetupTemplateId,
+    ) ||
+    config.setupTemplate ||
+    setupTemplates[0];
 
   return [
     sectionHeader(
@@ -4655,15 +4666,33 @@ function renderDiscord() {
       ]),
     ]),
     card("Local Server Layout", [
-      discord.config?.setupTemplate
+      selectedSetupTemplate
         ? h("div", { className: "state-banner compact info" }, [
-            h("strong", { text: discord.config.setupTemplate.name }),
+            h("strong", { text: selectedSetupTemplate.name }),
             h("span", {
               text:
-                discord.config.setupTemplate.recommendedFor ||
-                discord.config.setupTemplate.description,
+                selectedSetupTemplate.recommendedFor ||
+                selectedSetupTemplate.description,
             }),
           ])
+        : null,
+      setupTemplates.length
+        ? formRow(
+            "Layout preset",
+            h(
+              "select",
+              {
+                id: "discordSetupTemplateId",
+                onChange: updateDiscordDraft,
+              },
+              setupTemplates.map((template) =>
+                option(
+                  template.id,
+                  `${template.name} (${template.categoryCount || 0} sections, ${template.channelCount || 0} channels)`,
+                ),
+              ),
+            ),
+          )
         : null,
       h("label", { className: "inline-check" }, [
         h("input", {
@@ -4682,7 +4711,7 @@ function renderDiscord() {
         "Lock Staff category to the selected Staff role",
       ]),
       callout(
-        "Baseline: START HERE, STREAM, COMMUNITY, VOICE, and STAFF. Preview shows exactly what will be created, reused, or blocked before anything is applied.",
+        "Each preset is a full server layout. Preview shows exactly which categories, text channels, voice channels, and optional roles will be created, reused, or blocked before anything is applied.",
         "info",
       ),
       h("div", { className: "actions" }, [
@@ -4961,7 +4990,7 @@ function renderDiscordPlan(result) {
       ],
     ]),
     callout(
-      "Required bot permissions for this baseline: View Channels, Manage Channels, Send Messages, Embed Links, and Manage Roles only when creating Stream Alerts.",
+      "Required bot permissions for the selected preset: View Channels, Manage Channels, Send Messages, Embed Links, and Manage Roles only when creating Stream Alerts.",
       "info",
     ),
     h("div", { className: "compact-capability-list" }, [
@@ -9681,6 +9710,7 @@ async function previewDiscordSetup() {
     "discordPreviewSetup",
     async () => {
       const result = await api.previewDiscordSetup({
+        templateId: field("discordSetupTemplateId")?.value || "",
         includeRoles: Boolean(field("discordCreateStreamAlertsRole")?.checked),
         lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
         staffRoleId: field("discordStaffRoleId")?.value || "",
@@ -9709,6 +9739,7 @@ async function applyDiscordSetup() {
     "discordApplySetup",
     async () => {
       const result = await api.applyDiscordSetup({
+        templateId: field("discordSetupTemplateId")?.value || "",
         includeRoles: Boolean(field("discordCreateStreamAlertsRole")?.checked),
         lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
         staffRoleId: field("discordStaffRoleId")?.value || "",
@@ -9884,6 +9915,9 @@ function updateDiscordDraft(event) {
     event.target.type === "checkbox"
       ? event.target.checked
       : event.target.value;
+  if (event.target.id === "discordSetupTemplateId") {
+    state.discordSetupPreview = null;
+  }
   updateDisabledState();
 }
 
@@ -10088,6 +10122,8 @@ function readDiscordConfigPayload() {
       "",
     staffRoleId: field("discordStaffRoleId")?.value || config.staffRoleId || "",
     lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
+    setupTemplateId:
+      field("discordSetupTemplateId")?.value || config.setupTemplateId || "",
   };
 }
 
@@ -10947,6 +10983,10 @@ function syncFormValues() {
   setValue(
     "discordStaffRoleSelect",
     discordValue("discordStaffRoleId", discordConfig.staffRoleId || ""),
+  );
+  setValue(
+    "discordSetupTemplateId",
+    discordValue("discordSetupTemplateId", discordConfig.setupTemplateId || ""),
   );
   setChecked(
     "discordCreateStreamAlertsRole",

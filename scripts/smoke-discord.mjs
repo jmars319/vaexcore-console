@@ -37,6 +37,14 @@ async function runSmoke() {
   assert(appJs.includes('["discord", "Discord"]'), "Discord tab is registered");
   assert(appJs.includes("Server Layout"), "Discord setup UI is present");
   assert(
+    appJs.includes("Layout preset"),
+    "Discord layout preset picker is present",
+  );
+  assert(
+    appJs.includes("Each preset is a full server layout"),
+    "Discord layout presets explain preview behavior",
+  );
+  assert(
     appJs.includes("Lock Staff category"),
     "Discord Staff privacy toggle is present",
   );
@@ -46,7 +54,7 @@ async function runSmoke() {
     "Discord role loading action is present",
   );
   assert(
-    appJs.includes("Required bot permissions for this baseline"),
+    appJs.includes("Required bot permissions for the selected preset"),
     "Discord preview explains required bot permissions",
   );
   assert(
@@ -65,13 +73,26 @@ async function runSmoke() {
     "Discord readiness starts blocked",
   );
   assert(
-    cleanStatus.config.setupTemplate.name === "Streamer Community Baseline",
-    "Discord baseline template is surfaced",
+    cleanStatus.config.setupTemplate.name === "Full Creator Server",
+    "Discord full setup template is surfaced by default",
+  );
+  assert(
+    cleanStatus.config.setupTemplates.some(
+      (template) => template.id === "streamer-community-baseline",
+    ),
+    "Discord baseline setup option is surfaced",
+  );
+  assert(
+    cleanStatus.config.setupTemplates.some(
+      (template) => template.id === "lean-live-alerts",
+    ),
+    "Discord lean setup option is surfaced",
   );
 
   const saved = await post("/api/discord/config", {
     botToken,
     guildId,
+    setupTemplateId: "content-clips-hub",
   });
   assert(saved.ok === true, "Discord config save returns ok");
   assert(
@@ -79,6 +100,10 @@ async function runSmoke() {
     "Discord bot token is saved safely",
   );
   assert(saved.config.guildId === guildId, "Discord guild ID is saved");
+  assert(
+    saved.config.setupTemplateId === "content-clips-hub",
+    "Discord setup template choice is saved",
+  );
   assertSafePayload(saved);
 
   const validated = await json("/api/discord/status?validate=1");
@@ -94,7 +119,21 @@ async function runSmoke() {
   );
   assertSafePayload(roles);
 
+  const leanPreview = await post("/api/discord/setup/preview", {
+    templateId: "lean-live-alerts",
+    includeRoles: true,
+  });
+  assert(
+    leanPreview.plan.template.name === "Lean Live Alerts",
+    "alternate Discord setup preset can be previewed",
+  );
+  assert(
+    leanPreview.plan.summary.channelsToCreate >= 8,
+    "lean setup preset plans a compact server layout",
+  );
+
   const preview = await post("/api/discord/setup/preview", {
+    templateId: "full-creator-community",
     includeRoles: true,
   });
   assert(preview.connected === true, "setup preview connects to Discord");
@@ -122,6 +161,7 @@ async function runSmoke() {
   );
 
   const blockedPrivacy = await post("/api/discord/setup/preview", {
+    templateId: "full-creator-community",
     includeRoles: true,
     lockStaffCategory: true,
   });
@@ -140,6 +180,7 @@ async function runSmoke() {
   );
 
   const privacyPreview = await post("/api/discord/setup/preview", {
+    templateId: "full-creator-community",
     includeRoles: true,
     lockStaffCategory: true,
     staffRoleId,
@@ -150,6 +191,7 @@ async function runSmoke() {
   );
 
   const applied = await post("/api/discord/setup/apply", {
+    templateId: "full-creator-community",
     includeRoles: true,
     lockStaffCategory: true,
     staffRoleId,
@@ -183,6 +225,7 @@ async function runSmoke() {
   );
 
   const idempotent = await post("/api/discord/setup/apply", {
+    templateId: "full-creator-community",
     includeRoles: true,
     lockStaffCategory: true,
     staffRoleId,

@@ -16,7 +16,7 @@ import {
   type DiscordSetupRoleTemplate,
   type DiscordSetupTemplate,
   discordChannelTypeCodes,
-  minimalStreamerDiscordTemplate,
+  defaultDiscordSetupTemplate,
 } from "./templates";
 
 export type DiscordSetupActionType =
@@ -102,7 +102,7 @@ export const planDiscordServerSetup = (options: {
   lockStaffCategory?: boolean;
   staffRoleId?: string;
 }): DiscordSetupPlan => {
-  const template = options.template ?? minimalStreamerDiscordTemplate;
+  const template = options.template ?? defaultDiscordSetupTemplate;
   const includeRoles = options.includeRoles ?? false;
   const lockStaffCategory = options.lockStaffCategory ?? false;
   const actions: DiscordSetupAction[] = [];
@@ -237,7 +237,7 @@ export const planDiscordServerSetup = (options: {
 };
 
 export const previewDiscordSetupTemplate = (
-  template = minimalStreamerDiscordTemplate,
+  template = defaultDiscordSetupTemplate,
 ) =>
   planDiscordServerSetup({
     existingChannels: [],
@@ -253,7 +253,7 @@ export const applyDiscordServerSetup = async (options: {
   lockStaffCategory?: boolean;
   staffRoleId?: string;
 }): Promise<DiscordSetupApplyResult> => {
-  const template = options.template ?? minimalStreamerDiscordTemplate;
+  const template = options.template ?? defaultDiscordSetupTemplate;
   const guildId = normalizeDiscordSnowflake(
     options.guildId,
     "Discord guild ID",
