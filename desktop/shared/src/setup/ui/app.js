@@ -851,9 +851,9 @@ function renderReadyForStreamCard(runtime = {}, readiness = {}) {
         : readiness.nextAction ||
           "Run the local rehearsal to refresh setup, Relay, Discord, giveaway, diagnostics, and support-export checks.";
 
-  return card("Ready for Stream", [
+  return card("Operations Center", [
     h("div", { className: `state-banner compact ${readyForStreamTone()}` }, [
-      h("strong", { text: readyForStreamLabel() }),
+      h("strong", { text: `Ready for Stream: ${readyForStreamLabel()}` }),
       h("span", { text: primaryDetail }),
     ]),
     statusGrid([

@@ -31,6 +31,10 @@ try {
 async function runSmoke() {
   const appJs = await text("/ui/app.js");
   assert(appJs.includes("Bot Completion"), "Bot Completion card is present");
+  assert(
+    appJs.includes("Operations Center"),
+    "Operations Center card is present",
+  );
   assert(appJs.includes("Ready for Stream"), "dashboard ready card is present");
   assert(appJs.includes("Last checked"), "bot completion shows last checked");
   assert(appJs.includes("Run dry-run rehearsal"), "rehearsal UI is present");

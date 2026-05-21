@@ -38,6 +38,23 @@ export type RelayBotReadinessReport = {
     degradedCount: number;
     blockedCount: number;
   };
+  codeReadiness?: {
+    state?: "ready" | "degraded" | "blocked";
+    detail?: string;
+    lastCheckedAt?: string;
+    schemaReady?: boolean;
+    queueReady?: boolean;
+    retryReady?: boolean;
+    deadLetterReady?: boolean;
+    eventSubFresh?: boolean;
+    discordCommandsFresh?: boolean;
+    queueAges?: {
+      twitchChatOldestAgeMs?: number | null;
+      discordInteractionOldestAgeMs?: number | null;
+      outboundRetryOldestAgeMs?: number | null;
+    };
+    latestRecordMetadata?: Record<string, unknown>;
+  };
   installation?: {
     id: string;
     name: string;
@@ -57,7 +74,36 @@ export type RelayBotReadinessReport = {
     suggestions?: Record<string, number>;
     outboundSends?: Record<string, number>;
   };
+  schema?: {
+    ready?: boolean;
+    requiredTables?: number;
+    presentTables?: number;
+    missingTables?: string[];
+  };
+  queues?: {
+    twitchChatEvents?: {
+      queued?: number;
+      oldestAgeMs?: number | null;
+    };
+    discordInteractions?: {
+      queued?: number;
+      oldestAgeMs?: number | null;
+    };
+    outboundRetry?: {
+      dueRetry?: number;
+      deadLettered?: number;
+      oldestRetryAgeMs?: number | null;
+    };
+  };
+  freshness?: {
+    eventSub?: { present?: boolean; ageMs?: number | null };
+    discordCommandRegistration?: {
+      present?: boolean;
+      ageMs?: number | null;
+    };
+  };
   latest?: Record<string, unknown>;
+  latestRecordMetadata?: Record<string, unknown>;
 };
 
 export type RelayEvent = {

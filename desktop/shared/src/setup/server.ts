@@ -663,7 +663,7 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
   }
 
   if (request.method === "GET" && url.pathname === "/api/support-bundle") {
-    sendJson(response, 200, getSupportBundle());
+    sendJson(response, 200, await getSupportBundle());
     return;
   }
 
@@ -3230,7 +3230,7 @@ const getBotSupportBundleRoute = async () => {
   const [completion, supportBundle, discordEvents, discordSuggestions] =
     await Promise.all([
       getBotCompletionRoute(),
-      Promise.resolve(getSupportBundle()),
+      getSupportBundle(),
       getOptionalDiscordRelayEvents(),
       getOptionalDiscordRelaySuggestions(),
     ]);
@@ -3382,7 +3382,7 @@ const runFullLocalRehearsalRoute = async () => {
     getRelayStatusRoute(),
     previewDiscordSetup({ includeRoles: true }),
     Promise.resolve(getDiagnosticsReport()),
-    Promise.resolve(getSupportBundle()),
+    getSupportBundle(),
   ]);
   const giveawayState = getGiveawayState();
   const giveawayExport = giveawaysService.exportResults();
@@ -5333,10 +5333,13 @@ const getDiagnosticsReport = () => {
   };
 };
 
-const getSupportBundle = () => {
+const getSupportBundle = async () => {
   const secrets = readLocalSecrets();
   const setupMode = getSetupMode(secrets);
   const diagnostics = getDiagnosticsReport();
+  const completion = await getBotCompletionRoute();
+  const giveawayState = getGiveawayState();
+  const giveawayExport = giveawaysService.exportResults();
   const outbound = outboundHistory
     .list()
     .slice(0, 50)
@@ -5405,6 +5408,35 @@ const getSupportBundle = () => {
       setupChecks: getSafeSetupChecks(secrets),
       modeCapabilities: getSetupCapabilitySummary(setupMode),
     },
+    operations: {
+      status: completion.status,
+      statusLabel: completion.statusLabel,
+      statusDetail: completion.statusDetail,
+      completionPercent: completion.completionPercent,
+      lastChecks: {
+        botCompletion: completion.generatedAt,
+        localSetup: completion.setupChecks.local?.checkedAt ?? "",
+        relaySetup: completion.setupChecks.relay?.checkedAt ?? "",
+        diagnostics: diagnostics.generatedAt,
+      },
+      capabilities: completion.modeCapabilities,
+      relay: summarizeRelayReadinessForSupport(completion.relayReadinessReport),
+      giveaway: {
+        status: giveawayState.summary.status,
+        operatorState: giveawayState.summary.operatorState,
+        entryCount: giveawayState.summary.entryCount,
+        pendingConfirmationCount:
+          giveawayState.summary.pendingConfirmationCount,
+        expiredWinnerCount: giveawayState.summary.expiredWinnerCount,
+        exportGeneratedAt:
+          giveawayExport.available === true ? giveawayExport.exportedAt : "",
+        exportEntrantCount:
+          giveawayExport.available === true ? giveawayExport.entries.length : 0,
+        exportWinnerCount:
+          giveawayExport.available === true ? giveawayExport.winners.length : 0,
+        redacted: true,
+      },
+    },
     discordSetup: getDiscordSetupSummary(secrets),
     diagnostics,
     featureGates: featureGates.list(),
@@ -5425,6 +5457,78 @@ const getSupportBundle = () => {
       })),
     },
     recovery: diagnostics.firstRun.recoverySteps,
+  };
+};
+
+const summarizeRelayReadinessForSupport = (
+  relayReadinessReport: Awaited<ReturnType<typeof getRelayReadinessReport>>,
+) => {
+  if (!relayReadinessReport.ok) {
+    return {
+      connected: false,
+      state: "not connected",
+      detail: relayReadinessReport.error,
+      lastCheckedAt: "",
+      schemaReady: false,
+      queueReady: false,
+      eventSubFresh: false,
+      discordCommandsFresh: false,
+    };
+  }
+
+  const report = relayReadinessReport.report;
+  if (report.codeReadiness) {
+    return {
+      connected: true,
+      state: report.codeReadiness.state ?? report.summary?.state ?? "unknown",
+      detail:
+        report.codeReadiness.detail ??
+        report.summary?.detail ??
+        "Relay readiness report was returned.",
+      lastCheckedAt:
+        report.codeReadiness.lastCheckedAt ??
+        report.summary?.lastCheckedAt ??
+        report.generatedAt,
+      schemaReady: report.codeReadiness.schemaReady === true,
+      queueReady: report.codeReadiness.queueReady === true,
+      eventSubFresh: report.codeReadiness.eventSubFresh === true,
+      discordCommandsFresh: report.codeReadiness.discordCommandsFresh === true,
+      queueAges: {
+        twitchChatOldestAgeMs:
+          report.codeReadiness.queueAges?.twitchChatOldestAgeMs ?? null,
+        discordInteractionOldestAgeMs:
+          report.codeReadiness.queueAges?.discordInteractionOldestAgeMs ?? null,
+        outboundRetryOldestAgeMs:
+          report.codeReadiness.queueAges?.outboundRetryOldestAgeMs ?? null,
+      },
+      latestRecordMetadata:
+        report.codeReadiness.latestRecordMetadata ??
+        report.latestRecordMetadata ??
+        {},
+    };
+  }
+
+  return {
+    connected: true,
+    state: report.summary?.state ?? "unknown",
+    detail: report.summary?.detail ?? "Relay readiness report was returned.",
+    lastCheckedAt: report.summary?.lastCheckedAt ?? report.generatedAt,
+    schemaReady: report.schema?.ready === true,
+    queueReady:
+      (report.queues?.outboundRetry?.dueRetry ?? 0) === 0 &&
+      (report.queues?.outboundRetry?.deadLettered ?? 0) === 0,
+    eventSubFresh: report.freshness?.eventSub?.present === true,
+    discordCommandsFresh:
+      report.freshness?.discordCommandRegistration?.present === true,
+    queueAges: {
+      twitchChatOldestAgeMs:
+        report.queues?.twitchChatEvents?.oldestAgeMs ?? null,
+      discordInteractionOldestAgeMs:
+        report.queues?.discordInteractions?.oldestAgeMs ?? null,
+      outboundRetryOldestAgeMs:
+        report.queues?.outboundRetry?.oldestRetryAgeMs ?? null,
+    },
+    latestRecordMetadata: report.latestRecordMetadata ?? {},
   };
 };
 

@@ -151,6 +151,22 @@ async function runSmoke() {
     "support bundle includes setup mode capabilities",
   );
   assert(
+    bundle.operations?.status,
+    "support bundle includes operations center status",
+  );
+  assert(
+    bundle.operations?.lastChecks?.botCompletion,
+    "support bundle includes operations last-check timestamps",
+  );
+  assert(
+    bundle.operations?.relay?.state,
+    "support bundle includes Relay readiness summary",
+  );
+  assert(
+    bundle.operations?.giveaway?.redacted === true,
+    "support bundle includes redacted giveaway rehearsal summary",
+  );
+  assert(
     bundle.discordSetup.templateName === "Streamer Community Baseline",
     "support bundle includes Discord setup template summary",
   );
