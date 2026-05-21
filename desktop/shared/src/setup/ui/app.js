@@ -4610,6 +4610,14 @@ function renderDiscord() {
           }),
         ),
         formRow(
+          "Operator role ID",
+          h("input", {
+            id: "discordOperatorRoleId",
+            placeholder: "VaexCore Operator role ID",
+            onInput: updateDiscordDraft,
+          }),
+        ),
+        formRow(
           "Staff role ID",
           h("input", {
             id: "discordStaffRoleId",
@@ -4649,7 +4657,7 @@ function renderDiscord() {
             )
           : null,
       callout(
-        "The bot token stays in the local secrets file and is never returned by the setup API. The bot needs Manage Channels to create the layout, Send Messages and Embed Links to announce, Manage Roles only if you create the optional Stream Alerts role, and Manage Channels to apply Staff privacy.",
+        "The bot token stays in the local secrets file and is never returned by the setup API. The bot needs View Channels, Manage Channels, Manage Roles, Send Messages, and Embed Links for the full operations setup.",
         "info",
       ),
       h("div", { className: "actions" }, [
@@ -4688,7 +4696,7 @@ function renderDiscord() {
               setupTemplates.map((template) =>
                 option(
                   template.id,
-                  `${template.name} (${template.categoryCount || 0} sections, ${template.channelCount || 0} channels)`,
+                  `${template.name} (${template.categoryCount || 0} sections, ${template.channelCount || 0} channels, ${template.roleCount || 0} roles)`,
                 ),
               ),
             ),
@@ -4700,7 +4708,23 @@ function renderDiscord() {
           type: "checkbox",
           onChange: updateDiscordDraft,
         }),
-        "Create optional Stream Alerts role",
+        "Create preset roles",
+      ]),
+      h("label", { className: "inline-check" }, [
+        h("input", {
+          id: "discordApplyPermissions",
+          type: "checkbox",
+          onChange: updateDiscordDraft,
+        }),
+        "Apply operations permission matrix",
+      ]),
+      h("label", { className: "inline-check" }, [
+        h("input", {
+          id: "discordPostStarterMessages",
+          type: "checkbox",
+          onChange: updateDiscordDraft,
+        }),
+        "Post starter messages",
       ]),
       h("label", { className: "inline-check" }, [
         h("input", {
@@ -4711,7 +4735,7 @@ function renderDiscord() {
         "Lock Staff category to the selected Staff role",
       ]),
       callout(
-        "Each preset is a full server layout. Preview shows exactly which categories, text channels, voice channels, and optional roles will be created, reused, or blocked before anything is applied.",
+        "Each preset is a server layout. Preview shows exactly which categories, text channels, voice channels, roles, permission overwrites, and starter messages will be created, reused, skipped, or blocked before anything is applied.",
         "info",
       ),
       h("div", { className: "actions" }, [
@@ -4983,20 +5007,24 @@ function renderDiscordPlan(result) {
       ["Roles to create", summary.rolesToCreate || 0],
       ["Skipped roles", summary.skippedRoles || 0],
       ["Permission actions", summary.permissionOverwrites || 0],
+      ["Starter messages", summary.starterMessagesToPost || 0],
+      ["Starter messages skipped", summary.starterMessagesSkipped || 0],
       [
         "Blocked privacy",
-        summary.blockedPermissions || 0,
-        !summary.blockedPermissions,
+        (summary.blockedPermissions || 0) +
+          (summary.starterMessagesBlocked || 0),
+        !(summary.blockedPermissions || summary.starterMessagesBlocked),
       ],
     ]),
     callout(
-      "Required bot permissions for the selected preset: View Channels, Manage Channels, Send Messages, Embed Links, and Manage Roles only when creating Stream Alerts.",
+      "Required bot permissions for the full setup: View Channels, Manage Channels, Manage Roles, Send Messages, and Embed Links. Created roles intentionally avoid Administrator, Kick Members, Ban Members, and Manage Server.",
       "info",
     ),
     h("div", { className: "compact-capability-list" }, [
       h("span", { text: "Stream alerts map to live-now." }),
       h("span", { text: "General announcements map to announcements." }),
       h("span", { text: "Relay suggestions map to suggestions." }),
+      h("span", { text: "Relay operators map to VaexCore Operator." }),
       h("span", {
         text: plan.lockStaffCategory
           ? "Staff privacy will only touch the STAFF category."
@@ -5012,11 +5040,14 @@ function renderDiscordPlan(result) {
           className:
             action.type === "create_channel" || action.type === "create_role"
               ? "warn"
-              : action.type === "blocked_permission"
+              : action.type === "blocked_permission" ||
+                  action.type === "blocked_starter_message"
                 ? "bad"
-                : action.type === "apply_permission_overwrite"
+                : action.type === "apply_permission_overwrite" ||
+                    action.type === "post_starter_message"
                   ? "warn"
-                  : action.type === "skip_role"
+                  : action.type === "skip_role" ||
+                      action.type === "skip_starter_message"
                     ? "muted"
                     : "ok",
           text: `${action.name}: ${action.detail}`,
@@ -9712,6 +9743,10 @@ async function previewDiscordSetup() {
       const result = await api.previewDiscordSetup({
         templateId: field("discordSetupTemplateId")?.value || "",
         includeRoles: Boolean(field("discordCreateStreamAlertsRole")?.checked),
+        applyPermissions: Boolean(field("discordApplyPermissions")?.checked),
+        postStarterMessages: Boolean(
+          field("discordPostStarterMessages")?.checked,
+        ),
         lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
         staffRoleId: field("discordStaffRoleId")?.value || "",
       });
@@ -9741,6 +9776,10 @@ async function applyDiscordSetup() {
       const result = await api.applyDiscordSetup({
         templateId: field("discordSetupTemplateId")?.value || "",
         includeRoles: Boolean(field("discordCreateStreamAlertsRole")?.checked),
+        applyPermissions: Boolean(field("discordApplyPermissions")?.checked),
+        postStarterMessages: Boolean(
+          field("discordPostStarterMessages")?.checked,
+        ),
         lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
         staffRoleId: field("discordStaffRoleId")?.value || "",
       });
@@ -9917,6 +9956,13 @@ function updateDiscordDraft(event) {
       : event.target.value;
   if (event.target.id === "discordSetupTemplateId") {
     state.discordSetupPreview = null;
+    const config = state.discord?.config || state.config?.discord || {};
+    const template = (config.setupTemplates || []).find(
+      (item) => item.id === event.target.value,
+    );
+    const postStarterMessages = Boolean(template?.postStarterMessagesByDefault);
+    state.discordDraft.discordPostStarterMessages = postStarterMessages;
+    setChecked("discordPostStarterMessages", postStarterMessages);
   }
   updateDisabledState();
 }
@@ -10120,6 +10166,8 @@ function readDiscordConfigPayload() {
       field("discordStreamAlertsRoleId")?.value ||
       config.streamAlertsRoleId ||
       "",
+    operatorRoleId:
+      field("discordOperatorRoleId")?.value || config.operatorRoleId || "",
     staffRoleId: field("discordStaffRoleId")?.value || config.staffRoleId || "",
     lockStaffCategory: Boolean(field("discordLockStaffCategory")?.checked),
     setupTemplateId:
@@ -10867,6 +10915,11 @@ function syncFormValues() {
   const config = state.config || {};
   const relayConfig = config.relay || {};
   const discordConfig = state.discord?.config || config.discord || {};
+  const selectedDiscordSetupTemplate =
+    discordConfig.setupTemplate ||
+    (discordConfig.setupTemplates || []).find(
+      (template) => template.id === discordConfig.setupTemplateId,
+    );
   const summary = state.giveaway?.summary || {};
   const selectedCommand = selectedCustomCommand();
   const currentTimer = selectedTimer();
@@ -10977,6 +11030,10 @@ function syncFormValues() {
     ),
   );
   setValue(
+    "discordOperatorRoleId",
+    discordValue("discordOperatorRoleId", discordConfig.operatorRoleId || ""),
+  );
+  setValue(
     "discordStaffRoleId",
     discordValue("discordStaffRoleId", discordConfig.staffRoleId || ""),
   );
@@ -10991,6 +11048,19 @@ function syncFormValues() {
   setChecked(
     "discordCreateStreamAlertsRole",
     Boolean(discordValue("discordCreateStreamAlertsRole", true)),
+  );
+  setChecked(
+    "discordApplyPermissions",
+    Boolean(discordValue("discordApplyPermissions", true)),
+  );
+  setChecked(
+    "discordPostStarterMessages",
+    Boolean(
+      discordValue(
+        "discordPostStarterMessages",
+        selectedDiscordSetupTemplate?.postStarterMessagesByDefault || false,
+      ),
+    ),
   );
   setChecked(
     "discordLockStaffCategory",

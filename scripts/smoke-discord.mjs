@@ -41,12 +41,24 @@ async function runSmoke() {
     "Discord layout preset picker is present",
   );
   assert(
-    appJs.includes("Each preset is a full server layout"),
+    appJs.includes("Each preset is a server layout"),
     "Discord layout presets explain preview behavior",
   );
   assert(
     appJs.includes("Lock Staff category"),
     "Discord Staff privacy toggle is present",
+  );
+  assert(
+    appJs.includes("Create preset roles"),
+    "Discord preset role setup toggle is present",
+  );
+  assert(
+    appJs.includes("Apply operations permission matrix"),
+    "Discord operations permission toggle is present",
+  );
+  assert(
+    appJs.includes("Post starter messages"),
+    "Discord starter message toggle is present",
   );
   assert(appJs.includes("Staff role picker"), "Discord role picker is present");
   assert(
@@ -54,7 +66,7 @@ async function runSmoke() {
     "Discord role loading action is present",
   );
   assert(
-    appJs.includes("Required bot permissions for the selected preset"),
+    appJs.includes("Required bot permissions for the full setup"),
     "Discord preview explains required bot permissions",
   );
   assert(
@@ -75,6 +87,14 @@ async function runSmoke() {
   assert(
     cleanStatus.config.setupTemplate.name === "Full Creator Server",
     "Discord full setup template is surfaced by default",
+  );
+  assert(
+    cleanStatus.config.setupTemplate.roleCount >= 13,
+    "Discord full setup template exposes the full role hierarchy",
+  );
+  assert(
+    cleanStatus.config.setupTemplate.starterMessageCount >= 8,
+    "Discord full setup template exposes starter content",
   );
   assert(
     cleanStatus.config.setupTemplates.some(
@@ -135,6 +155,8 @@ async function runSmoke() {
   const preview = await post("/api/discord/setup/preview", {
     templateId: "full-creator-community",
     includeRoles: true,
+    applyPermissions: true,
+    postStarterMessages: true,
   });
   assert(preview.connected === true, "setup preview connects to Discord");
   assert(
@@ -142,8 +164,24 @@ async function runSmoke() {
     "setup preview plans streamer text and voice channels",
   );
   assert(
-    preview.plan.summary.rolesToCreate === 1,
-    "setup preview plans optional Stream Alerts role",
+    preview.plan.summary.rolesToCreate >= 13,
+    "setup preview plans the full operations role hierarchy",
+  );
+  assert(
+    preview.plan.summary.permissionOverwrites >= 60,
+    "setup preview plans the operations permission matrix",
+  );
+  assert(
+    preview.plan.summary.starterMessagesToPost >= 8,
+    "setup preview plans starter messages",
+  );
+  assert(
+    preview.plan.actions.some(
+      (action) =>
+        action.type === "post_starter_message" &&
+        action.detail.includes("Welcome to the server"),
+    ),
+    "setup preview shows exact starter message copy",
   );
   assert(
     preview.plan.summary.existingChannels >= 4,
@@ -163,6 +201,7 @@ async function runSmoke() {
   const blockedPrivacy = await post("/api/discord/setup/preview", {
     templateId: "full-creator-community",
     includeRoles: true,
+    applyPermissions: false,
     lockStaffCategory: true,
   });
   assert(
@@ -182,6 +221,7 @@ async function runSmoke() {
   const privacyPreview = await post("/api/discord/setup/preview", {
     templateId: "full-creator-community",
     includeRoles: true,
+    applyPermissions: false,
     lockStaffCategory: true,
     staffRoleId,
   });
@@ -193,8 +233,9 @@ async function runSmoke() {
   const applied = await post("/api/discord/setup/apply", {
     templateId: "full-creator-community",
     includeRoles: true,
-    lockStaffCategory: true,
-    staffRoleId,
+    applyPermissions: true,
+    postStarterMessages: true,
+    lockStaffCategory: false,
   });
   assert(applied.ok === true, "Discord setup apply returns ok");
   assert(
@@ -202,18 +243,55 @@ async function runSmoke() {
       privacyPreview.plan.summary.channelsToCreate,
     "Discord setup creates planned channels",
   );
-  assert(applied.createdRoles.length === 1, "Discord setup creates alert role");
   assert(
-    applied.permissionOverwritesApplied === 2,
-    "Discord setup applies Staff privacy overwrites",
+    applied.createdRoles.length >= 13,
+    "Discord setup creates the full operations role hierarchy",
   );
   assert(
-    fakeDiscord.permissionOverwrites.length === 2,
-    "fake Discord received only Staff category permission changes",
+    fakeDiscord.roles.some((role) => role.name === "VaexCore Operator"),
+    "Discord setup creates the VaexCore Operator role",
+  );
+  assert(
+    fakeDiscord.roles.some((role) => role.name === "Muted"),
+    "Discord setup creates the Muted role",
+  );
+  assert(
+    fakeDiscord.roles
+      .filter((role) => role.id !== guildId && !role.managed)
+      .every((role) => !["2", "4", "8", "32"].includes(role.permissions)),
+    "Discord setup does not grant unsafe role permissions",
+  );
+  assert(
+    applied.permissionOverwritesApplied ===
+      preview.plan.summary.permissionOverwrites,
+    `Discord setup applies the planned operations permission overwrites (${applied.permissionOverwritesApplied} applied, ${preview.plan.summary.permissionOverwrites} previewed)`,
+  );
+  assert(
+    fakeDiscord.permissionOverwrites.length ===
+      applied.permissionOverwritesApplied,
+    "fake Discord stores deterministic permission overwrites",
+  );
+  assert(
+    applied.starterMessagesPosted >= 8,
+    "Discord setup posts starter messages",
+  );
+  assert(
+    applied.createdMessageIds.welcome && applied.createdMessageIds.rules,
+    "Discord setup records starter message IDs",
+  );
+  assert(
+    fakeDiscord.messages.some((message) =>
+      message.content.includes("Welcome to the server"),
+    ),
+    "fake Discord received starter message content",
   );
   assert(
     applied.config.streamAnnouncementChannelId,
     "Discord setup stores stream announcement channel",
+  );
+  assert(
+    applied.config.operatorRoleId,
+    "Discord setup stores the operator role ID",
   );
   assert(
     fakeDiscord.channels.some((channel) => channel.name === "live-now"),
@@ -227,8 +305,9 @@ async function runSmoke() {
   const idempotent = await post("/api/discord/setup/apply", {
     templateId: "full-creator-community",
     includeRoles: true,
-    lockStaffCategory: true,
-    staffRoleId,
+    applyPermissions: true,
+    postStarterMessages: true,
+    lockStaffCategory: false,
   });
   assert(
     idempotent.createdChannels.length === 0,
@@ -237,6 +316,19 @@ async function runSmoke() {
   assert(
     idempotent.createdRoles.length === 0,
     "Discord setup is idempotent for roles",
+  );
+  assert(
+    idempotent.starterMessagesPosted === 0,
+    "Discord setup is idempotent for starter messages",
+  );
+  assert(
+    idempotent.plan.summary.starterMessagesSkipped >= 8,
+    "Discord setup preview skips previously posted starter messages",
+  );
+  assert(
+    fakeDiscord.permissionOverwrites.length ===
+      applied.permissionOverwritesApplied,
+    "Discord setup updates permission overwrites without duplicating them",
   );
 
   const live = await post("/api/discord/announce", {
@@ -247,8 +339,11 @@ async function runSmoke() {
   });
   assert(live.ok === true, "live announcement sends");
   assert(live.messageId, "live announcement returns message ID");
+  const liveMessage = fakeDiscord.messages.find(
+    (message) => message.id === live.messageId,
+  );
   assert(
-    fakeDiscord.messages[0]?.content.includes("<@&"),
+    liveMessage?.content.includes("<@&"),
     "live announcement mentions the Stream Alerts role",
   );
   assertSafePayload(live);
@@ -260,8 +355,11 @@ async function runSmoke() {
     mentionRole: false,
   });
   assert(late.ok === true, "late announcement sends");
+  const lateMessage = fakeDiscord.messages.find(
+    (message) => message.id === late.messageId,
+  );
   assert(
-    !fakeDiscord.messages[1]?.content.includes("<@&"),
+    !lateMessage?.content.includes("<@&"),
     "late announcement does not mention role when disabled",
   );
 }
@@ -365,6 +463,7 @@ async function startFakeDiscord() {
       const role = {
         id: nextId(state),
         name: body.name,
+        permissions: body.permissions ?? "0",
         color: body.color ?? 0,
         hoist: Boolean(body.hoist),
         managed: false,
@@ -398,10 +497,18 @@ async function startFakeDiscord() {
       /^\/api\/v10\/channels\/\d+\/permissions\/\d+$/.test(url.pathname)
     ) {
       const body = await readBody(request);
-      state.permissionOverwrites.push({
+      const overwrite = {
         path: url.pathname,
         body,
-      });
+      };
+      const existingIndex = state.permissionOverwrites.findIndex(
+        (item) => item.path === overwrite.path,
+      );
+      if (existingIndex >= 0) {
+        state.permissionOverwrites[existingIndex] = overwrite;
+      } else {
+        state.permissionOverwrites.push(overwrite);
+      }
       send(response, 204, {});
       return;
     }

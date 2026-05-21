@@ -12,8 +12,11 @@ import {
 import {
   type DiscordAnnouncementKind,
   type DiscordChannelKind,
+  type DiscordPermissionName,
   type DiscordSetupChannelTemplate,
+  type DiscordSetupPermissionOverwriteTemplate,
   type DiscordSetupRoleTemplate,
+  type DiscordSetupStarterMessageTemplate,
   type DiscordSetupTemplate,
   discordChannelTypeCodes,
   defaultDiscordSetupTemplate,
@@ -26,7 +29,10 @@ export type DiscordSetupActionType =
   | "use_existing_role"
   | "skip_role"
   | "apply_permission_overwrite"
-  | "blocked_permission";
+  | "blocked_permission"
+  | "post_starter_message"
+  | "skip_starter_message"
+  | "blocked_starter_message";
 
 export type DiscordSetupAction = {
   type: DiscordSetupActionType;
@@ -41,6 +47,8 @@ export type DiscordSetupPlan = {
   ok: true;
   template: Pick<DiscordSetupTemplate, "id" | "name" | "description">;
   includeRoles: boolean;
+  applyPermissions: boolean;
+  postStarterMessages: boolean;
   lockStaffCategory: boolean;
   actions: DiscordSetupAction[];
   summary: {
@@ -51,7 +59,16 @@ export type DiscordSetupPlan = {
     skippedRoles: number;
     permissionOverwrites: number;
     blockedPermissions: number;
+    starterMessagesToPost: number;
+    starterMessagesSkipped: number;
+    starterMessagesBlocked: number;
   };
+};
+
+export type DiscordCreatedStarterMessage = {
+  templateId: string;
+  channelId: string;
+  messageId: string;
 };
 
 export type DiscordSetupApplyResult = {
@@ -62,13 +79,18 @@ export type DiscordSetupApplyResult = {
   createdRoles: DiscordGuildRole[];
   channelIds: Record<string, string>;
   roleIds: Record<string, string>;
+  createdMessageIds: Record<string, string>;
+  createdStarterMessages: DiscordCreatedStarterMessage[];
   recommended: {
     streamAnnouncementChannelId?: string;
     generalAnnouncementChannelId?: string;
     suggestionChannelId?: string;
     streamAlertsRoleId?: string;
+    operatorRoleId?: string;
   };
   permissionOverwritesApplied: number;
+  starterMessagesPosted: number;
+  starterMessagesSkipped: number;
 };
 
 export type DiscordAnnouncementInput = {
@@ -87,23 +109,41 @@ export type DiscordConfigInput = {
   streamAnnouncementChannelId?: string;
   generalAnnouncementChannelId?: string;
   streamAlertsRoleId?: string;
+  operatorRoleId?: string;
   staffRoleId?: string;
   lockStaffCategory?: boolean;
 };
 
 const viewChannelPermissionBit = "1024";
+const discordPermissionBits: Record<DiscordPermissionName, bigint> = {
+  view_channel: 1n << 10n,
+  send_messages: 1n << 11n,
+  send_messages_in_threads: 1n << 38n,
+  read_message_history: 1n << 16n,
+  add_reactions: 1n << 6n,
+  embed_links: 1n << 14n,
+  attach_files: 1n << 15n,
+  manage_messages: 1n << 13n,
+  connect: 1n << 20n,
+  speak: 1n << 21n,
+};
 
 export const planDiscordServerSetup = (options: {
   existingChannels: DiscordGuildChannel[];
   existingRoles: DiscordGuildRole[];
   template?: DiscordSetupTemplate;
   includeRoles?: boolean;
+  applyPermissions?: boolean;
+  postStarterMessages?: boolean;
+  existingMessageIds?: Record<string, string>;
   guildId?: string;
   lockStaffCategory?: boolean;
   staffRoleId?: string;
 }): DiscordSetupPlan => {
   const template = options.template ?? defaultDiscordSetupTemplate;
   const includeRoles = options.includeRoles ?? false;
+  const applyPermissions = options.applyPermissions ?? false;
+  const postStarterMessages = options.postStarterMessages ?? false;
   const lockStaffCategory = options.lockStaffCategory ?? false;
   const actions: DiscordSetupAction[] = [];
   const roleIds = new Map<string, string>();
@@ -133,7 +173,7 @@ export const planDiscordServerSetup = (options: {
         templateId: role.id,
         name: role.name,
         detail:
-          "Role creation is optional and skipped unless Stream Alerts role setup is enabled.",
+          "Preset role creation is optional and skipped unless role setup is enabled.",
       });
     }
   }
@@ -166,6 +206,18 @@ export const planDiscordServerSetup = (options: {
       kind: channel.kind,
       detail: `Creates ${channel.kind} channel ${channel.name}.`,
     });
+  }
+
+  if (applyPermissions) {
+    actions.push(
+      ...planTemplatePermissionOverwrites({
+        template,
+        roleIds,
+        channelIds,
+        includeRoles,
+        guildId: options.guildId,
+      }),
+    );
   }
 
   if (lockStaffCategory) {
@@ -202,6 +254,16 @@ export const planDiscordServerSetup = (options: {
     }
   }
 
+  if (postStarterMessages) {
+    actions.push(
+      ...planStarterMessages({
+        template,
+        channelIds,
+        existingMessageIds: options.existingMessageIds ?? {},
+      }),
+    );
+  }
+
   return {
     ok: true,
     template: {
@@ -210,6 +272,8 @@ export const planDiscordServerSetup = (options: {
       description: template.description,
     },
     includeRoles,
+    applyPermissions,
+    postStarterMessages,
     lockStaffCategory,
     actions,
     summary: {
@@ -232,6 +296,15 @@ export const planDiscordServerSetup = (options: {
       blockedPermissions: actions.filter(
         (action) => action.type === "blocked_permission",
       ).length,
+      starterMessagesToPost: actions.filter(
+        (action) => action.type === "post_starter_message",
+      ).length,
+      starterMessagesSkipped: actions.filter(
+        (action) => action.type === "skip_starter_message",
+      ).length,
+      starterMessagesBlocked: actions.filter(
+        (action) => action.type === "blocked_starter_message",
+      ).length,
     },
   };
 };
@@ -250,6 +323,9 @@ export const applyDiscordServerSetup = async (options: {
   guildId: string;
   template?: DiscordSetupTemplate;
   includeRoles?: boolean;
+  applyPermissions?: boolean;
+  postStarterMessages?: boolean;
+  existingMessageIds?: Record<string, string>;
   lockStaffCategory?: boolean;
   staffRoleId?: string;
 }): Promise<DiscordSetupApplyResult> => {
@@ -261,6 +337,9 @@ export const applyDiscordServerSetup = async (options: {
   const existingChannels = await options.client.listGuildChannels(guildId);
   const existingRoles = await options.client.listGuildRoles(guildId);
   const includeRoles = options.includeRoles ?? false;
+  const applyPermissions = options.applyPermissions ?? false;
+  const postStarterMessages = options.postStarterMessages ?? false;
+  const existingMessageIds = options.existingMessageIds ?? {};
   const lockStaffCategory = options.lockStaffCategory ?? false;
   const staffRoleId = options.staffRoleId
     ? normalizeDiscordSnowflake(options.staffRoleId, "Discord staff role ID")
@@ -271,6 +350,8 @@ export const applyDiscordServerSetup = async (options: {
   const createdRoles: DiscordGuildRole[] = [];
   const channelIds: Record<string, string> = {};
   const roleIds: Record<string, string> = {};
+  const createdMessageIds: Record<string, string> = {};
+  const createdStarterMessages: DiscordCreatedStarterMessage[] = [];
   let permissionOverwritesApplied = 0;
 
   if (lockStaffCategory && !staffRoleId) {
@@ -295,6 +376,7 @@ export const applyDiscordServerSetup = async (options: {
 
       const created = await options.client.createGuildRole(guildId, {
         name: role.name,
+        permissions: permissionBitfield(role.permissions ?? []),
         color: role.color,
         hoist: role.hoist,
         mentionable: role.mentionable,
@@ -340,6 +422,25 @@ export const applyDiscordServerSetup = async (options: {
     channelIds[channel.id] = created.id;
   }
 
+  if (applyPermissions) {
+    for (const overwrite of template.permissionOverwrites ?? []) {
+      const channelId = channelIds[overwrite.channelId];
+      const roleId =
+        overwrite.roleId === "@everyone" ? guildId : roleIds[overwrite.roleId];
+      if (!channelId || !roleId) {
+        throw new SafeInputError(
+          `Discord permission overwrite ${overwrite.id} could not be resolved.`,
+        );
+      }
+      await options.client.setChannelPermissionOverwrite(channelId, roleId, {
+        type: 0,
+        allow: permissionBitfield(overwrite.allow ?? []),
+        deny: permissionBitfield(overwrite.deny ?? []),
+      });
+      permissionOverwritesApplied += 1;
+    }
+  }
+
   if (lockStaffCategory) {
     const staffCategoryId = channelIds["category-staff"];
     if (!staffCategoryId) {
@@ -366,7 +467,31 @@ export const applyDiscordServerSetup = async (options: {
         deny: "0",
       },
     );
-    permissionOverwritesApplied = 2;
+    permissionOverwritesApplied += 2;
+  }
+
+  if (postStarterMessages) {
+    for (const starterMessage of template.starterMessages ?? []) {
+      if (existingMessageIds[starterMessage.id]) {
+        continue;
+      }
+      const channelId = channelIds[starterMessage.channelId];
+      if (!channelId) {
+        throw new SafeInputError(
+          `Discord starter message ${starterMessage.id} channel could not be resolved.`,
+        );
+      }
+      const result = await options.client.createMessage(channelId, {
+        content: starterMessage.content,
+        allowed_mentions: { parse: [] },
+      });
+      createdMessageIds[starterMessage.id] = result.id;
+      createdStarterMessages.push({
+        templateId: starterMessage.id,
+        channelId,
+        messageId: result.id,
+      });
+    }
   }
 
   const plan = planDiscordServerSetup({
@@ -374,6 +499,12 @@ export const applyDiscordServerSetup = async (options: {
     existingRoles: workingRoles,
     template,
     includeRoles,
+    applyPermissions,
+    postStarterMessages,
+    existingMessageIds: {
+      ...existingMessageIds,
+      ...createdMessageIds,
+    },
     guildId,
     lockStaffCategory,
     staffRoleId,
@@ -387,6 +518,8 @@ export const applyDiscordServerSetup = async (options: {
     createdRoles,
     channelIds,
     roleIds,
+    createdMessageIds,
+    createdStarterMessages,
     recommended: {
       streamAnnouncementChannelId:
         channelIds[template.recommended.streamAnnouncementChannelId],
@@ -394,8 +527,15 @@ export const applyDiscordServerSetup = async (options: {
         channelIds[template.recommended.generalAnnouncementChannelId],
       suggestionChannelId: channelIds[template.recommended.suggestionChannelId],
       streamAlertsRoleId: roleIds[template.recommended.streamAlertsRoleId],
+      operatorRoleId: template.recommended.operatorRoleId
+        ? roleIds[template.recommended.operatorRoleId]
+        : undefined,
     },
     permissionOverwritesApplied,
+    starterMessagesPosted: createdStarterMessages.length,
+    starterMessagesSkipped: Object.keys(existingMessageIds).filter((id) =>
+      (template.starterMessages ?? []).some((message) => message.id === id),
+    ).length,
   };
 };
 
@@ -487,6 +627,10 @@ export const normalizeDiscordConfigInput = (
     input.streamAlertsRoleId,
     "Discord Stream Alerts role ID",
   ),
+  operatorRoleId: normalizeOptionalDiscordSnowflake(
+    input.operatorRoleId,
+    "Discord operator role ID",
+  ),
   staffRoleId: normalizeOptionalDiscordSnowflake(
     input.staffRoleId,
     "Discord staff role ID",
@@ -518,6 +662,93 @@ const normalizeOptionalDiscordSnowflake = (
 
   return normalizeDiscordSnowflake(value, field);
 };
+
+const planTemplatePermissionOverwrites = (options: {
+  template: DiscordSetupTemplate;
+  roleIds: Map<string, string>;
+  channelIds: Map<string, string>;
+  includeRoles: boolean;
+  guildId?: string;
+}): DiscordSetupAction[] => {
+  const channelTemplates = new Set(
+    options.template.channels.map((channel) => channel.id),
+  );
+  const roleTemplates = new Set(options.template.roles.map((role) => role.id));
+
+  return (options.template.permissionOverwrites ?? []).map((overwrite) => {
+    const channelResolvable =
+      options.channelIds.has(overwrite.channelId) ||
+      channelTemplates.has(overwrite.channelId);
+    const roleResolvable =
+      overwrite.roleId === "@everyone"
+        ? Boolean(options.guildId)
+        : options.roleIds.has(overwrite.roleId) ||
+          (options.includeRoles && roleTemplates.has(overwrite.roleId));
+
+    if (!channelResolvable || !roleResolvable) {
+      return {
+        type: "blocked_permission",
+        templateId: overwrite.id,
+        name: overwrite.id,
+        detail: !channelResolvable
+          ? `Permission target channel ${overwrite.channelId} is not part of this setup.`
+          : `Permission target role ${overwrite.roleId} is not available. Enable preset role creation or save/select an existing role.`,
+      };
+    }
+
+    return {
+      type: "apply_permission_overwrite",
+      templateId: overwrite.id,
+      name: overwrite.id,
+      detail:
+        overwrite.detail ??
+        `Applies Discord permission overwrite ${overwrite.id}.`,
+    };
+  });
+};
+
+const planStarterMessages = (options: {
+  template: DiscordSetupTemplate;
+  channelIds: Map<string, string>;
+  existingMessageIds: Record<string, string>;
+}): DiscordSetupAction[] => {
+  const channelTemplates = new Set(
+    options.template.channels.map((channel) => channel.id),
+  );
+
+  return (options.template.starterMessages ?? []).map((message) => {
+    if (options.existingMessageIds[message.id]) {
+      return {
+        type: "skip_starter_message",
+        templateId: message.id,
+        name: message.id,
+        detail: `Starter message ${message.id} has already been posted.`,
+      };
+    }
+    if (
+      !options.channelIds.has(message.channelId) &&
+      !channelTemplates.has(message.channelId)
+    ) {
+      return {
+        type: "blocked_starter_message",
+        templateId: message.id,
+        name: message.id,
+        detail: `Starter message target channel ${message.channelId} is not part of this setup.`,
+      };
+    }
+    return {
+      type: "post_starter_message",
+      templateId: message.id,
+      name: message.id,
+      detail: `Posts to ${message.channelId}: ${message.content}`,
+    };
+  });
+};
+
+const permissionBitfield = (permissions: DiscordPermissionName[]) =>
+  permissions
+    .reduce((bits, permission) => bits | discordPermissionBits[permission], 0n)
+    .toString();
 
 const findExistingRole = (
   roles: DiscordGuildRole[],

@@ -46,6 +46,7 @@ export type DiscordCreateChannelInput = {
 
 export type DiscordCreateRoleInput = {
   name: string;
+  permissions?: string;
   color?: number;
   hoist?: boolean;
   mentionable?: boolean;

@@ -1923,14 +1923,22 @@ const getSafeDiscordConfig = (secrets = readLocalSecrets()) => {
       discord.streamAlertsRoleId ??
       discord.createdRoleIds?.[template.recommended.streamAlertsRoleId] ??
       "",
+    operatorRoleId:
+      discord.operatorRoleId ??
+      (template.recommended.operatorRoleId
+        ? discord.createdRoleIds?.[template.recommended.operatorRoleId]
+        : undefined) ??
+      "",
     staffRoleId: discord.staffRoleId ?? "",
     lockStaffCategory: Boolean(discord.lockStaffCategory),
     setupTemplateId: template.id,
     setupTemplate: safeDiscordTemplateSummary(template),
     setupTemplates: discordSetupTemplates.map(safeDiscordTemplateSummary),
     setupAppliedAt: discord.setupAppliedAt ?? "",
+    starterMessagesAppliedAt: discord.starterMessagesAppliedAt ?? "",
     createdChannelIds: discord.createdChannelIds ?? {},
     createdRoleIds: discord.createdRoleIds ?? {},
+    createdMessageIds: discord.createdMessageIds ?? {},
     relay: getSafeDiscordRelayConfig(secrets),
   };
 };
@@ -1946,6 +1954,9 @@ const safeDiscordTemplateSummary = (template: DiscordSetupTemplate) => ({
   categoryCount: template.channels.filter(
     (channel) => channel.kind === "category",
   ).length,
+  roleCount: template.roles.length,
+  starterMessageCount: template.starterMessages?.length ?? 0,
+  postStarterMessagesByDefault: Boolean(template.postStarterMessagesByDefault),
 });
 
 const getSafeDiscordRelayConfig = (secrets = readLocalSecrets()) => {
@@ -2250,6 +2261,7 @@ const saveDiscordConfig = (body: unknown) => {
       input.generalAnnouncementChannelId,
     ),
     streamAlertsRoleId: optionalInputString(input.streamAlertsRoleId),
+    operatorRoleId: optionalInputString(input.operatorRoleId),
     staffRoleId: optionalInputString(input.staffRoleId),
     lockStaffCategory,
   });
@@ -2271,6 +2283,9 @@ const saveDiscordConfig = (body: unknown) => {
     streamAlertsRoleId:
       normalized.streamAlertsRoleId ||
       (guildChanged ? undefined : existing.discord.streamAlertsRoleId),
+    operatorRoleId:
+      normalized.operatorRoleId ||
+      (guildChanged ? undefined : existing.discord.operatorRoleId),
     staffRoleId:
       normalized.staffRoleId ||
       (guildChanged ? undefined : existing.discord.staffRoleId),
@@ -2281,6 +2296,12 @@ const saveDiscordConfig = (body: unknown) => {
       ? {}
       : (existing.discord.createdChannelIds ?? {}),
     createdRoleIds: guildChanged ? {} : (existing.discord.createdRoleIds ?? {}),
+    createdMessageIds: guildChanged
+      ? {}
+      : (existing.discord.createdMessageIds ?? {}),
+    starterMessagesAppliedAt: guildChanged
+      ? undefined
+      : existing.discord.starterMessagesAppliedAt,
   };
 
   writeLocalSecrets({
@@ -2299,6 +2320,14 @@ const previewDiscordSetup = async (body: unknown) => {
     normalizeDiscordSetupTemplateId(optionalInputString(input.templateId)) ??
       secrets.discord.setupTemplateId,
   );
+  const applyPermissions =
+    input.applyPermissions === undefined
+      ? true
+      : Boolean(input.applyPermissions);
+  const postStarterMessages =
+    input.postStarterMessages === undefined
+      ? Boolean(template.postStarterMessagesByDefault)
+      : Boolean(input.postStarterMessages);
   const lockStaffCategory =
     input.lockStaffCategory === undefined
       ? Boolean(secrets.discord.lockStaffCategory)
@@ -2320,6 +2349,9 @@ const previewDiscordSetup = async (body: unknown) => {
         existingRoles: [],
         template,
         includeRoles,
+        applyPermissions,
+        postStarterMessages,
+        existingMessageIds: secrets.discord.createdMessageIds ?? {},
         guildId: secrets.discord.guildId,
         lockStaffCategory,
         staffRoleId,
@@ -2344,6 +2376,9 @@ const previewDiscordSetup = async (body: unknown) => {
       existingRoles,
       template,
       includeRoles,
+      applyPermissions,
+      postStarterMessages,
+      existingMessageIds: secrets.discord.createdMessageIds ?? {},
       guildId,
       lockStaffCategory,
       staffRoleId,
@@ -2362,6 +2397,14 @@ const applyDiscordSetup = async (body: unknown) => {
     normalizeDiscordSetupTemplateId(optionalInputString(input.templateId)) ??
       secrets.discord.setupTemplateId,
   );
+  const applyPermissions =
+    input.applyPermissions === undefined
+      ? true
+      : Boolean(input.applyPermissions);
+  const postStarterMessages =
+    input.postStarterMessages === undefined
+      ? Boolean(template.postStarterMessagesByDefault)
+      : Boolean(input.postStarterMessages);
   const lockStaffCategory =
     input.lockStaffCategory === undefined
       ? Boolean(secrets.discord.lockStaffCategory)
@@ -2378,10 +2421,23 @@ const applyDiscordSetup = async (body: unknown) => {
     guildId,
     template,
     includeRoles,
+    applyPermissions,
+    postStarterMessages,
+    existingMessageIds: secrets.discord.createdMessageIds ?? {},
     lockStaffCategory,
     staffRoleId,
   });
   const latest = readLocalSecrets();
+  const operatorRoleId =
+    result.recommended.operatorRoleId || latest.discord.operatorRoleId;
+  const createdMessageIds = {
+    ...(latest.discord.createdMessageIds ?? {}),
+    ...result.createdMessageIds,
+  };
+  const starterMessagesAppliedAt =
+    result.starterMessagesPosted > 0
+      ? result.appliedAt
+      : latest.discord.starterMessagesAppliedAt;
   writeLocalSecrets({
     ...latest,
     discord: {
@@ -2398,11 +2454,22 @@ const applyDiscordSetup = async (body: unknown) => {
       streamAlertsRoleId:
         result.recommended.streamAlertsRoleId ||
         latest.discord.streamAlertsRoleId,
+      operatorRoleId,
       staffRoleId: staffRoleId || latest.discord.staffRoleId,
       lockStaffCategory,
       setupTemplateId: template.id,
+      createdMessageIds,
+      starterMessagesAppliedAt,
     },
   });
+
+  const relayOperatorRoleSync = operatorRoleId
+    ? await syncDiscordOperatorRoleToRelay(operatorRoleId)
+    : {
+        ok: false,
+        skipped: true,
+        error: "No Discord operator role was resolved.",
+      };
 
   appendSuiteTimelineEvent({
     sourceApp: "vaexcore-console",
@@ -2413,15 +2480,22 @@ const applyDiscordSetup = async (body: unknown) => {
     metadata: {
       guildId,
       includeRoles,
+      applyPermissions,
+      postStarterMessages,
       lockStaffCategory,
       createdChannelIds: Object.keys(result.channelIds),
       createdRoleIds: Object.keys(result.roleIds),
+      createdMessageIds: Object.keys(createdMessageIds),
       permissionOverwritesApplied: result.permissionOverwritesApplied,
+      starterMessagesPosted: result.starterMessagesPosted,
+      operatorRoleId,
+      relayOperatorRoleSynced: relayOperatorRoleSync.ok,
     },
   });
 
   return {
     ...result,
+    relayOperatorRoleSync,
     config: getSafeDiscordConfig(),
   };
 };
@@ -2670,6 +2744,29 @@ const createDiscordRelayClient = (secrets = readLocalSecrets()) =>
     installationId: secrets.relay.installationId,
     consoleToken: secrets.relay.consoleToken,
   });
+
+const syncDiscordOperatorRoleToRelay = async (operatorRoleId: string) => {
+  const secrets = readLocalSecrets();
+  const connectionError = discordRelayConnectionError(secrets);
+  if (connectionError) {
+    return { ok: false, skipped: true, error: connectionError };
+  }
+  try {
+    const result = await createDiscordRelayClient(secrets).updateConfig({
+      operatorRoleId,
+    });
+    return { ...result, skipped: false };
+  } catch (error) {
+    return {
+      ok: false,
+      skipped: false,
+      error: safeErrorMessage(
+        error,
+        "Relay could not save the Discord operator role.",
+      ),
+    };
+  }
+};
 
 const recordRelayChatbotIdentityValidation = (body: unknown) => {
   const input = objectInput(body);

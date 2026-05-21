@@ -36,12 +36,15 @@ const localSecretsSchema = z.object({
       streamAnnouncementChannelId: z.string().optional(),
       generalAnnouncementChannelId: z.string().optional(),
       streamAlertsRoleId: z.string().optional(),
+      operatorRoleId: z.string().optional(),
       staffRoleId: z.string().optional(),
       lockStaffCategory: z.boolean().default(false),
       setupTemplateId: z.string().optional(),
       setupAppliedAt: z.string().optional(),
+      starterMessagesAppliedAt: z.string().optional(),
       createdChannelIds: z.record(z.string()).default({}),
       createdRoleIds: z.record(z.string()).default({}),
+      createdMessageIds: z.record(z.string()).default({}),
     })
     .default({}),
   relay: z
@@ -102,6 +105,7 @@ export const readLocalSecrets = (): LocalSecrets => {
         lockStaffCategory: false,
         createdChannelIds: {},
         createdRoleIds: {},
+        createdMessageIds: {},
       },
       relay: { twitchTransportMode: "local-user-token" },
       setupChecks: { local: {}, relay: {} },
@@ -174,6 +178,11 @@ const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
       "Discord Stream Alerts role ID",
       32,
     ),
+    operatorRoleId: sanitizeOptional(
+      secrets.discord.operatorRoleId,
+      "Discord operator role ID",
+      32,
+    ),
     staffRoleId: sanitizeOptional(
       secrets.discord.staffRoleId,
       "Discord staff role ID",
@@ -184,9 +193,15 @@ const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
       "Discord setup template ID",
       80,
     ),
+    starterMessagesAppliedAt: sanitizeOptional(
+      secrets.discord.starterMessagesAppliedAt,
+      "Discord starter messages applied timestamp",
+      80,
+    ),
     lockStaffCategory: Boolean(secrets.discord.lockStaffCategory),
     createdChannelIds: secrets.discord.createdChannelIds ?? {},
     createdRoleIds: secrets.discord.createdRoleIds ?? {},
+    createdMessageIds: secrets.discord.createdMessageIds ?? {},
   },
   relay: {
     ...secrets.relay,

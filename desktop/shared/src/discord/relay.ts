@@ -94,6 +94,17 @@ export class DiscordRelayClient {
     });
   }
 
+  updateConfig(input: { operatorRoleId: string }) {
+    return this.request<{
+      ok: true;
+      operatorRoleId: string;
+      updatedAt: string;
+    }>("/api/console/discord/config", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
   private async request<T>(
     path: string,
     options: { method?: string; body?: string } = {},
