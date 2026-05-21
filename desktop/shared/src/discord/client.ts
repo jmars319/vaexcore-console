@@ -9,6 +9,7 @@ export type DiscordGuildChannel = {
   parent_id?: string | null;
   topic?: string | null;
   position?: number;
+  permission_overwrites?: DiscordPermissionOverwrite[];
 };
 
 export type DiscordGuildRole = {
@@ -32,6 +33,13 @@ export type DiscordMessage = {
   channel_id: string;
   content?: string;
   timestamp?: string;
+};
+
+export type DiscordPermissionOverwrite = {
+  id: string;
+  type: 0 | 1;
+  allow: string;
+  deny: string;
 };
 
 export type DiscordCreateChannelInput = {

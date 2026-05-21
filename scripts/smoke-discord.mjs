@@ -347,6 +347,10 @@ async function runSmoke() {
     "Discord setup is idempotent for starter messages",
   );
   assert(
+    idempotent.permissionOverwritesApplied === 0,
+    "Discord setup skips already matching permission overwrites",
+  );
+  assert(
     idempotent.plan.summary.starterMessagesSkipped >= 8,
     "Discord setup preview skips previously posted starter messages",
   );
@@ -400,6 +404,7 @@ async function startFakeDiscord() {
         parent_id: null,
         topic: null,
         position: 0,
+        permission_overwrites: [],
       },
       {
         id: "111111111111111112",
@@ -408,6 +413,7 @@ async function startFakeDiscord() {
         parent_id: null,
         topic: null,
         position: 1,
+        permission_overwrites: [],
       },
       {
         id: "111111111111111115",
@@ -416,6 +422,7 @@ async function startFakeDiscord() {
         parent_id: null,
         topic: null,
         position: 2,
+        permission_overwrites: [],
       },
       {
         id: "111111111111111113",
@@ -424,6 +431,7 @@ async function startFakeDiscord() {
         parent_id: null,
         topic: null,
         position: 3,
+        permission_overwrites: [],
       },
       {
         id: "111111111111111114",
@@ -432,6 +440,7 @@ async function startFakeDiscord() {
         parent_id: null,
         topic: null,
         position: 4,
+        permission_overwrites: [],
       },
     ],
     roles: [
@@ -519,6 +528,7 @@ async function startFakeDiscord() {
         parent_id: body.parent_id ?? null,
         topic: body.topic ?? null,
         position: state.channels.length,
+        permission_overwrites: body.permission_overwrites ?? [],
       };
       state.channels.push(channel);
       send(response, 200, channel);
@@ -553,6 +563,26 @@ async function startFakeDiscord() {
         state.permissionOverwrites[existingIndex] = overwrite;
       } else {
         state.permissionOverwrites.push(overwrite);
+      }
+      const channelId = url.pathname.split("/").at(-3);
+      const channel = state.channels.find((item) => item.id === channelId);
+      if (channel) {
+        const channelOverwrites = channel.permission_overwrites ?? [];
+        const channelOverwrite = {
+          id: overwriteId,
+          type: body.type,
+          allow: body.allow ?? "0",
+          deny: body.deny ?? "0",
+        };
+        const channelOverwriteIndex = channelOverwrites.findIndex(
+          (item) => item.id === overwriteId,
+        );
+        if (channelOverwriteIndex >= 0) {
+          channelOverwrites[channelOverwriteIndex] = channelOverwrite;
+        } else {
+          channelOverwrites.push(channelOverwrite);
+        }
+        channel.permission_overwrites = channelOverwrites;
       }
       send(response, 204, {});
       return;

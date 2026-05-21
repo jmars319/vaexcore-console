@@ -2662,16 +2662,25 @@ const applyDiscordRelaySetupRoute = async (body: unknown) => {
   if (connectionError) {
     throw new SafeInputError(connectionError);
   }
-  const result = await createDiscordRelayClient(secrets).applySetup(
-    objectInput(body),
-  );
+  const input = objectInput(body);
+  const client = createDiscordRelayClient(secrets);
+  let result = await client.applySetup(input);
+  let chunks = 1;
+  while (discordRelaySetupNeedsContinuation(result) && chunks < 10) {
+    await wait(250);
+    result = await client.applySetup(input);
+    chunks += 1;
+  }
   appendSuiteTimelineEvent({
     sourceApp: "vaexcore-console",
     sourceAppName: "vaexcore console",
     kind: "discord.relay.setup",
-    title: "Hosted Discord setup applied",
-    detail:
-      "Relay applied the hosted Discord server setup without exposing a bot token in Console.",
+    title: discordRelaySetupNeedsContinuation(result)
+      ? "Hosted Discord setup partially applied"
+      : "Hosted Discord setup applied",
+    detail: discordRelaySetupNeedsContinuation(result)
+      ? "Relay applied part of the hosted Discord server setup. Run Apply setup again to continue."
+      : "Relay applied the hosted Discord server setup without exposing a bot token in Console.",
     metadata: {
       templateId:
         typeof result.template === "object" &&
@@ -2679,10 +2688,19 @@ const applyDiscordRelaySetupRoute = async (body: unknown) => {
         "id" in result.template
           ? result.template.id
           : undefined,
+      chunks,
     },
   });
   return result;
 };
+
+const discordRelaySetupNeedsContinuation = (result: Record<string, unknown>) =>
+  result.needsContinuation === true;
+
+const wait = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 const registerDiscordRelayCommandsRoute = async () => {
   const secrets = readLocalSecrets();

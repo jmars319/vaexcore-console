@@ -8,6 +8,7 @@ import {
   type DiscordApiClient,
   type DiscordCreateMessageInput,
   type DiscordGuildChannel,
+  type DiscordPermissionOverwriteInput,
   type DiscordGuildRole,
 } from "./client";
 import {
@@ -92,6 +93,10 @@ export type DiscordSetupApplyResult = {
   permissionOverwritesApplied: number;
   starterMessagesPosted: number;
   starterMessagesSkipped: number;
+  complete: boolean;
+  needsContinuation: boolean;
+  mutationsApplied: number;
+  maxMutations?: number | undefined;
 };
 
 export type DiscordAnnouncementInput = {
@@ -330,6 +335,7 @@ export const applyDiscordServerSetup = async (options: {
   lockStaffCategory?: boolean;
   staffRoleId?: string;
   botUserId?: string;
+  maxMutations?: number;
 }): Promise<DiscordSetupApplyResult> => {
   const template = options.template ?? defaultDiscordSetupTemplate;
   const guildId = normalizeDiscordSnowflake(
@@ -358,6 +364,70 @@ export const applyDiscordServerSetup = async (options: {
   const createdMessageIds: Record<string, string> = {};
   const createdStarterMessages: DiscordCreatedStarterMessage[] = [];
   let permissionOverwritesApplied = 0;
+  let mutationsApplied = 0;
+  const maxMutations =
+    options.maxMutations === undefined
+      ? undefined
+      : parseSafeInteger(options.maxMutations, {
+          field: "Discord setup mutation limit",
+          min: 1,
+          max: 1000,
+        });
+  const hasMutationBudget = () =>
+    maxMutations === undefined || mutationsApplied < maxMutations;
+  const markMutationApplied = () => {
+    mutationsApplied += 1;
+  };
+  const buildResult = (complete: boolean): DiscordSetupApplyResult => {
+    const plan = planDiscordServerSetup({
+      existingChannels: workingChannels,
+      existingRoles: workingRoles,
+      template,
+      includeRoles,
+      applyPermissions,
+      postStarterMessages,
+      existingMessageIds: {
+        ...existingMessageIds,
+        ...createdMessageIds,
+      },
+      guildId,
+      lockStaffCategory,
+      staffRoleId,
+    });
+
+    return {
+      ok: true,
+      appliedAt: new Date().toISOString(),
+      plan,
+      createdChannels,
+      createdRoles,
+      channelIds,
+      roleIds,
+      createdMessageIds,
+      createdStarterMessages,
+      recommended: {
+        streamAnnouncementChannelId:
+          channelIds[template.recommended.streamAnnouncementChannelId],
+        generalAnnouncementChannelId:
+          channelIds[template.recommended.generalAnnouncementChannelId],
+        suggestionChannelId:
+          channelIds[template.recommended.suggestionChannelId],
+        streamAlertsRoleId: roleIds[template.recommended.streamAlertsRoleId],
+        operatorRoleId: template.recommended.operatorRoleId
+          ? roleIds[template.recommended.operatorRoleId]
+          : undefined,
+      },
+      permissionOverwritesApplied,
+      starterMessagesPosted: createdStarterMessages.length,
+      starterMessagesSkipped: Object.keys(existingMessageIds).filter((id) =>
+        (template.starterMessages ?? []).some((message) => message.id === id),
+      ).length,
+      complete,
+      needsContinuation: !complete,
+      mutationsApplied,
+      maxMutations,
+    };
+  };
 
   if (lockStaffCategory && !staffRoleId) {
     throw new SafeInputError(
@@ -378,6 +448,9 @@ export const applyDiscordServerSetup = async (options: {
         roleIds[role.id] = existing.id;
         continue;
       }
+      if (!hasMutationBudget()) {
+        return buildResult(false);
+      }
 
       const created = await options.client.createGuildRole(guildId, {
         name: role.name,
@@ -389,6 +462,7 @@ export const applyDiscordServerSetup = async (options: {
       workingRoles.push(created);
       createdRoles.push(created);
       roleIds[role.id] = created.id;
+      markMutationApplied();
     }
   } else {
     for (const role of template.roles) {
@@ -412,6 +486,9 @@ export const applyDiscordServerSetup = async (options: {
       channelIds[channel.id] = existing.id;
       continue;
     }
+    if (!hasMutationBudget()) {
+      return buildResult(false);
+    }
 
     const created = await options.client.createGuildChannel(guildId, {
       name: channel.name,
@@ -425,6 +502,7 @@ export const applyDiscordServerSetup = async (options: {
     workingChannels.push(created);
     createdChannels.push(created);
     channelIds[channel.id] = created.id;
+    markMutationApplied();
   }
 
   if (applyPermissions) {
@@ -441,23 +519,44 @@ export const applyDiscordServerSetup = async (options: {
       for (const channelTemplateId of privateChannelTemplateIds) {
         const channelId = channelIds[channelTemplateId];
         if (!channelId) continue;
+        const input = {
+          type: 1 as const,
+          allow: permissionBitfield([
+            "view_channel",
+            "read_message_history",
+            "send_messages",
+            "send_messages_in_threads",
+            "embed_links",
+            "attach_files",
+          ]),
+          deny: "0",
+        };
+        if (
+          channelPermissionOverwriteMatches(
+            workingChannels,
+            channelId,
+            botUserId,
+            input,
+          )
+        ) {
+          continue;
+        }
+        if (!hasMutationBudget()) {
+          return buildResult(false);
+        }
         try {
           await options.client.setChannelPermissionOverwrite(
             channelId,
             botUserId,
-            {
-              type: 1,
-              allow: permissionBitfield([
-                "view_channel",
-                "read_message_history",
-                "send_messages",
-                "send_messages_in_threads",
-                "embed_links",
-                "attach_files",
-              ]),
-              deny: "0",
-            },
+            input,
           );
+          recordChannelPermissionOverwrite(
+            workingChannels,
+            channelId,
+            botUserId,
+            input,
+          );
+          markMutationApplied();
         } catch (error) {
           throw discordBotAccessOverwriteError(
             template,
@@ -477,16 +576,41 @@ export const applyDiscordServerSetup = async (options: {
           `Discord permission overwrite ${overwrite.id} could not be resolved.`,
         );
       }
+      const input = {
+        type: 0 as const,
+        allow: permissionBitfield(overwrite.allow ?? []),
+        deny: permissionBitfield(overwrite.deny ?? []),
+      };
+      if (
+        channelPermissionOverwriteMatches(
+          workingChannels,
+          channelId,
+          roleId,
+          input,
+        )
+      ) {
+        continue;
+      }
+      if (!hasMutationBudget()) {
+        return buildResult(false);
+      }
       try {
-        await options.client.setChannelPermissionOverwrite(channelId, roleId, {
-          type: 0,
-          allow: permissionBitfield(overwrite.allow ?? []),
-          deny: permissionBitfield(overwrite.deny ?? []),
-        });
+        await options.client.setChannelPermissionOverwrite(
+          channelId,
+          roleId,
+          input,
+        );
+        recordChannelPermissionOverwrite(
+          workingChannels,
+          channelId,
+          roleId,
+          input,
+        );
       } catch (error) {
         throw discordPermissionOverwriteError(template, overwrite, error);
       }
       permissionOverwritesApplied += 1;
+      markMutationApplied();
     }
   }
 
@@ -498,25 +622,67 @@ export const applyDiscordServerSetup = async (options: {
       );
     }
 
-    await options.client.setChannelPermissionOverwrite(
-      staffCategoryId,
-      guildId,
-      {
-        type: 0,
-        allow: "0",
-        deny: viewChannelPermissionBit,
-      },
-    );
-    await options.client.setChannelPermissionOverwrite(
-      staffCategoryId,
-      staffRoleId,
-      {
-        type: 0,
-        allow: viewChannelPermissionBit,
-        deny: "0",
-      },
-    );
-    permissionOverwritesApplied += 2;
+    const everyoneInput = {
+      type: 0 as const,
+      allow: "0",
+      deny: viewChannelPermissionBit,
+    };
+    if (
+      !channelPermissionOverwriteMatches(
+        workingChannels,
+        staffCategoryId,
+        guildId,
+        everyoneInput,
+      )
+    ) {
+      if (!hasMutationBudget()) {
+        return buildResult(false);
+      }
+      await options.client.setChannelPermissionOverwrite(
+        staffCategoryId,
+        guildId,
+        everyoneInput,
+      );
+      recordChannelPermissionOverwrite(
+        workingChannels,
+        staffCategoryId,
+        guildId,
+        everyoneInput,
+      );
+      permissionOverwritesApplied += 1;
+      markMutationApplied();
+    }
+
+    const staffInput = {
+      type: 0 as const,
+      allow: viewChannelPermissionBit,
+      deny: "0",
+    };
+    if (
+      !channelPermissionOverwriteMatches(
+        workingChannels,
+        staffCategoryId,
+        staffRoleId,
+        staffInput,
+      )
+    ) {
+      if (!hasMutationBudget()) {
+        return buildResult(false);
+      }
+      await options.client.setChannelPermissionOverwrite(
+        staffCategoryId,
+        staffRoleId,
+        staffInput,
+      );
+      recordChannelPermissionOverwrite(
+        workingChannels,
+        staffCategoryId,
+        staffRoleId,
+        staffInput,
+      );
+      permissionOverwritesApplied += 1;
+      markMutationApplied();
+    }
   }
 
   if (postStarterMessages) {
@@ -530,6 +696,9 @@ export const applyDiscordServerSetup = async (options: {
           `Discord starter message ${starterMessage.id} channel could not be resolved.`,
         );
       }
+      if (!hasMutationBudget()) {
+        return buildResult(false);
+      }
       const result = await options.client.createMessage(channelId, {
         content: starterMessage.content,
         allowed_mentions: { parse: [] },
@@ -540,52 +709,11 @@ export const applyDiscordServerSetup = async (options: {
         channelId,
         messageId: result.id,
       });
+      markMutationApplied();
     }
   }
 
-  const plan = planDiscordServerSetup({
-    existingChannels: workingChannels,
-    existingRoles: workingRoles,
-    template,
-    includeRoles,
-    applyPermissions,
-    postStarterMessages,
-    existingMessageIds: {
-      ...existingMessageIds,
-      ...createdMessageIds,
-    },
-    guildId,
-    lockStaffCategory,
-    staffRoleId,
-  });
-
-  return {
-    ok: true,
-    appliedAt: new Date().toISOString(),
-    plan,
-    createdChannels,
-    createdRoles,
-    channelIds,
-    roleIds,
-    createdMessageIds,
-    createdStarterMessages,
-    recommended: {
-      streamAnnouncementChannelId:
-        channelIds[template.recommended.streamAnnouncementChannelId],
-      generalAnnouncementChannelId:
-        channelIds[template.recommended.generalAnnouncementChannelId],
-      suggestionChannelId: channelIds[template.recommended.suggestionChannelId],
-      streamAlertsRoleId: roleIds[template.recommended.streamAlertsRoleId],
-      operatorRoleId: template.recommended.operatorRoleId
-        ? roleIds[template.recommended.operatorRoleId]
-        : undefined,
-    },
-    permissionOverwritesApplied,
-    starterMessagesPosted: createdStarterMessages.length,
-    starterMessagesSkipped: Object.keys(existingMessageIds).filter((id) =>
-      (template.starterMessages ?? []).some((message) => message.id === id),
-    ).length,
-  };
+  return buildResult(true);
 };
 
 const discordPermissionOverwriteError = (
@@ -841,6 +969,51 @@ const permissionBitfield = (permissions: DiscordPermissionName[]) =>
   permissions
     .reduce((bits, permission) => bits | discordPermissionBits[permission], 0n)
     .toString();
+
+const channelPermissionOverwriteMatches = (
+  channels: DiscordGuildChannel[],
+  channelId: string,
+  overwriteId: string,
+  input: DiscordPermissionOverwriteInput,
+) => {
+  const existing = channels
+    .find((channel) => channel.id === channelId)
+    ?.permission_overwrites?.find((overwrite) => overwrite.id === overwriteId);
+  return (
+    existing?.type === input.type &&
+    bitfieldsEqual(existing.allow, input.allow) &&
+    bitfieldsEqual(existing.deny, input.deny)
+  );
+};
+
+const recordChannelPermissionOverwrite = (
+  channels: DiscordGuildChannel[],
+  channelId: string,
+  overwriteId: string,
+  input: DiscordPermissionOverwriteInput,
+) => {
+  const channel = channels.find((item) => item.id === channelId);
+  if (!channel) return;
+  const overwrites = channel.permission_overwrites ?? [];
+  const next = {
+    id: overwriteId,
+    type: input.type,
+    allow: input.allow,
+    deny: input.deny,
+  };
+  const index = overwrites.findIndex(
+    (overwrite) => overwrite.id === overwriteId,
+  );
+  if (index >= 0) {
+    overwrites[index] = next;
+  } else {
+    overwrites.push(next);
+  }
+  channel.permission_overwrites = overwrites;
+};
+
+const bitfieldsEqual = (left: string | undefined, right: string | undefined) =>
+  BigInt(left ?? "0") === BigInt(right ?? "0");
 
 const findExistingRole = (
   roles: DiscordGuildRole[],
