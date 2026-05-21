@@ -127,6 +127,9 @@ export class DiscordRelayClient {
       {
         method: "POST",
         body: JSON.stringify(input),
+        timeoutMs: 90_000,
+        timeoutMessage:
+          "Discord setup is still applying and Console timed out waiting for Relay. Wait a few seconds, refresh, and run Apply setup again; completed setup steps will be skipped.",
       },
     );
   }
@@ -178,7 +181,12 @@ export class DiscordRelayClient {
 
   private async request<T>(
     path: string,
-    options: { method?: string; body?: string } = {},
+    options: {
+      method?: string;
+      body?: string;
+      timeoutMs?: number;
+      timeoutMessage?: string;
+    } = {},
   ): Promise<T> {
     if (!this.configured()) {
       throw new Error("Relay transport is not fully configured.");
@@ -188,7 +196,8 @@ export class DiscordRelayClient {
       this.config.installationId ?? "",
     )}`;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10_000);
+    const timeoutMs = options.timeoutMs ?? 10_000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(url, {
         method: options.method ?? "GET",
@@ -207,6 +216,15 @@ export class DiscordRelayClient {
         );
       }
       return body as T;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new DiscordRelayError(
+          options.timeoutMessage ??
+            `Discord Relay request timed out after ${Math.round(timeoutMs / 1000)} seconds.`,
+          408,
+        );
+      }
+      throw error;
     } finally {
       clearTimeout(timeout);
     }
