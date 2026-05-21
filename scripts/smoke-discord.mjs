@@ -8,6 +8,7 @@ const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-discord-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
 const guildId = "123456789012345678";
 const botToken = "smoke.discord.bot-token";
+const botUserId = "999999999999999999";
 const staffRoleId = "888888888888888888";
 
 process.env.VAEXCORE_CONFIG_DIR = tempDir;
@@ -283,9 +284,17 @@ async function runSmoke() {
     `Discord setup applies the planned operations permission overwrites (${applied.permissionOverwritesApplied} applied, ${preview.plan.summary.permissionOverwrites} previewed)`,
   );
   assert(
-    fakeDiscord.permissionOverwrites.length ===
+    fakeDiscord.plannedPermissionOverwrites.length ===
       applied.permissionOverwritesApplied,
     "fake Discord stores deterministic permission overwrites",
+  );
+  assert(
+    fakeDiscord.permissionOverwrites.some(
+      (overwrite) =>
+        overwrite.path.endsWith(`/permissions/${botUserId}`) &&
+        overwrite.body.type === 1,
+    ),
+    "Discord setup preserves bot access with a member permission overwrite",
   );
   assert(
     applied.starterMessagesPosted >= 8,
@@ -342,7 +351,7 @@ async function runSmoke() {
     "Discord setup preview skips previously posted starter messages",
   );
   assert(
-    fakeDiscord.permissionOverwrites.length ===
+    fakeDiscord.plannedPermissionOverwrites.length ===
       applied.permissionOverwritesApplied,
     "Discord setup updates permission overwrites without duplicating them",
   );
@@ -456,7 +465,7 @@ async function startFakeDiscord() {
 
     if (request.method === "GET" && url.pathname === "/api/v10/users/@me") {
       send(response, 200, {
-        id: "999999999999999999",
+        id: botUserId,
         username: "vaexcore-test-bot",
         global_name: "VaexCore Test Bot",
       });
@@ -521,6 +530,18 @@ async function startFakeDiscord() {
       /^\/api\/v10\/channels\/\d+\/permissions\/\d+$/.test(url.pathname)
     ) {
       const body = await readBody(request);
+      const overwriteId = url.pathname.split("/").at(-1);
+      if (
+        body.type === 0 &&
+        !state.roles.some((role) => role.id === overwriteId)
+      ) {
+        send(response, 404, { message: "Unknown Overwrite", code: 10009 });
+        return;
+      }
+      if (body.type === 1 && overwriteId !== botUserId) {
+        send(response, 404, { message: "Unknown Member", code: 10007 });
+        return;
+      }
       const overwrite = {
         path: url.pathname,
         body,
@@ -584,6 +605,11 @@ async function startFakeDiscord() {
     },
     get permissionOverwrites() {
       return state.permissionOverwrites;
+    },
+    get plannedPermissionOverwrites() {
+      return state.permissionOverwrites.filter(
+        (overwrite) => overwrite.body.type === 0,
+      );
     },
     stop: () => new Promise((resolve) => server.close(resolve)),
   };

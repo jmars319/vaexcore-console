@@ -329,7 +329,7 @@ export const applyDiscordServerSetup = async (options: {
   existingMessageIds?: Record<string, string>;
   lockStaffCategory?: boolean;
   staffRoleId?: string;
-  botRoleId?: string;
+  botUserId?: string;
 }): Promise<DiscordSetupApplyResult> => {
   const template = options.template ?? defaultDiscordSetupTemplate;
   const guildId = normalizeDiscordSnowflake(
@@ -346,8 +346,8 @@ export const applyDiscordServerSetup = async (options: {
   const staffRoleId = options.staffRoleId
     ? normalizeDiscordSnowflake(options.staffRoleId, "Discord staff role ID")
     : "";
-  const botRoleId = options.botRoleId
-    ? normalizeDiscordSnowflake(options.botRoleId, "Discord bot role ID")
+  const botUserId = options.botUserId
+    ? normalizeDiscordSnowflake(options.botUserId, "Discord bot user ID")
     : "";
   const workingChannels = [...existingChannels];
   const workingRoles = [...existingRoles];
@@ -428,7 +428,7 @@ export const applyDiscordServerSetup = async (options: {
   }
 
   if (applyPermissions) {
-    if (botRoleId) {
+    if (botUserId) {
       const privateChannelTemplateIds = new Set(
         (template.permissionOverwrites ?? [])
           .filter(
@@ -444,9 +444,9 @@ export const applyDiscordServerSetup = async (options: {
         try {
           await options.client.setChannelPermissionOverwrite(
             channelId,
-            botRoleId,
+            botUserId,
             {
-              type: 0,
+              type: 1,
               allow: permissionBitfield([
                 "view_channel",
                 "read_message_history",
@@ -465,7 +465,6 @@ export const applyDiscordServerSetup = async (options: {
             error,
           );
         }
-        permissionOverwritesApplied += 1;
       }
     }
 

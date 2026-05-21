@@ -2454,7 +2454,7 @@ const applyDiscordSetup = async (body: unknown) => {
     existingMessageIds: secrets.discord.createdMessageIds ?? {},
     lockStaffCategory,
     staffRoleId,
-    botRoleId: bot.id,
+    botUserId: bot.id,
   });
   const latest = readLocalSecrets();
   const operatorRoleId =
