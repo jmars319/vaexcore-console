@@ -215,7 +215,7 @@ const discordErrorMessage = (status: number, path: string, body: string) => {
   }
 
   if (status === 403) {
-    return "Discord denied the request. Confirm the bot is in the server and has Manage Channels, Send Messages, and Embed Links permissions.";
+    return `Discord denied the request at ${path}. Confirm the bot is in the server and has the required role/channel permissions. ${redactedBody}`;
   }
 
   if (status === 429) {

@@ -4,6 +4,7 @@ import {
   sanitizeText,
 } from "../core/security";
 import {
+  DiscordHttpError,
   type DiscordApiClient,
   type DiscordCreateMessageInput,
   type DiscordGuildChannel,
@@ -328,6 +329,7 @@ export const applyDiscordServerSetup = async (options: {
   existingMessageIds?: Record<string, string>;
   lockStaffCategory?: boolean;
   staffRoleId?: string;
+  botRoleId?: string;
 }): Promise<DiscordSetupApplyResult> => {
   const template = options.template ?? defaultDiscordSetupTemplate;
   const guildId = normalizeDiscordSnowflake(
@@ -343,6 +345,9 @@ export const applyDiscordServerSetup = async (options: {
   const lockStaffCategory = options.lockStaffCategory ?? false;
   const staffRoleId = options.staffRoleId
     ? normalizeDiscordSnowflake(options.staffRoleId, "Discord staff role ID")
+    : "";
+  const botRoleId = options.botRoleId
+    ? normalizeDiscordSnowflake(options.botRoleId, "Discord bot role ID")
     : "";
   const workingChannels = [...existingChannels];
   const workingRoles = [...existingRoles];
@@ -423,6 +428,47 @@ export const applyDiscordServerSetup = async (options: {
   }
 
   if (applyPermissions) {
+    if (botRoleId) {
+      const privateChannelTemplateIds = new Set(
+        (template.permissionOverwrites ?? [])
+          .filter(
+            (overwrite) =>
+              overwrite.roleId === "@everyone" &&
+              (overwrite.deny ?? []).includes("view_channel"),
+          )
+          .map((overwrite) => overwrite.channelId),
+      );
+      for (const channelTemplateId of privateChannelTemplateIds) {
+        const channelId = channelIds[channelTemplateId];
+        if (!channelId) continue;
+        try {
+          await options.client.setChannelPermissionOverwrite(
+            channelId,
+            botRoleId,
+            {
+              type: 0,
+              allow: permissionBitfield([
+                "view_channel",
+                "read_message_history",
+                "send_messages",
+                "send_messages_in_threads",
+                "embed_links",
+                "attach_files",
+              ]),
+              deny: "0",
+            },
+          );
+        } catch (error) {
+          throw discordBotAccessOverwriteError(
+            template,
+            channelTemplateId,
+            error,
+          );
+        }
+        permissionOverwritesApplied += 1;
+      }
+    }
+
     for (const overwrite of template.permissionOverwrites ?? []) {
       const channelId = channelIds[overwrite.channelId];
       const roleId =
@@ -432,11 +478,15 @@ export const applyDiscordServerSetup = async (options: {
           `Discord permission overwrite ${overwrite.id} could not be resolved.`,
         );
       }
-      await options.client.setChannelPermissionOverwrite(channelId, roleId, {
-        type: 0,
-        allow: permissionBitfield(overwrite.allow ?? []),
-        deny: permissionBitfield(overwrite.deny ?? []),
-      });
+      try {
+        await options.client.setChannelPermissionOverwrite(channelId, roleId, {
+          type: 0,
+          allow: permissionBitfield(overwrite.allow ?? []),
+          deny: permissionBitfield(overwrite.deny ?? []),
+        });
+      } catch (error) {
+        throw discordPermissionOverwriteError(template, overwrite, error);
+      }
       permissionOverwritesApplied += 1;
     }
   }
@@ -537,6 +587,49 @@ export const applyDiscordServerSetup = async (options: {
       (template.starterMessages ?? []).some((message) => message.id === id),
     ).length,
   };
+};
+
+const discordPermissionOverwriteError = (
+  template: DiscordSetupTemplate,
+  overwrite: DiscordSetupPermissionOverwriteTemplate,
+  error: unknown,
+) => {
+  const channelName =
+    template.channels.find((channel) => channel.id === overwrite.channelId)
+      ?.name ?? overwrite.channelId;
+  const roleName =
+    overwrite.roleId === "@everyone"
+      ? "@everyone"
+      : (template.roles.find((role) => role.id === overwrite.roleId)?.name ??
+        overwrite.roleId);
+  const detail =
+    error instanceof DiscordHttpError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : "Discord denied the permission overwrite.";
+  return new SafeInputError(
+    `Discord could not apply permission overwrite ${overwrite.id} on ${channelName} for ${roleName}. ${detail}`,
+  );
+};
+
+const discordBotAccessOverwriteError = (
+  template: DiscordSetupTemplate,
+  channelTemplateId: string,
+  error: unknown,
+) => {
+  const channelName =
+    template.channels.find((channel) => channel.id === channelTemplateId)
+      ?.name ?? channelTemplateId;
+  const detail =
+    error instanceof DiscordHttpError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : "Discord denied the bot access overwrite.";
+  return new SafeInputError(
+    `Discord could not preserve VaexCore bot access on ${channelName}. ${detail}`,
+  );
 };
 
 export const buildDiscordAnnouncementMessage = (

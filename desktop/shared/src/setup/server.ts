@@ -2442,8 +2442,10 @@ const applyDiscordSetup = async (body: unknown) => {
     throw new SafeInputError("Discord bot token and server ID are required.");
   }
 
+  const client = createDiscordClient(botToken);
+  const bot = await client.getCurrentUser();
   const result = await applyDiscordServerSetup({
-    client: createDiscordClient(botToken),
+    client,
     guildId,
     template,
     includeRoles,
@@ -2452,6 +2454,7 @@ const applyDiscordSetup = async (body: unknown) => {
     existingMessageIds: secrets.discord.createdMessageIds ?? {},
     lockStaffCategory,
     staffRoleId,
+    botRoleId: bot.id,
   });
   const latest = readLocalSecrets();
   const operatorRoleId =
