@@ -91,7 +91,7 @@ export class DiscordApiClient {
     this.botToken = options.botToken;
     this.apiBaseUrl =
       options.apiBaseUrl?.replace(/\/+$/, "") ?? "https://discord.com/api/v10";
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? ((input, init) => fetch(input, init));
   }
 
   getCurrentUser() {
