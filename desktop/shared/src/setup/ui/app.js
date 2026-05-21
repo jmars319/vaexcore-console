@@ -429,6 +429,7 @@ const backgroundRefreshMs = 5000;
 const renderIdleDelayMs = 900;
 const interactionQuietMs = 1400;
 const scrollPositions = {};
+const keyedScrollPositions = {};
 let deferredRenderTimer = null;
 let lastUserInteractionAt = 0;
 let backgroundRefreshPromise = null;
@@ -478,18 +479,29 @@ function saveScrollPosition(tabId = state.activeTab) {
     return;
   }
   scrollPositions[tabId] = content.scrollTop;
+
+  for (const node of content.querySelectorAll("[data-scroll-key]")) {
+    keyedScrollPositions[`${tabId}:${node.dataset.scrollKey}`] = node.scrollTop;
+  }
 }
 
 function restoreScrollPosition(tabId = state.activeTab) {
   const top = scrollPositions[tabId];
-  if (top === undefined) {
-    return;
-  }
 
   requestAnimationFrame(() => {
     const content = currentContentNode();
     if (content) {
-      content.scrollTop = top;
+      if (top !== undefined) {
+        content.scrollTop = top;
+      }
+
+      for (const node of content.querySelectorAll("[data-scroll-key]")) {
+        const keyedTop =
+          keyedScrollPositions[`${tabId}:${node.dataset.scrollKey}`];
+        if (keyedTop !== undefined) {
+          node.scrollTop = keyedTop;
+        }
+      }
     }
   });
 }
@@ -5138,7 +5150,7 @@ function renderDiscordPlan(result) {
     result.message ? callout(result.message, "warn") : null,
     h(
       "ul",
-      { className: "discord-plan-list" },
+      { className: "discord-plan-list", "data-scroll-key": "discord-plan" },
       actions.map((action) =>
         h("li", {
           className:

@@ -295,6 +295,11 @@ async function runSmoke() {
     "setup UI restores scroll position after rerenders",
   );
   assert(
+    appJs.includes("keyedScrollPositions") &&
+      appJs.includes('data-scroll-key": "discord-plan"'),
+    "setup UI preserves nested Discord setup preview scrolling during polling",
+  );
+  assert(
     appJs.includes(
       "Saved Client ID and Client Secret are intentionally not shown",
     ),
