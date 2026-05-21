@@ -1781,6 +1781,13 @@ const checkSetupModeRoute = (body: unknown) => {
     ok: true,
     mode,
     check: record,
+    providerSetup: {
+      mode,
+      redacted: true,
+      checkedAt: record.checkedAt,
+      status: record.status,
+      message: record.message,
+    },
     setupChecks: getSafeSetupChecks(),
     config: getSafeConfig(),
   };
@@ -5413,6 +5420,11 @@ const getSupportBundle = async () => {
       statusLabel: completion.statusLabel,
       statusDetail: completion.statusDetail,
       completionPercent: completion.completionPercent,
+      providerSetupChecks: {
+        redacted: true,
+        local: completion.setupChecks.local ?? safeSetupCheck(undefined),
+        relay: completion.setupChecks.relay ?? safeSetupCheck(undefined),
+      },
       lastChecks: {
         botCompletion: completion.generatedAt,
         localSetup: completion.setupChecks.local?.checkedAt ?? "",

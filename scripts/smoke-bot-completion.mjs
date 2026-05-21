@@ -39,8 +39,12 @@ async function runSmoke() {
   assert(appJs.includes("Last checked"), "bot completion shows last checked");
   assert(appJs.includes("Run dry-run rehearsal"), "rehearsal UI is present");
   assert(
-    appJs.includes("Run full local rehearsal"),
-    "full local rehearsal UI is present",
+    appJs.includes("Run Operations Check"),
+    "operations check UI is present",
+  );
+  assert(
+    appJs.includes("Check provider setup"),
+    "provider setup check UI is present",
   );
   assert(
     appJs.includes("Copy bot support bundle"),

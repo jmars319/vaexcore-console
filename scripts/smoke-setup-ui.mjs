@@ -194,6 +194,11 @@ async function runSmoke() {
     "dashboard exposes unified setup health checks",
   );
   assert(
+    appJs.includes("Run Operations Check") &&
+      appJs.includes("Check provider setup"),
+    "dashboard exposes operations and provider setup checks",
+  );
+  assert(
     appJs.includes("Staff role picker"),
     "Discord setup exposes role picker",
   );

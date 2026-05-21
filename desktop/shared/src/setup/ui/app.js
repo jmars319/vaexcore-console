@@ -828,6 +828,7 @@ function renderReadyForStreamCard(runtime = {}, readiness = {}) {
   const diagnostics = state.diagnostics || rehearsal.diagnostics || {};
   const support = rehearsal.supportBundle || {};
   const mode = completion.setupMode || currentSetupMode(state.config || {});
+  const checks = completion.setupChecks || state.config?.setupChecks || {};
   const relayConnected = Boolean(
     rehearsal.relayStatus?.connected || state.relayStatus?.connected,
   );
@@ -888,7 +889,21 @@ function renderReadyForStreamCard(runtime = {}, readiness = {}) {
       ],
       ["Support Export", supportSafe ? "redacted" : "attention", supportSafe],
       ["Rehearsal", rehearsal.generatedAt || "not run", rehearsalReady],
+      [
+        "Local last checked",
+        checks.local?.checkedAt || "not checked",
+        Boolean(checks.local?.checkedAt),
+      ],
+      [
+        "Relay last checked",
+        checks.relay?.checkedAt || "not checked",
+        Boolean(checks.relay?.checkedAt) || mode === "local-only",
+      ],
     ]),
+    callout(
+      "Optional provider setup checks store only status, timestamp, and redacted messages.",
+      "muted",
+    ),
     rehearsal.steps?.length
       ? list(
           rehearsal.steps.map(
@@ -899,11 +914,17 @@ function renderReadyForStreamCard(runtime = {}, readiness = {}) {
         )
       : null,
     h("div", { className: "actions" }, [
-      actionButton("Run full local rehearsal", {
+      actionButton("Run Operations Check", {
         id: "dashboardFullLocalRehearsal",
         variant: "primary",
         busyKey: "localRehearsal",
         onClick: runFullLocalRehearsal,
+      }),
+      actionButton("Check provider setup", {
+        id: "dashboardProviderSetupCheck",
+        variant: "secondary",
+        busyKey: "setupHealthChecks",
+        onClick: runSetupHealthChecks,
       }),
       actionButton("Copy support bundle", {
         id: "dashboardCopySupportBundle",
@@ -9296,7 +9317,7 @@ async function runSetupHealthChecks() {
     },
     {
       skipRefresh: true,
-      success: "Setup health checks completed.",
+      success: "Provider setup checks completed.",
     },
   );
 }

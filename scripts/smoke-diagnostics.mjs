@@ -159,6 +159,10 @@ async function runSmoke() {
     "support bundle includes operations last-check timestamps",
   );
   assert(
+    bundle.operations?.providerSetupChecks?.redacted === true,
+    "support bundle includes redacted provider setup checks",
+  );
+  assert(
     bundle.operations?.relay?.state,
     "support bundle includes Relay readiness summary",
   );

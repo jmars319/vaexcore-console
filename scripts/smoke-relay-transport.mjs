@@ -157,6 +157,10 @@ async function runSmoke() {
     setupModeCheck.config.setupChecks.relay.checkedAt,
     "Relay Assisted setup check stores a timestamp",
   );
+  assert(
+    setupModeCheck.providerSetup.redacted === true,
+    "Relay Assisted setup check returns redacted provider metadata",
+  );
   assertSafePayload(setupModeCheck);
 
   const relayStatus = await json("/api/relay/status");
