@@ -171,7 +171,7 @@ async function runSmoke() {
     "support bundle includes redacted giveaway rehearsal summary",
   );
   assert(
-    bundle.discordSetup.templateName === "Streamer Community Baseline",
+    bundle.discordSetup.templateName === "Full Creator Server",
     "support bundle includes Discord setup template summary",
   );
   assert(

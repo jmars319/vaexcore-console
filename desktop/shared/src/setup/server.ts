@@ -151,8 +151,10 @@ import {
 import {
   RelayChatClient,
   relayConfigReadiness,
+  startRelayHostedInstall,
   type RelayBotReadinessReport,
 } from "../twitch/relayTransport";
+import { defaultConfig } from "../config/defaultConfig";
 import {
   getTokenExpiresAt,
   refreshStoredTwitchToken,
@@ -382,6 +384,15 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
 
   if (request.method === "GET" && url.pathname === "/api/relay/status") {
     sendJson(response, 200, await getRelayStatusRoute());
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/relay/hosted/connect"
+  ) {
+    const body = await readJson(request);
+    sendJson(response, 200, await connectHostedRelayRoute(body));
     return;
   }
 
@@ -2030,6 +2041,106 @@ const getRelaySetupUrls = (relay: LocalSecrets["relay"]) => {
   };
 };
 
+const connectHostedRelayRoute = async (body: unknown) => {
+  const input = objectInput(body);
+  const existing = readLocalSecrets();
+  const requestedBaseUrl =
+    optionalInputString(input.relayBaseUrl) ||
+    existing.relay.baseUrl ||
+    defaultConfig.hostedRelayBaseUrl;
+  const baseUrl = sanitizeRelayBaseUrl(requestedBaseUrl);
+  if (!baseUrl) {
+    throw new SafeInputError("Hosted Relay URL is missing.");
+  }
+
+  const alreadyPaired =
+    input.force !== true &&
+    existing.relay.twitchTransportMode === "relay-chatbot" &&
+    existing.relay.baseUrl?.replace(/\/+$/, "") === baseUrl &&
+    Boolean(existing.relay.installationId && existing.relay.consoleToken);
+
+  if (alreadyPaired) {
+    return {
+      ok: true,
+      alreadyPaired: true,
+      config: getSafeConfig(),
+      relay: getSafeRelayConfig(existing),
+      status: await getRelayStatusRoute(),
+    };
+  }
+
+  const install = await startRelayHostedInstall({
+    baseUrl,
+    name: "VaexCore Console",
+  });
+  if (!install.ok || !install.installationId || !install.consoleToken) {
+    throw new SafeInputError("Hosted Relay did not return a Console pairing.");
+  }
+
+  const now = new Date().toISOString();
+  const next: LocalSecrets = {
+    ...existing,
+    setupMode: "relay-assisted",
+    relay: {
+      ...existing.relay,
+      twitchTransportMode: "relay-chatbot",
+      baseUrl,
+      installationId: install.installationId,
+      consoleToken: install.consoleToken,
+      chatbotIdentityValidatedAt: undefined,
+      chatbotIdentityValidationNote: undefined,
+    },
+    setupChecks: {
+      ...existing.setupChecks,
+      relay: {
+        checkedAt: now,
+        status: "ready",
+        message:
+          "Hosted Relay pairing is saved. Authorize the bot and broadcaster accounts next.",
+      },
+    },
+    botValidation: {
+      ...existing.botValidation,
+      twitchEventSubRegisteredAt: undefined,
+      twitchRelayTestSendPassedAt: undefined,
+      twitchChatBotUserListConfirmedAt: undefined,
+    },
+  };
+  writeLocalSecrets(next);
+  appendSuiteTimelineEvent({
+    sourceApp: "vaexcore-console",
+    sourceAppName: "vaexcore console",
+    kind: "twitch.relay.hosted.connect",
+    title: "Hosted Twitch Relay paired",
+    detail:
+      "Console created a hosted Relay installation for Twitch Chat Bot setup.",
+    metadata: {
+      transport: "relay-chatbot",
+      relayBaseUrl: baseUrl,
+      installationId: install.installationId,
+    },
+  });
+
+  let status: Awaited<ReturnType<typeof getRelayStatusRoute>> | null = null;
+  try {
+    status = await getRelayStatusRoute();
+  } catch {
+    status = null;
+  }
+
+  return {
+    ok: true,
+    alreadyPaired: false,
+    config: getSafeConfig(),
+    relay: getSafeRelayConfig(),
+    install: {
+      installationId: install.installationId,
+      next: install.next ?? {},
+    },
+    status,
+  };
+};
+
 const getDiscordReadiness = (secrets = readLocalSecrets()) => {
   const discord = secrets.discord;
   const checks = [
@@ -2254,7 +2365,7 @@ const relayConnectionError = (secrets = readLocalSecrets()) => {
     consoleToken: relay.consoleToken,
   });
   if (!readiness.ready) {
-    return "Save Relay URL, installation ID, and console token before using Relay chatbot setup.";
+    return "Connect hosted Twitch before using Relay chatbot setup.";
   }
   return "";
 };
@@ -3088,19 +3199,13 @@ const buildBotCompletionChecks = ({
       "relay-paired",
       "Console paired to Relay",
       !relayConnectionError(secrets),
-      "Save Relay URL, installation ID, and console token.",
+      "Connect hosted Twitch.",
     ),
     botCompletionCheck(
       "twitch-transport-relay",
       "Twitch transport is relay-chatbot",
       secrets.relay.twitchTransportMode === "relay-chatbot",
       "Switch Twitch Chat Transport to relay-chatbot in Settings.",
-    ),
-    botCompletionCheck(
-      "twitch-callback-recorded",
-      botValidationLabels.twitchCallbackAddedAt,
-      Boolean(records.twitchCallbackAddedAt),
-      "Add the Relay callback URL in the Twitch Developer Console, then record it here.",
     ),
     botCompletionCheck(
       "twitch-bot-oauth",
@@ -3258,11 +3363,10 @@ const buildBotCompletionSections = (
       title: "Twitch credentials",
       incompleteState: "needs credentials",
       readyDetail:
-        "Twitch callback, OAuth grants, account separation, and EventSub records are present.",
+        "OAuth grants, account separation, and EventSub records are present.",
       blockedDetail:
-        "Complete the Twitch app callback, bot grant, broadcaster grant, account separation, and EventSub records.",
+        "Complete the bot grant, broadcaster grant, account separation, and EventSub records.",
       checkKeys: [
-        "twitch-callback-recorded",
         "twitch-bot-oauth",
         "twitch-broadcaster-oauth",
         "twitch-separate-account",
@@ -3516,10 +3620,10 @@ const runBotSetupRehearsalRoute = async () => {
   const steps = [
     dryRunStep(
       "twitch-callback",
-      "Generate Twitch callback URL",
+      "Hosted Twitch callback URL",
       Boolean(setupUrls.twitchCallbackUrl),
       setupUrls.twitchCallbackUrl ||
-        "Save Relay URL before generating the callback URL.",
+        "Connect hosted Twitch before generating the callback URL.",
     ),
     dryRunStep(
       "bot-oauth",

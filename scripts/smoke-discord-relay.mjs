@@ -37,7 +37,7 @@ async function runSmoke() {
     "Discord Relay UI distinguishes slash commands and suggestions",
   );
   assert(
-    appJs.includes("Local Discord Connection"),
+    appJs.includes("Advanced Self-Hosted Discord Connection"),
     "Discord UI labels local setup separately",
   );
   assert(

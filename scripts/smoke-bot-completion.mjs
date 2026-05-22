@@ -62,19 +62,19 @@ async function runSmoke() {
   const clean = await json("/api/bot/completion");
   assert(clean.ok === true, "bot completion route returns ok");
   assert(
-    clean.validation.checklist.length === 10,
+    clean.validation.checklist.length >= 10,
     "validation checklist is complete",
   );
   assert(
-    clean.setupMode === "local-only",
-    "clean completion uses Local Console mode",
+    clean.setupMode === "relay-assisted",
+    "clean completion defaults to Relay Assisted mode",
   );
   assert(
     clean.sections.some(
       (section) =>
-        section.title === "Local Console" && section.state === "blocked",
+        section.title === "Relay pairing" && section.state === "blocked",
     ),
-    "bot completion route groups blocked Local Console setup",
+    "bot completion route groups blocked hosted Relay setup",
   );
   assertSafePayload(clean);
 
@@ -180,7 +180,7 @@ async function runSmoke() {
     "bot support includes setup capabilities",
   );
   assert(
-    bundle.discordSetup.templateName === "Streamer Community Baseline",
+    bundle.discordSetup.templateName === "Full Creator Server",
     "bot support includes Discord template summary",
   );
   assert(

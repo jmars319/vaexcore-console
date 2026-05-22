@@ -11,6 +11,19 @@ export type RelayTransportConfig = {
   consoleToken?: string;
 };
 
+export type RelayHostedInstallStartResponse = {
+  ok: boolean;
+  installationId: string;
+  consoleToken: string;
+  next?: {
+    twitchCallbackUrl?: string;
+    botOAuthUrl?: string;
+    broadcasterOAuthUrl?: string;
+    twitchEventSubWebhookUrl?: string;
+    discordInteractionUrl?: string;
+  };
+};
+
 export type RelayStatus = {
   ok: boolean;
   installation?: {
@@ -223,6 +236,38 @@ export class RelayChatClient {
     }
   }
 }
+
+export const startRelayHostedInstall = async (input: {
+  baseUrl: string;
+  name?: string;
+}): Promise<RelayHostedInstallStartResponse> => {
+  const baseUrl = input.baseUrl.replace(/\/+$/, "");
+  if (!baseUrl) {
+    throw new Error("Relay URL is required before hosted Twitch setup.");
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(`${baseUrl}/api/console/install/start`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: input.name || "VaexCore Console",
+      }),
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new RelayTransportError(
+        relayErrorMessage(body, response.status),
+        response.status,
+      );
+    }
+    return body as RelayHostedInstallStartResponse;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
 
 export class RelayEventPoller {
   private timer: NodeJS.Timeout | undefined;

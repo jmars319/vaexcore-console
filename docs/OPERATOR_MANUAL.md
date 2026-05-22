@@ -273,19 +273,18 @@ Delete and timeout actions only run in live EventSub chat after the feature gate
 
 Open `Settings`, then use `Setup Guide`.
 
-1. Create a Twitch application.
-   Open `https://dev.twitch.tv/console/apps`, click `Register Your Application`, use any name such as `vaexcore console`, set OAuth Redirect URL to `http://localhost:3434/auth/twitch/callback`, and choose `Application Integration`. Use one redirect URL only; do not leave a second blank redirect row. The redirect URL must match exactly. This Twitch Developer App can be created from any Twitch account you control; it does not need to be the Bot Login or the Broadcaster Login.
-2. Enter app credentials.
-   Copy the Twitch app `Client ID` and `Client Secret` into vaexcore console. Keep the Redirect URI as `http://localhost:3434/auth/twitch/callback` unless you know why it must change.
-3. Enter Twitch usernames.
-   `Broadcaster Login` is the channel vaexcore console operates in. `Bot Login` is the account that sends messages. For the first full Suite test, use the same Twitch account for both fields so chat OAuth and Studio stream-key import work from one connection. Separate bot accounts are supported for chat, but the current local Suite cannot import the broadcaster stream key from a separate bot account token.
-4. Connect Twitch.
-   Click `Connect Twitch` while logged into the Bot Login account and approve the chat scopes. If Studio must import the Twitch stream key from Console in this local tester build, Bot Login must be the broadcaster account. Approve the optional moderation scopes too if you want delete or timeout enforcement. The Client ID and Client Secret belong to the Twitch Developer App, not to one authorized Twitch user.
-   If Twitch authorizes the wrong account, click `Disconnect Twitch`, switch Twitch accounts in the browser, then connect again.
-5. Validate setup.
-   Click `Validate Setup` and confirm token, scopes, bot identity, and broadcaster identity pass. vaexcore console stores Twitch OAuth tokens locally and refreshes expired access tokens automatically when Twitch returns `401 Unauthorized`; if refresh fails, disconnect and reconnect Twitch.
-6. Test chat.
-   Click `Send test message` to confirm the bot can speak in chat.
+1. Connect hosted Twitch.
+   Click `Connect hosted Twitch`. Relay creates a hosted installation and Console stores only its local pairing token. Users do not need to see a Twitch client ID, Twitch client secret, Relay admin token, installation ID, or console token.
+2. Authorize `vaexcorebot`.
+   Click `Authorize vaexcorebot` while the browser is logged into the bot account. Relay requests the chat scopes it needs.
+3. Authorize the broadcaster channel.
+   Click `Authorize Broadcaster Channel` while the browser is logged into the channel owner account. Relay requests the channel bot grant.
+4. Register EventSub.
+   Click `Register Twitch EventSub` after both OAuth grants pass.
+5. Test chat.
+   Click `Send Relay test message` and confirm the bot can speak in Twitch chat.
+6. Confirm Chat Bot identity.
+   Click `Mark Chat Bot identity live-tested` only after Twitch shows `vaexcorebot` as a Chat Bot in the channel user list.
 7. Start the bot.
    Click `Start Bot` in the Setup Guide or Dashboard. CLI fallback is `npm run dev:app-config` after using packaged desktop app setup, or `npm run dev` after using project-local setup or `.env`. Type `!ping` in Twitch chat and wait for `LIVE CHAT CONFIRMED`.
 
@@ -331,7 +330,9 @@ npm run setup
 
 Then open `http://localhost:3434` and smoke test tab navigation, giveaway state loading, simulated commands, and the lifecycle test.
 
-## Configuring Twitch
+## Advanced Local Twitch OAuth
+
+Hosted Twitch is the default. Use this local OAuth path only when intentionally self-hosting or testing without Relay.
 
 Create a Twitch Developer app and set the redirect URI exactly:
 
@@ -372,7 +373,7 @@ The low-level Twitch transport is still stored as `local-user-token` or `relay-c
 
 Local Console mode can send chat, but Twitch may show the bot account as a normal user. Relay Assisted mode is required for the server-side app-token path that can make `vaexcorebot` appear as a Twitch Chat Bot.
 
-After Relay is deployed and paired, save the Relay URL, installation ID, and console token in Console. Relay readiness confirms config and authorization state, but Console keeps a separate `Chat Bot identity live test` field until a human validates Twitch’s user list in the real channel. Click `Mark Chat Bot identity live-tested` only after Twitch shows `vaexcorebot` as a Chat Bot.
+Use `Connect hosted Twitch` in Console to create the Relay pairing. Relay readiness confirms config and authorization state, but Console keeps a separate `Chat Bot identity live test` field until a human validates Twitch’s user list in the real channel. Click `Mark Chat Bot identity live-tested` only after Twitch shows `vaexcorebot` as a Chat Bot.
 
 Run `npm run bot:readiness` for a redacted preflight covering Relay health, saved pairing, Twitch OAuth grant readiness, Discord Relay readiness, local Discord setup, and remaining next actions. The exact credential and portal sequence lives in [Bot Live Validation Runbook](BOT_LIVE_VALIDATION.md).
 

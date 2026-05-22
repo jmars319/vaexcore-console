@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { z } from "zod";
 import { normalizeLogin, sanitizeText } from "../core/security";
+import { defaultConfig } from "./defaultConfig";
 
 const configDir = process.env.VAEXCORE_CONFIG_DIR
   ? resolve(process.env.VAEXCORE_CONFIG_DIR)
@@ -99,7 +100,7 @@ export const readLocalSecrets = (): LocalSecrets => {
   if (!existsSync(secretsPath)) {
     return {
       mode: "live",
-      setupMode: "local-only",
+      setupMode: "relay-assisted",
       twitch: { redirectUri: defaultRedirectUri, scopes: [] },
       discord: {
         lockStaffCategory: false,
@@ -107,7 +108,10 @@ export const readLocalSecrets = (): LocalSecrets => {
         createdRoleIds: {},
         createdMessageIds: {},
       },
-      relay: { twitchTransportMode: "local-user-token" },
+      relay: {
+        twitchTransportMode: "relay-chatbot",
+        baseUrl: defaultConfig.hostedRelayBaseUrl,
+      },
       setupChecks: { local: {}, relay: {} },
       botValidation: {},
     };
@@ -132,168 +136,189 @@ export const getLocalSecretsPath = () => secretsPath;
 
 export const defaultRedirectUri = "http://localhost:3434/auth/twitch/callback";
 
-const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => ({
-  mode: secrets.mode,
-  setupMode:
+const normalizeSecrets = (secrets: LocalSecrets): LocalSecrets => {
+  const twitchTransportMode =
+    secrets.relay.twitchTransportMode === "relay-chatbot"
+      ? "relay-chatbot"
+      : "local-user-token";
+  const setupMode =
     secrets.setupMode ??
-    (secrets.relay.twitchTransportMode === "relay-chatbot"
-      ? "relay-assisted"
-      : "local-only"),
-  twitch: {
-    ...secrets.twitch,
-    clientId: sanitizeOptional(secrets.twitch.clientId, "Client ID", 120),
-    clientSecret: sanitizeOptional(
-      secrets.twitch.clientSecret,
-      "Client secret",
-      200,
-    ),
-    redirectUri: secrets.twitch.redirectUri || defaultRedirectUri,
-    broadcasterLogin: secrets.twitch.broadcasterLogin
-      ? normalizeLogin(secrets.twitch.broadcasterLogin, "Broadcaster login")
-      : undefined,
-    botLogin: secrets.twitch.botLogin
-      ? normalizeLogin(secrets.twitch.botLogin, "Bot login")
-      : undefined,
-  },
-  discord: {
-    ...secrets.discord,
-    botToken: sanitizeOptional(
-      secrets.discord.botToken,
-      "Discord bot token",
-      240,
-    ),
-    guildId: sanitizeOptional(secrets.discord.guildId, "Discord server ID", 32),
-    streamAnnouncementChannelId: sanitizeOptional(
-      secrets.discord.streamAnnouncementChannelId,
-      "Discord stream announcement channel ID",
-      32,
-    ),
-    generalAnnouncementChannelId: sanitizeOptional(
-      secrets.discord.generalAnnouncementChannelId,
-      "Discord general announcement channel ID",
-      32,
-    ),
-    streamAlertsRoleId: sanitizeOptional(
-      secrets.discord.streamAlertsRoleId,
-      "Discord Stream Alerts role ID",
-      32,
-    ),
-    operatorRoleId: sanitizeOptional(
-      secrets.discord.operatorRoleId,
-      "Discord operator role ID",
-      32,
-    ),
-    staffRoleId: sanitizeOptional(
-      secrets.discord.staffRoleId,
-      "Discord staff role ID",
-      32,
-    ),
-    setupTemplateId: sanitizeOptional(
-      secrets.discord.setupTemplateId,
-      "Discord setup template ID",
-      80,
-    ),
-    starterMessagesAppliedAt: sanitizeOptional(
-      secrets.discord.starterMessagesAppliedAt,
-      "Discord starter messages applied timestamp",
-      80,
-    ),
-    lockStaffCategory: Boolean(secrets.discord.lockStaffCategory),
-    createdChannelIds: secrets.discord.createdChannelIds ?? {},
-    createdRoleIds: secrets.discord.createdRoleIds ?? {},
-    createdMessageIds: secrets.discord.createdMessageIds ?? {},
-  },
-  relay: {
-    ...secrets.relay,
-    twitchTransportMode:
-      secrets.relay.twitchTransportMode === "relay-chatbot"
-        ? "relay-chatbot"
-        : "local-user-token",
-    baseUrl: secrets.relay.baseUrl
-      ? sanitizeOptional(secrets.relay.baseUrl, "Relay URL", 300)
-      : undefined,
-    installationId: secrets.relay.installationId
-      ? sanitizeOptional(
-          secrets.relay.installationId,
-          "Relay installation ID",
-          120,
-        )
-      : undefined,
-    consoleToken: secrets.relay.consoleToken
-      ? sanitizeOptional(secrets.relay.consoleToken, "Relay console token", 240)
-      : undefined,
-    chatbotIdentityValidatedAt: secrets.relay.chatbotIdentityValidatedAt
-      ? sanitizeOptional(
-          secrets.relay.chatbotIdentityValidatedAt,
-          "Relay Chat Bot validation timestamp",
-          80,
-        )
-      : undefined,
-    chatbotIdentityValidationNote: secrets.relay.chatbotIdentityValidationNote
-      ? sanitizeOptional(
-          secrets.relay.chatbotIdentityValidationNote,
-          "Relay Chat Bot validation note",
-          240,
-        )
-      : undefined,
-  },
-  setupChecks: {
-    local: normalizeSetupCheck(secrets.setupChecks?.local, "local setup check"),
-    relay: normalizeSetupCheck(secrets.setupChecks?.relay, "Relay setup check"),
-  },
-  botValidation: {
-    twitchCallbackAddedAt: sanitizeOptional(
-      secrets.botValidation.twitchCallbackAddedAt,
-      "Twitch callback validation timestamp",
-      80,
-    ),
-    twitchBotOAuthCompletedAt: sanitizeOptional(
-      secrets.botValidation.twitchBotOAuthCompletedAt,
-      "Twitch bot OAuth validation timestamp",
-      80,
-    ),
-    twitchBroadcasterOAuthCompletedAt: sanitizeOptional(
-      secrets.botValidation.twitchBroadcasterOAuthCompletedAt,
-      "Twitch broadcaster OAuth validation timestamp",
-      80,
-    ),
-    twitchEventSubRegisteredAt: sanitizeOptional(
-      secrets.botValidation.twitchEventSubRegisteredAt,
-      "Twitch EventSub validation timestamp",
-      80,
-    ),
-    twitchRelayTestSendPassedAt: sanitizeOptional(
-      secrets.botValidation.twitchRelayTestSendPassedAt,
-      "Twitch Relay test send validation timestamp",
-      80,
-    ),
-    twitchChatBotUserListConfirmedAt: sanitizeOptional(
-      secrets.botValidation.twitchChatBotUserListConfirmedAt,
-      "Twitch Chat Bot user-list validation timestamp",
-      80,
-    ),
-    discordInteractionEndpointAcceptedAt: sanitizeOptional(
-      secrets.botValidation.discordInteractionEndpointAcceptedAt,
-      "Discord interaction endpoint validation timestamp",
-      80,
-    ),
-    discordSlashCommandsRegisteredAt: sanitizeOptional(
-      secrets.botValidation.discordSlashCommandsRegisteredAt,
-      "Discord slash command validation timestamp",
-      80,
-    ),
-    discordSuggestCommandTestedAt: sanitizeOptional(
-      secrets.botValidation.discordSuggestCommandTestedAt,
-      "Discord suggest command validation timestamp",
-      80,
-    ),
-    discordAnnouncementCommandTestedAt: sanitizeOptional(
-      secrets.botValidation.discordAnnouncementCommandTestedAt,
-      "Discord announcement command validation timestamp",
-      80,
-    ),
-  },
-});
+    (twitchTransportMode === "relay-chatbot" ? "relay-assisted" : "local-only");
+  const useHostedRelayDefault =
+    setupMode === "relay-assisted" || twitchTransportMode === "relay-chatbot";
+
+  return {
+    mode: secrets.mode,
+    setupMode,
+    twitch: {
+      ...secrets.twitch,
+      clientId: sanitizeOptional(secrets.twitch.clientId, "Client ID", 120),
+      clientSecret: sanitizeOptional(
+        secrets.twitch.clientSecret,
+        "Client secret",
+        200,
+      ),
+      redirectUri: secrets.twitch.redirectUri || defaultRedirectUri,
+      broadcasterLogin: secrets.twitch.broadcasterLogin
+        ? normalizeLogin(secrets.twitch.broadcasterLogin, "Broadcaster login")
+        : undefined,
+      botLogin: secrets.twitch.botLogin
+        ? normalizeLogin(secrets.twitch.botLogin, "Bot login")
+        : undefined,
+    },
+    discord: {
+      ...secrets.discord,
+      botToken: sanitizeOptional(
+        secrets.discord.botToken,
+        "Discord bot token",
+        240,
+      ),
+      guildId: sanitizeOptional(
+        secrets.discord.guildId,
+        "Discord server ID",
+        32,
+      ),
+      streamAnnouncementChannelId: sanitizeOptional(
+        secrets.discord.streamAnnouncementChannelId,
+        "Discord stream announcement channel ID",
+        32,
+      ),
+      generalAnnouncementChannelId: sanitizeOptional(
+        secrets.discord.generalAnnouncementChannelId,
+        "Discord general announcement channel ID",
+        32,
+      ),
+      streamAlertsRoleId: sanitizeOptional(
+        secrets.discord.streamAlertsRoleId,
+        "Discord Stream Alerts role ID",
+        32,
+      ),
+      operatorRoleId: sanitizeOptional(
+        secrets.discord.operatorRoleId,
+        "Discord operator role ID",
+        32,
+      ),
+      staffRoleId: sanitizeOptional(
+        secrets.discord.staffRoleId,
+        "Discord staff role ID",
+        32,
+      ),
+      setupTemplateId: sanitizeOptional(
+        secrets.discord.setupTemplateId,
+        "Discord setup template ID",
+        80,
+      ),
+      starterMessagesAppliedAt: sanitizeOptional(
+        secrets.discord.starterMessagesAppliedAt,
+        "Discord starter messages applied timestamp",
+        80,
+      ),
+      lockStaffCategory: Boolean(secrets.discord.lockStaffCategory),
+      createdChannelIds: secrets.discord.createdChannelIds ?? {},
+      createdRoleIds: secrets.discord.createdRoleIds ?? {},
+      createdMessageIds: secrets.discord.createdMessageIds ?? {},
+    },
+    relay: {
+      ...secrets.relay,
+      twitchTransportMode,
+      baseUrl: secrets.relay.baseUrl
+        ? sanitizeOptional(secrets.relay.baseUrl, "Relay URL", 300)
+        : useHostedRelayDefault
+          ? defaultConfig.hostedRelayBaseUrl
+          : undefined,
+      installationId: secrets.relay.installationId
+        ? sanitizeOptional(
+            secrets.relay.installationId,
+            "Relay installation ID",
+            120,
+          )
+        : undefined,
+      consoleToken: secrets.relay.consoleToken
+        ? sanitizeOptional(
+            secrets.relay.consoleToken,
+            "Relay console token",
+            240,
+          )
+        : undefined,
+      chatbotIdentityValidatedAt: secrets.relay.chatbotIdentityValidatedAt
+        ? sanitizeOptional(
+            secrets.relay.chatbotIdentityValidatedAt,
+            "Relay Chat Bot validation timestamp",
+            80,
+          )
+        : undefined,
+      chatbotIdentityValidationNote: secrets.relay.chatbotIdentityValidationNote
+        ? sanitizeOptional(
+            secrets.relay.chatbotIdentityValidationNote,
+            "Relay Chat Bot validation note",
+            240,
+          )
+        : undefined,
+    },
+    setupChecks: {
+      local: normalizeSetupCheck(
+        secrets.setupChecks?.local,
+        "local setup check",
+      ),
+      relay: normalizeSetupCheck(
+        secrets.setupChecks?.relay,
+        "Relay setup check",
+      ),
+    },
+    botValidation: {
+      twitchCallbackAddedAt: sanitizeOptional(
+        secrets.botValidation.twitchCallbackAddedAt,
+        "Twitch callback validation timestamp",
+        80,
+      ),
+      twitchBotOAuthCompletedAt: sanitizeOptional(
+        secrets.botValidation.twitchBotOAuthCompletedAt,
+        "Twitch bot OAuth validation timestamp",
+        80,
+      ),
+      twitchBroadcasterOAuthCompletedAt: sanitizeOptional(
+        secrets.botValidation.twitchBroadcasterOAuthCompletedAt,
+        "Twitch broadcaster OAuth validation timestamp",
+        80,
+      ),
+      twitchEventSubRegisteredAt: sanitizeOptional(
+        secrets.botValidation.twitchEventSubRegisteredAt,
+        "Twitch EventSub validation timestamp",
+        80,
+      ),
+      twitchRelayTestSendPassedAt: sanitizeOptional(
+        secrets.botValidation.twitchRelayTestSendPassedAt,
+        "Twitch Relay test send validation timestamp",
+        80,
+      ),
+      twitchChatBotUserListConfirmedAt: sanitizeOptional(
+        secrets.botValidation.twitchChatBotUserListConfirmedAt,
+        "Twitch Chat Bot user-list validation timestamp",
+        80,
+      ),
+      discordInteractionEndpointAcceptedAt: sanitizeOptional(
+        secrets.botValidation.discordInteractionEndpointAcceptedAt,
+        "Discord interaction endpoint validation timestamp",
+        80,
+      ),
+      discordSlashCommandsRegisteredAt: sanitizeOptional(
+        secrets.botValidation.discordSlashCommandsRegisteredAt,
+        "Discord slash command validation timestamp",
+        80,
+      ),
+      discordSuggestCommandTestedAt: sanitizeOptional(
+        secrets.botValidation.discordSuggestCommandTestedAt,
+        "Discord suggest command validation timestamp",
+        80,
+      ),
+      discordAnnouncementCommandTestedAt: sanitizeOptional(
+        secrets.botValidation.discordAnnouncementCommandTestedAt,
+        "Discord announcement command validation timestamp",
+        80,
+      ),
+    },
+  };
+};
 
 const normalizeSetupCheck = (
   check: LocalSecrets["setupChecks"]["local"] | undefined,

@@ -46,8 +46,12 @@ async function runSmoke() {
     "Relay-specific setup guide is present",
   );
   assert(
-    appJs.includes("Add Twitch Callback URL"),
-    "Relay setup guide includes the Twitch callback step",
+    appJs.includes("Connect hosted Twitch"),
+    "Relay setup guide includes the hosted connect step",
+  );
+  assert(
+    appJs.includes("Advanced Local Twitch OAuth"),
+    "local Twitch credentials are behind an advanced hosted-mode panel",
   );
   assert(appJs.includes("Relay Chat Bot"), "Relay Chat Bot mode is labeled");
   assert(
@@ -67,37 +71,40 @@ async function runSmoke() {
 
   const clean = await json("/api/config");
   assert(
-    clean.setupMode === "local-only",
-    "clean install defaults to Local Console mode",
+    clean.setupMode === "relay-assisted",
+    "clean install defaults to Relay Assisted mode",
   );
   assert(
-    clean.relay.twitchTransportMode === "local-user-token",
-    "clean install defaults to local user-token transport",
+    clean.relay.twitchTransportMode === "relay-chatbot",
+    "clean install defaults to hosted Relay chatbot transport",
   );
   assert(
     clean.relay.hasConsoleToken === false,
     "clean install starts without Relay console token",
   );
   assert(
-    clean.relay.setupUrls.twitchCallbackUrl === "",
-    "clean install has no Relay callback URL until a Relay URL is saved",
+    clean.relay.setupUrls.twitchCallbackUrl ===
+      "https://relay.vaexil.tv/oauth/twitch/callback",
+    "clean install uses the hosted Relay callback URL",
   );
   assertSafePayload(clean);
 
-  const saveResult = await post("/api/config", {
+  await post("/api/config", {
     mode: "live",
-    redirectUri: "http://localhost:3434/auth/twitch/callback",
-    clientId: "relay-client-id",
-    clientSecret: "relay-client-secret",
-    broadcasterLogin: "vaexcore",
-    botLogin: "vaexcorebot",
     setupMode: "relay-assisted",
     twitchTransportMode: "relay-chatbot",
     relayBaseUrl: `${fakeRelay.url}/`,
-    relayInstallationId,
-    relayConsoleToken,
   });
-  const saved = saveResult.config;
+
+  const hostedStart = await post("/api/relay/hosted/connect", {});
+  assert(hostedStart.ok === true, "hosted Relay connect returns ok");
+  assert(
+    fakeRelay.installStartCount === 1,
+    "fake Relay saw hosted install start",
+  );
+  assertSafePayload(hostedStart);
+
+  const saved = hostedStart.config;
 
   assert(
     saved.setupMode === "relay-assisted",
@@ -199,6 +206,7 @@ async function runSmoke() {
 
 async function startFakeRelay() {
   const state = {
+    installStartCount: 0,
     eventSubRegisterCount: 0,
     chatSendCount: 0,
   };
@@ -213,6 +221,26 @@ async function startFakeRelay() {
       send(response, 200, {
         ok: true,
         service: "vaexcore relay smoke",
+      });
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/console/install/start"
+    ) {
+      state.installStartCount += 1;
+      send(response, 200, {
+        ok: true,
+        installationId: relayInstallationId,
+        consoleToken: relayConsoleToken,
+        next: {
+          twitchCallbackUrl: `${stateUrl(server)}/oauth/twitch/callback`,
+          botOAuthUrl: `${stateUrl(server)}/oauth/twitch/start?installationId=${relayInstallationId}&kind=bot`,
+          broadcasterOAuthUrl: `${stateUrl(server)}/oauth/twitch/start?installationId=${relayInstallationId}&kind=broadcaster`,
+          twitchEventSubWebhookUrl: `${stateUrl(server)}/webhooks/twitch/eventsub`,
+          discordInteractionUrl: `${stateUrl(server)}/webhooks/discord/interactions`,
+        },
       });
       return;
     }
@@ -294,6 +322,9 @@ async function startFakeRelay() {
   return {
     get url() {
       return stateUrl(server);
+    },
+    get installStartCount() {
+      return state.installStartCount;
     },
     get eventSubRegisterCount() {
       return state.eventSubRegisterCount;

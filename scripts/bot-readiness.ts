@@ -41,21 +41,21 @@ addSection("Local Console Pairing", [
     "Relay URL",
     "saved",
     "missing",
-    "Save Relay URL in Console Settings.",
+    "Open Console Settings and click Connect hosted Twitch.",
   ),
   check(
     Boolean(secrets.relay.installationId),
     "Relay installation",
     "installation ID is saved",
     "installation ID is missing",
-    "Save the Relay installation ID in Console Settings.",
+    "Open Console Settings and click Connect hosted Twitch.",
   ),
   check(
     Boolean(secrets.relay.consoleToken),
     "Relay console token",
     "console token is saved locally",
     "console token is missing",
-    "Save the Relay console token in Console Settings.",
+    "Open Console Settings and click Connect hosted Twitch.",
   ),
   {
     label: "Twitch transport",
@@ -73,9 +73,9 @@ addSection("Twitch Relay Setup URLs", [
   check(
     Boolean(setupUrls.twitchCallbackUrl),
     "Twitch callback URL",
-    setupUrls.twitchCallbackUrl || "available after Relay URL is saved",
+    setupUrls.twitchCallbackUrl || "available after hosted Relay pairing",
     "missing",
-    "Add this URL in the Twitch Developer Console before OAuth.",
+    "Connect hosted Twitch from Console.",
   ),
   check(
     Boolean(setupUrls.twitchBotOAuthUrl),
@@ -181,7 +181,7 @@ async function addTwitchRelaySection() {
       "Console-to-Relay auth",
       "configured locally",
       "missing local Relay config",
-      "Save Relay URL, installation ID, and console token in Console Settings.",
+      "Open Console Settings and click Connect hosted Twitch.",
     ),
   ];
 
@@ -259,8 +259,8 @@ async function addDiscordRelaySection() {
     checks.push({
       label: "Discord Relay status",
       status: "todo",
-      detail: "not checked because local Relay config is incomplete",
-      nextAction: "Save Relay URL, installation ID, and console token first.",
+      detail: "not checked because hosted Relay pairing is incomplete",
+      nextAction: "Open Console Settings and click Connect hosted Twitch.",
     });
   }
 
@@ -270,11 +270,6 @@ async function addDiscordRelaySection() {
 function addValidationRecordSection() {
   const records = secrets.botValidation;
   addSection("Live Validation Records", [
-    recordCheck(
-      "Twitch callback URL added",
-      records.twitchCallbackAddedAt,
-      "Add the Relay callback URL in the Twitch Developer Console.",
-    ),
     recordCheck(
       "Twitch bot OAuth completed",
       records.twitchBotOAuthCompletedAt,

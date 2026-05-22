@@ -1,6 +1,6 @@
 # Bot Live Validation Runbook
 
-This runbook covers the final credential and portal actions for Twitch Chat Bot identity and Discord slash commands. It assumes Relay is already deployed at `https://relay.vaexil.tv` and Console is paired to installation `35d25f86-db02-4613-9715-fa3c580f5e46`.
+This runbook covers the final hosted OAuth and live validation actions for Twitch Chat Bot identity and Discord slash commands. It assumes Relay is already deployed at `https://relay.vaexil.tv`.
 
 Do not paste real secrets into docs, screenshots, support bundles, or chat. Use the Console UI and `wrangler secret put` prompts for secret values.
 
@@ -14,9 +14,9 @@ npm run bot:readiness
 
 Expected pre-credential blockers:
 
+- Hosted Relay pairing may be missing.
 - Twitch bot grant is pending.
 - Twitch broadcaster grant is pending.
-- Console may still be in `Local Console` mode.
 - Chat Bot identity live test is not recorded.
 - Discord Worker secrets may be missing.
 - Discord slash commands may not be registered.
@@ -26,53 +26,33 @@ Expected pre-credential blockers:
 
 ## Phase 6: Twitch Chat Bot Identity
 
-1. Open the Twitch Developer Console for the Relay Twitch app.
-2. Add this OAuth redirect URL exactly:
-
-```text
-https://relay.vaexil.tv/oauth/twitch/callback
-```
-
-3. Save the Twitch app settings.
-4. In a browser session logged into `vaexcorebot`, open:
-
-```text
-https://relay.vaexil.tv/oauth/twitch/start?installationId=35d25f86-db02-4613-9715-fa3c580f5e46&kind=bot
-```
-
-5. Approve the bot grant scopes:
+1. Open Console `Settings`.
+2. Click `Connect hosted Twitch`.
+3. In the browser session logged into `vaexcorebot`, approve the bot grant scopes:
 
 - `user:bot`
 - `user:read:chat`
 - `user:write:chat`
 
-6. In a separate browser session logged into the broadcaster account, open:
-
-```text
-https://relay.vaexil.tv/oauth/twitch/start?installationId=35d25f86-db02-4613-9715-fa3c580f5e46&kind=broadcaster
-```
-
-7. Approve the broadcaster grant scope:
+4. Return to Console and click `Authorize broadcaster`.
+5. In a browser session logged into the broadcaster account, approve the broadcaster grant scope:
 
 - `channel:bot`
 
-8. Open Console `Settings`.
-9. Confirm Relay URL, installation ID, and console token are saved.
-10. Set `Operating Mode` to `Relay Assisted`.
-11. Click `Check Relay`.
-12. Confirm Relay readiness shows bot grant, broadcaster grant, and separate bot account checks as passing.
-13. Register or refresh the Twitch EventSub chat subscription from Console if the action is available.
-14. Send a test chat message through Relay.
-15. Confirm the message appears in the target Twitch chat as `vaexcorebot`.
-16. Confirm Twitch's chat user list labels `vaexcorebot` as a Chat Bot.
-17. Only after the user-list check passes, click `Mark Chat Bot identity live-tested` in Console.
-18. Run:
+6. Return to Console and click `Check Relay`.
+7. Confirm Relay readiness shows bot grant, broadcaster grant, and separate bot account checks as passing.
+8. Click `Register Twitch EventSub`.
+9. Click `Send Relay test message`.
+10. Confirm the message appears in the target Twitch chat as `vaexcorebot`.
+11. Confirm Twitch's chat user list labels `vaexcorebot` as a Chat Bot.
+12. Only after the user-list check passes, click `Mark Chat Bot identity live-tested` in Console.
+13. Run:
 
 ```bash
 npm run bot:readiness
 ```
 
-19. Confirm the Twitch section has no remaining TODO items except unrelated Discord/local setup items.
+14. Confirm the Twitch section has no remaining TODO items except unrelated Discord/local setup items.
 
 If Twitch still shows `vaexcorebot` as a normal user, do not mark the live test complete. Recheck the transport mode, Relay readiness, OAuth grants, and that the bot and broadcaster grants were approved by separate Twitch accounts.
 
