@@ -3004,10 +3004,10 @@ const recordRelayChatbotIdentityValidation = (body: unknown) => {
 
 const getBotCompletionRoute = async () => {
   const secrets = readLocalSecrets();
-  const [relayStatus, relayReport, discordStatus] = await Promise.all([
+  const [relayStatus, relayReport, discordRelayStatus] = await Promise.all([
     getRelayStatusRoute(),
     getRelayReadinessReport(secrets),
-    getDiscordStatus(new URLSearchParams()),
+    getDiscordRelayStatusRoute(),
   ]);
   const validation = getSafeBotValidation(secrets);
   const relay = getSafeRelayConfig(secrets);
@@ -3017,6 +3017,7 @@ const getBotCompletionRoute = async () => {
     secrets,
     relayStatus,
     relayReport,
+    discordRelayStatus,
     localDiscord,
     records,
     setupMode: getSetupMode(secrets),
@@ -3056,7 +3057,7 @@ const getBotCompletionRoute = async () => {
     discord: {
       localReadiness: localDiscord,
       localConfig: getSafeDiscordConfig(secrets),
-      relay: discordStatus,
+      relay: discordRelayStatus,
     },
     setupMode: getSetupMode(secrets),
     transportMode: secrets.relay.twitchTransportMode,
@@ -3137,6 +3138,7 @@ const buildBotCompletionChecks = ({
   secrets,
   relayStatus,
   relayReport,
+  discordRelayStatus,
   localDiscord,
   records,
   setupMode,
@@ -3144,6 +3146,7 @@ const buildBotCompletionChecks = ({
   secrets: LocalSecrets;
   relayStatus: Awaited<ReturnType<typeof getRelayStatusRoute>>;
   relayReport: Awaited<ReturnType<typeof getRelayReadinessReport>>;
+  discordRelayStatus: Awaited<ReturnType<typeof getDiscordRelayStatusRoute>>;
   localDiscord: ReturnType<typeof getDiscordReadiness>;
   records: Record<BotValidationKey, string>;
   setupMode: SetupMode;
@@ -3156,8 +3159,11 @@ const buildBotCompletionChecks = ({
         : [];
   const checkByKey = (key: string) =>
     relayReadinessChecks.find((item) => item.key === key);
-  const discordChecks =
-    relayReport.ok && relayReport.report ? relayReport.report.checks || [] : [];
+  const discordChecks = discordRelayStatus.ok
+    ? discordRelayStatus.readiness?.checks || []
+    : relayReport.ok && relayReport.report
+      ? relayReport.report.checks || []
+      : [];
   const discordCheckByKey = (key: string) =>
     discordChecks.find((item) => item.key === key);
 
@@ -3262,15 +3268,24 @@ const buildBotCompletionChecks = ({
         discordCheckByKey("discord-bot-token")?.ok &&
         discordCheckByKey("discord-public-key")?.ok &&
         discordCheckByKey("discord-application-id")?.ok &&
-        discordCheckByKey("discord-guild-id")?.ok,
+        discordCheckByKey("discord-client-secret")?.ok,
       ),
       "Set Discord Worker secrets on Relay.",
     ),
     botCompletionCheck(
+      "discord-guild-connected",
+      "Discord server is connected",
+      Boolean(discordCheckByKey("discord-guild-id")?.ok),
+      "Connect Discord from Console so Relay knows which server to manage.",
+    ),
+    botCompletionCheck(
       "discord-interaction-endpoint",
       botValidationLabels.discordInteractionEndpointAcceptedAt,
-      Boolean(records.discordInteractionEndpointAcceptedAt),
-      "Set the Discord Interactions Endpoint to the Relay URL and record Discord acceptance.",
+      Boolean(
+        records.discordInteractionEndpointAcceptedAt ||
+        discordCheckByKey("discord-interaction-url")?.ok,
+      ),
+      "Set the Discord Interactions Endpoint to the Relay URL.",
     ),
     botCompletionCheck(
       "discord-slash-commands",
@@ -3279,7 +3294,7 @@ const buildBotCompletionChecks = ({
         records.discordSlashCommandsRegisteredAt ||
         discordCheckByKey("discord-command-registration")?.ok,
       ),
-      "Register Discord slash commands through Console after Worker secrets are set.",
+      "Register Discord slash commands through Console after Discord is connected.",
     ),
     botCompletionCheck(
       "discord-suggest-tested",
@@ -3376,13 +3391,14 @@ const buildBotCompletionSections = (
     {
       key: "discord-relay",
       title: "Discord Relay",
-      incompleteState: "needs credentials",
+      incompleteState: "needs setup",
       readyDetail:
-        "Discord Worker secrets, endpoint acceptance, and slash commands are ready.",
+        "Discord server, Worker secrets, endpoint, and slash commands are ready.",
       blockedDetail:
-        "Configure Relay Worker Discord secrets, accept the endpoint, and register commands.",
+        "Connect Discord to this Relay installation, verify Worker secrets, and register commands.",
       checkKeys: [
         "discord-worker-config",
+        "discord-guild-connected",
         "discord-interaction-endpoint",
         "discord-slash-commands",
       ],

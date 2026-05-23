@@ -119,6 +119,34 @@ async function runSmoke() {
     "Discord Worker checks are included",
   );
   assert(
+    completion.checks.some(
+      (check) => check.key === "discord-worker-config" && check.complete,
+    ),
+    "Discord Worker checks do not require guild state",
+  );
+  assert(
+    completion.checks.some(
+      (check) => check.key === "discord-guild-connected" && check.complete,
+    ),
+    "Discord guild connection is tracked separately",
+  );
+  assert(
+    completion.checks.some(
+      (check) => check.key === "discord-interaction-endpoint" && check.complete,
+    ),
+    "Discord interaction endpoint is detected from Relay readiness",
+  );
+  assert(
+    completion.sections.some(
+      (section) =>
+        section.title === "Discord Relay" &&
+        section.state === "needs setup" &&
+        section.completed === 3 &&
+        section.total === 4,
+    ),
+    "Discord Relay section separates setup state from Worker credentials",
+  );
+  assert(
     completion.sections.some(
       (section) =>
         section.title === "Relay pairing" &&
@@ -241,7 +269,13 @@ async function startFakeRelay() {
             { key: "discord-bot-token", ok: true, detail: "configured" },
             { key: "discord-public-key", ok: true, detail: "configured" },
             { key: "discord-application-id", ok: true, detail: "configured" },
+            { key: "discord-client-secret", ok: true, detail: "configured" },
             { key: "discord-guild-id", ok: true, detail: "configured" },
+            {
+              key: "discord-interaction-url",
+              ok: true,
+              detail: "configured",
+            },
             {
               key: "discord-command-registration",
               ok: false,
@@ -404,7 +438,19 @@ function relayReadinessReport() {
         detail: "configured",
       },
       {
+        key: "discord-client-secret",
+        ok: true,
+        state: "ready",
+        detail: "configured",
+      },
+      {
         key: "discord-guild-id",
+        ok: true,
+        state: "ready",
+        detail: "configured",
+      },
+      {
+        key: "discord-interaction-url",
         ok: true,
         state: "ready",
         detail: "configured",

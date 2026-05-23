@@ -1335,11 +1335,12 @@ function clientBotCompletionSections(checks) {
       ],
     ],
     [
-      "Discord credentials",
-      "needs credentials",
+      "Discord Relay",
+      "needs setup",
       [
         "discord-local-setup",
         "discord-worker-config",
+        "discord-guild-connected",
         "discord-interaction-endpoint",
         "discord-slash-commands",
       ],
