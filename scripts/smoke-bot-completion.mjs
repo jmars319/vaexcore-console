@@ -67,7 +67,7 @@ async function runSmoke() {
   );
   assert(
     clean.setupMode === "relay-assisted",
-    "clean completion defaults to Relay Assisted mode",
+    "clean completion defaults to Hosted mode",
   );
   assert(
     clean.sections.some(

@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -31,10 +31,22 @@ try {
 
 async function runSmoke() {
   const appJs = await text("/ui/app.js");
-  assert(appJs.includes("Twitch Chat Transport"), "Relay transport UI exists");
-  assert(appJs.includes("Operating Mode"), "Console mode selector exists");
-  assert(appJs.includes("Local Console"), "Local Console mode is labeled");
-  assert(appJs.includes("Relay Assisted"), "Relay Assisted mode is labeled");
+  const electronMain = readFileSync(
+    resolve("desktop/shared/electron/main.cjs"),
+    "utf8",
+  );
+  assert(
+    appJs.includes("Twitch Chat Transport"),
+    "Assisted transport UI exists",
+  );
+  assert(appJs.includes("Setup Mode"), "setup mode selector exists");
+  assert(
+    appJs.includes("setup-mode-selector"),
+    "segmented setup mode UI exists",
+  );
+  assert(appJs.includes("Hosted"), "Hosted mode is labeled");
+  assert(appJs.includes("Assisted"), "Assisted mode is labeled");
+  assert(appJs.includes("Local"), "Local mode is labeled");
   assert(
     appJs.includes("Hosted Relay Bot Setup"),
     "hosted Relay setup UI exists",
@@ -46,33 +58,57 @@ async function runSmoke() {
     "Relay-specific setup guide is present",
   );
   assert(
-    appJs.includes("Connect hosted Twitch"),
+    appJs.includes("Start hosted setup"),
     "Relay setup guide includes the hosted connect step",
   );
   assert(
-    appJs.includes("Advanced Local Twitch OAuth"),
-    "local Twitch credentials are behind an advanced hosted-mode panel",
+    appJs.includes("Log in as vaexcorebot"),
+    "Relay setup guide labels the bot OAuth account",
+  );
+  assert(
+    appJs.includes("Log in as broadcaster"),
+    "Relay setup guide labels the broadcaster OAuth account",
+  );
+  assert(
+    appJs.includes("Register required EventSub"),
+    "Relay setup guide makes EventSub registration a required step",
+  );
+  assert(
+    electronMain.includes("hostedTwitchOAuthKind"),
+    "desktop app detects hosted Twitch OAuth windows",
+  );
+  assert(
+    electronMain.includes("persist:vaexcore-twitch-${kind}"),
+    "desktop app keeps bot and broadcaster Twitch sessions separate",
+  );
+  assert(
+    appJs.includes("Local OAuth Fallback"),
+    "local Twitch credentials are behind an advanced panel",
   );
   assert(appJs.includes("Relay Chat Bot"), "Relay Chat Bot mode is labeled");
   assert(
-    appJs.includes(
-      "Local Console chat sends appear as the authorized Twitch user",
-    ),
+    appJs.includes("Local chat sends appear as the authorized Twitch user"),
     "local fallback identity warning is visible",
   );
   assert(
-    appJs.includes("Local Console sends through direct OAuth chat"),
-    "settings UI explains Local Console transport",
+    appJs.includes("Local sends through direct OAuth chat"),
+    "settings UI explains Local transport",
   );
   assert(
     appJs.includes("Relay Chat Bot identity sends through hosted Relay"),
-    "settings UI explains Relay Assisted transport",
+    "settings UI explains Hosted transport",
+  );
+  assert(
+    appJs.includes(
+      "Hosted setup keeps Twitch and Discord service secrets in Relay",
+    ),
+    "Hosted view copy does not make local token setup the main path",
   );
 
   const clean = await json("/api/config");
   assert(
     clean.setupMode === "relay-assisted",
-    "clean install defaults to Relay Assisted mode",
+    "clean install defaults to Hosted mode",
   );
   assert(
     clean.relay.twitchTransportMode === "relay-chatbot",
@@ -106,10 +142,7 @@ async function runSmoke() {
 
   const saved = hostedStart.config;
 
-  assert(
-    saved.setupMode === "relay-assisted",
-    "Relay Assisted setup mode is saved",
-  );
+  assert(saved.setupMode === "relay-assisted", "Hosted setup mode is saved");
   assert(
     saved.relay.twitchTransportMode === "relay-chatbot",
     "Relay chatbot mode is saved",
@@ -158,15 +191,15 @@ async function runSmoke() {
   });
   assert(
     setupModeCheck.check.status === "ready",
-    "Relay Assisted setup check stores ready status",
+    "Hosted setup check stores ready status",
   );
   assert(
     setupModeCheck.config.setupChecks.relay.checkedAt,
-    "Relay Assisted setup check stores a timestamp",
+    "Hosted setup check stores a timestamp",
   );
   assert(
     setupModeCheck.providerSetup.redacted === true,
-    "Relay Assisted setup check returns redacted provider metadata",
+    "Hosted setup check returns redacted provider metadata",
   );
   assertSafePayload(setupModeCheck);
 

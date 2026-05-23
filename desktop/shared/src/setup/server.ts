@@ -1767,10 +1767,10 @@ const getSetupMode = (secrets = readLocalSecrets()): SetupMode => {
 
 const setupModeDisplayLabel = (mode: SetupMode) =>
   mode === "relay-assisted"
-    ? "Relay Assisted"
+    ? "Hosted"
     : mode === "advanced"
-      ? "Advanced"
-      : "Local Console";
+      ? "Assisted"
+      : "Local";
 
 const parseSetupMode = (value: unknown, fallback: SetupMode): SetupMode =>
   typeof value === "string" && setupModes.includes(value as SetupMode)
@@ -1845,7 +1845,7 @@ const buildLocalSetupCheck = (secrets: LocalSecrets) => {
   if (missing.length) {
     return {
       status: "blocked" as const,
-      message: `Local Console needs ${missing.join(", ")} before local chat validation can pass.`,
+      message: `Local setup needs ${missing.join(", ")} before local chat validation can pass.`,
     };
   }
 
@@ -1860,7 +1860,7 @@ const buildLocalSetupCheck = (secrets: LocalSecrets) => {
   return {
     status: "ready" as const,
     message:
-      "Local Console setup has Twitch OAuth fields and local Discord announcement/layout settings.",
+      "Local setup has Twitch OAuth fields and local Discord announcement/layout settings.",
   };
 };
 
@@ -1886,14 +1886,14 @@ const buildRelaySetupCheck = (secrets: LocalSecrets) => {
     return {
       status: "degraded" as const,
       message:
-        "Relay pairing is saved, but Twitch transport is still set to Local Console.",
+        "Relay pairing is saved, but Twitch transport is still set to Local.",
     };
   }
 
   return {
     status: "ready" as const,
     message:
-      "Relay Assisted setup has hosted Relay pairing and Twitch Chat Bot transport selected.",
+      "Hosted setup has Relay pairing and Twitch Chat Bot transport selected.",
   };
 };
 
@@ -2365,7 +2365,7 @@ const relayConnectionError = (secrets = readLocalSecrets()) => {
     consoleToken: relay.consoleToken,
   });
   if (!readiness.ready) {
-    return "Connect hosted Twitch before using Relay chatbot setup.";
+    return "Start hosted Twitch setup before using Relay chatbot setup.";
   }
   return "";
 };
@@ -3171,9 +3171,9 @@ const buildBotCompletionChecks = ({
   const localChecks = [
     botCompletionCheck(
       "twitch-transport-local",
-      "Twitch transport is Local Console",
+      "Twitch transport is Local",
       secrets.relay.twitchTransportMode !== "relay-chatbot",
-      "Select Local Console mode when you want chat sends to use the local Twitch OAuth token.",
+      "Select Local mode when you want chat sends to use the local Twitch OAuth token.",
     ),
     botCompletionCheck(
       "twitch-local-config",
@@ -3199,19 +3199,19 @@ const buildBotCompletionChecks = ({
       "relay-paired",
       "Console paired to Relay",
       !relayConnectionError(secrets),
-      "Connect hosted Twitch.",
+      "Start hosted Twitch setup.",
     ),
     botCompletionCheck(
       "twitch-transport-relay",
       "Twitch transport is relay-chatbot",
       secrets.relay.twitchTransportMode === "relay-chatbot",
-      "Switch Twitch Chat Transport to relay-chatbot in Settings.",
+      "Select Hosted mode in Settings.",
     ),
     botCompletionCheck(
       "twitch-bot-oauth",
       botValidationLabels.twitchBotOAuthCompletedAt,
       Boolean(records.twitchBotOAuthCompletedAt || checkByKey("bot-grant")?.ok),
-      "Open bot OAuth while logged into vaexcorebot.",
+      "Log in as vaexcorebot when Console opens the bot auth window.",
     ),
     botCompletionCheck(
       "twitch-broadcaster-oauth",
@@ -3220,7 +3220,7 @@ const buildBotCompletionChecks = ({
         records.twitchBroadcasterOAuthCompletedAt ||
         checkByKey("broadcaster-grant")?.ok,
       ),
-      "Open broadcaster OAuth while logged into the channel owner account.",
+      "Log in as the channel owner when Console opens the broadcaster auth window.",
     ),
     botCompletionCheck(
       "twitch-separate-account",
@@ -3326,7 +3326,7 @@ const buildBotCompletionSections = (
   const sectionDefinitions = [
     {
       key: "local-console",
-      title: "Local Console",
+      title: "Local Twitch",
       incompleteState: "blocked",
       readyDetail:
         "Local Twitch setup is ready to send chat through the saved OAuth user token.",
@@ -3623,7 +3623,7 @@ const runBotSetupRehearsalRoute = async () => {
       "Hosted Twitch callback URL",
       Boolean(setupUrls.twitchCallbackUrl),
       setupUrls.twitchCallbackUrl ||
-        "Connect hosted Twitch before generating the callback URL.",
+        "Start hosted Twitch setup before generating the callback URL.",
     ),
     dryRunStep(
       "bot-oauth",
@@ -3740,7 +3740,7 @@ const runFullLocalRehearsalRoute = async () => {
       relayStatus.connected
         ? "Relay status responded with installation/readiness metadata."
         : relayOptional
-          ? "Local Console mode does not require Relay to be paired."
+          ? "Local mode does not require Relay to be paired."
           : relayStatus.error || "Relay status was not available.",
     ),
     dryRunStep(

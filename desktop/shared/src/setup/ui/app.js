@@ -432,6 +432,7 @@ const renderIdleDelayMs = 900;
 const interactionQuietMs = 1400;
 const scrollPositions = {};
 const keyedScrollPositions = {};
+const disclosureStates = {};
 let deferredRenderTimer = null;
 let lastUserInteractionAt = 0;
 let backgroundRefreshPromise = null;
@@ -508,6 +509,25 @@ function restoreScrollPosition(tabId = state.activeTab) {
   });
 }
 
+function disclosureOpen(key, defaultOpen = false) {
+  return Object.prototype.hasOwnProperty.call(disclosureStates, key)
+    ? disclosureStates[key]
+    : defaultOpen;
+}
+
+function disclosureAttributes(key, defaultOpen = false, attributes = {}) {
+  return {
+    ...attributes,
+    "data-disclosure-key": key,
+    open: disclosureOpen(key, defaultOpen),
+    onToggle: (event) => {
+      if (event.target === event.currentTarget) {
+        disclosureStates[key] = event.currentTarget.open;
+      }
+    },
+  };
+}
+
 function render(options = {}) {
   if (deferredRenderTimer) {
     clearTimeout(deferredRenderTimer);
@@ -523,7 +543,7 @@ function render(options = {}) {
       h("div", { className: "app-shell settings-shell" }, [
         renderHeader({
           title: "Console Settings",
-          subtitle: "Twitch OAuth and local setup",
+          subtitle: "Hosted, assisted, and local setup",
           showStatus: false,
         }),
         h("main", { className: "content settings-content" }, [
@@ -793,7 +813,7 @@ function renderDashboardModeCard() {
     ? completion.modeCapabilities
     : setupModeCapabilities(mode).map((item) => item.detail);
 
-  return card("Operating Mode", [
+  return card("Setup Mode", [
     h("div", { className: "state-banner compact info" }, [
       h("strong", { text: setupModeLabel(mode) }),
       h("span", { text: setupModeSummary(mode) }),
@@ -886,10 +906,10 @@ function renderReadyForStreamCard(runtime = {}, readiness = {}) {
     ]),
     statusGrid([
       ["Mode", setupModeLabel(mode), true],
-      ["Local Console", localReady ? "ready" : "needs setup", localReady],
+      ["Local", localReady ? "ready" : "needs setup", localReady],
       ["Bot Process", botRunning ? "running" : "stopped", botRunning],
       [
-        "Relay Assisted",
+        "Hosted Relay",
         relayConnected || mode === "local-only"
           ? relayConnected
             ? "connected"
@@ -1092,6 +1112,26 @@ function renderDashboardStartCard(runtime, readiness) {
 }
 
 function renderBotCompletionCard(context = "default") {
+  const title =
+    context === "discord" ? "Bot Completion" : "Bot Completion Status";
+
+  return card(title, renderBotCompletionContent());
+}
+
+function renderAdvancedReadinessDetails(open = false) {
+  return h(
+    "details",
+    disclosureAttributes("settings:advanced-readiness", open, {
+      className: "panel advanced-panel",
+    }),
+    [
+      h("summary", {}, [h("strong", { text: "Advanced readiness details" })]),
+      ...renderBotCompletionContent(),
+    ],
+  );
+}
+
+function renderBotCompletionContent() {
   const completion = state.botCompletion || {};
   const checks = completion.checks || [];
   const validation = completion.validation?.checklist || [];
@@ -1107,10 +1147,8 @@ function renderBotCompletionCard(context = "default") {
     nextActions[0] ||
     "Run bot completion refresh to load readiness.";
   const relaySummary = completion.relayReadinessReport?.report?.summary;
-  const title =
-    context === "discord" ? "Bot Completion" : "Bot Completion Status";
 
-  return card(title, [
+  return [
     statusGrid([
       [
         "Overall",
@@ -1232,7 +1270,7 @@ function renderBotCompletionCard(context = "default") {
           "info",
         )
       : null,
-  ]);
+  ];
 }
 
 function renderBotCompletionSection(section) {
@@ -1354,34 +1392,41 @@ function botCompletionTone(stateLabel = "") {
   return "warn";
 }
 
+const setupModeIds = ["relay-assisted", "advanced", "local-only"];
+
 function currentSetupMode(config = state.config || {}) {
   return (
     config.setupMode ||
-    (config.relay?.twitchTransportMode === "relay-chatbot"
-      ? "relay-assisted"
-      : "local-only")
+    (config.relay?.twitchTransportMode === "local-user-token"
+      ? "local-only"
+      : "relay-assisted")
   );
+}
+
+function selectedSetupMode(config = state.config || {}) {
+  const mode = settingsValue("setupMode", currentSetupMode(config));
+  return setupModeIds.includes(mode) ? mode : "relay-assisted";
 }
 
 function setupModeLabel(mode = "local-only") {
   return (
     {
-      "local-only": "Local Console",
-      "relay-assisted": "Relay Assisted",
-      advanced: "Advanced",
-    }[mode] || "Local Console"
+      "relay-assisted": "Hosted",
+      advanced: "Assisted",
+      "local-only": "Local",
+    }[mode] || "Hosted"
   );
 }
 
 function setupModeSummary(mode = "local-only") {
   return (
     {
-      "local-only":
-        "Everything runs from this machine; best for users who prefer no hosted Relay.",
       "relay-assisted":
-        "Hosted Relay handles public callbacks, Discord slash commands, suggestions, and Chat Bot identity.",
+        "Relay owns hosted Twitch and Discord service secrets for the normal setup path.",
       advanced:
-        "Shows local and hosted paths side by side for operators who want both.",
+        "Shows hosted setup plus local/manual controls for operator troubleshooting.",
+      "local-only":
+        "Runs from this machine with self-hosted Twitch and Discord credentials.",
     }[mode] || ""
   );
 }
@@ -1402,7 +1447,7 @@ function setupModeCapabilities(mode = "local-only") {
     {
       label: "Twitch Chat Bot identity",
       detail:
-        "Not available in Local Console mode; chat appears as the authorized user.",
+        "Not available in Local mode; chat appears as the authorized user.",
       tone: "warn",
     },
     {
@@ -1418,7 +1463,7 @@ function setupModeCapabilities(mode = "local-only") {
     },
     {
       label: "Discord server layout",
-      detail: "Local Console can preview and apply the baseline server layout.",
+      detail: "Local mode can preview and apply the baseline server layout.",
       tone: "ok",
     },
     {
@@ -1438,7 +1483,7 @@ function setupModeCapabilities(mode = "local-only") {
     {
       label: "Twitch Chat Bot identity",
       detail:
-        "Available through Relay Assisted mode after hosted validation records are complete.",
+        "Available through Hosted mode after hosted validation records are complete.",
       tone: "ok",
     },
     {
@@ -1470,7 +1515,7 @@ function setupModeCapabilities(mode = "local-only") {
     return [
       {
         label: "Mode contract",
-        detail: "Advanced displays local and Relay readiness separately.",
+        detail: "Assisted displays local and Relay readiness separately.",
         tone: "info",
       },
       ...local.slice(0, 3),
@@ -5336,76 +5381,62 @@ function renderTesting() {
 }
 
 function renderOperatingModeCard(config = state.config || {}) {
-  const mode = currentSetupMode(config);
+  const mode = selectedSetupMode(config);
   const checks = config.setupChecks || {};
-  const selectedCapabilities = setupModeCapabilities(mode);
+  const draftTransport = settingsValue(
+    "twitchTransportMode",
+    config.relay?.twitchTransportMode || "relay-chatbot",
+  );
+  const modeOptions = [
+    ["relay-assisted", "Hosted"],
+    ["advanced", "Assisted"],
+    ["local-only", "Local"],
+  ];
 
-  return card("Operating Mode", [
-    h("div", { className: "grid" }, [
-      formRow(
-        "Console mode",
-        h("select", { id: "setupMode", onChange: updateSettingsDraft }, [
-          option("local-only", "Local Console"),
-          option("relay-assisted", "Relay Assisted"),
-          option("advanced", "Advanced"),
-        ]),
-      ),
-      formRow(
-        "Low-level Twitch transport",
-        h(
-          "select",
-          { id: "twitchTransportMode", onChange: updateSettingsDraft },
-          [
-            option("local-user-token", "Local OAuth user token"),
-            option("relay-chatbot", "Relay Chat Bot identity"),
-          ],
-        ),
+  return card("Setup Mode", [
+    h("input", {
+      id: "setupMode",
+      type: "hidden",
+      value: mode,
+      onChange: updateSettingsDraft,
+    }),
+    h("div", { className: "setup-mode-selector" }, [
+      ...modeOptions.map(([value, label]) =>
+        actionButton(label, {
+          id: `setupMode-${value}`,
+          className: `segmented-button${mode === value ? " active" : ""}`,
+          onClick: () => selectSetupMode(value),
+        }),
       ),
     ]),
-    h("div", { className: "mode-cards" }, [
-      ...["local-only", "relay-assisted", "advanced"].map((item) =>
-        h("div", { className: `mode-card${mode === item ? " active" : ""}` }, [
-          h("strong", { text: setupModeLabel(item) }),
-          h("span", { text: setupModeSummary(item) }),
-        ]),
-      ),
+    h("div", { className: "state-banner compact info" }, [
+      h("strong", { text: setupModeLabel(mode) }),
+      h("span", { text: setupModeSummary(mode) }),
     ]),
-    h(
-      "div",
-      { className: "capability-grid" },
-      selectedCapabilities.map((item) =>
-        h("div", { className: `capability-row ${item.tone}` }, [
-          h("strong", { text: item.label }),
-          h("span", { text: item.detail }),
-        ]),
-      ),
+    statusGrid(
+      [
+        ["Selected mode", setupModeLabel(mode), setupModeIds.includes(mode)],
+        ["Transport", transportModeLabel(draftTransport), true],
+        mode !== "relay-assisted"
+          ? [
+              "Local check",
+              checks.local?.checkedAt || "not checked",
+              checks.local?.status === "ready",
+            ]
+          : null,
+        mode !== "local-only"
+          ? [
+              "Relay check",
+              checks.relay?.checkedAt || "not checked",
+              checks.relay?.status === "ready",
+            ]
+          : null,
+      ].filter(Boolean),
     ),
-    statusGrid([
-      [
-        "Selected mode",
-        setupModeLabel(mode),
-        ["local-only", "relay-assisted", "advanced"].includes(mode),
-      ],
-      [
-        "Local check",
-        checks.local?.checkedAt || "not checked",
-        checks.local?.status === "ready",
-      ],
-      [
-        "Relay check",
-        checks.relay?.checkedAt || "not checked",
-        checks.relay?.status === "ready",
-      ],
-      [
-        "Transport",
-        transportModeLabel(config.relay?.twitchTransportMode),
-        true,
-      ],
-    ]),
-    checks.local?.message
+    mode !== "relay-assisted" && checks.local?.message
       ? callout(`Local check: ${checks.local.message}`)
       : null,
-    checks.relay?.message
+    mode !== "local-only" && checks.relay?.message
       ? callout(`Relay check: ${checks.relay.message}`)
       : null,
     h("div", { className: "actions" }, [
@@ -5416,16 +5447,20 @@ function renderOperatingModeCard(config = state.config || {}) {
         busyKey: "setupHealthChecks",
         onClick: runSetupHealthChecks,
       }),
-      actionButton("Check Local Setup", {
-        id: "checkLocalSetupMode",
-        variant: "secondary",
-        onClick: () => checkSetupMode("local-only"),
-      }),
-      actionButton("Check Relay Setup", {
-        id: "checkRelaySetupMode",
-        variant: "secondary",
-        onClick: () => checkSetupMode("relay-assisted"),
-      }),
+      mode !== "relay-assisted"
+        ? actionButton("Check Local", {
+            id: "checkLocalSetupMode",
+            variant: "secondary",
+            onClick: () => checkSetupMode("local-only"),
+          })
+        : null,
+      mode !== "local-only"
+        ? actionButton("Check Hosted", {
+            id: "checkRelaySetupMode",
+            variant: "secondary",
+            onClick: () => checkSetupMode("relay-assisted"),
+          })
+        : null,
     ]),
   ]);
 }
@@ -5433,18 +5468,20 @@ function renderOperatingModeCard(config = state.config || {}) {
 function renderSettings() {
   const config = state.config || {};
   const relay = config.relay || {};
-  const relayMode = isRelayChatbotMode(config);
-  const setupMode = currentSetupMode(config);
+  const setupMode = selectedSetupMode(config);
   const required = missingConfigFields(config);
   const validationChecks = visibleValidationChecks();
+  const modeDescription =
+    setupMode === "relay-assisted"
+      ? "Hosted setup keeps Twitch and Discord service secrets in Relay and shows only the live setup steps needed here."
+      : setupMode === "advanced"
+        ? "Assisted setup shows hosted controls plus local/manual fallback details for troubleshooting."
+        : "Local setup uses self-hosted Twitch credentials and local OAuth on this machine.";
+
   return [
     sectionHeader(
       "Console Settings",
-      setupMode === "relay-assisted"
-        ? "Configure hosted Relay for Twitch Chat Bot identity and Discord interactions while keeping local tools available."
-        : setupMode === "advanced"
-          ? "Configure local and hosted paths side by side for advanced operators."
-          : "Configure local Twitch OAuth, local Discord setup, and automatic launch validation.",
+      modeDescription,
       setupMode === "relay-assisted"
         ? actionButton("Check Relay", {
             id: "settingsRelayStatus",
@@ -5457,33 +5494,80 @@ function renderSettings() {
     ),
     renderWindowsSetupPromptNotice(),
     renderSettingsLaunchNotice(),
-    renderSetupGuide(),
     renderOperatingModeCard(config),
-    renderBotCompletionCard("settings"),
-    relayMode
-      ? renderRelaySetupCompletion(relay)
-      : renderLocalSetupCompletion(config, required),
-    relayMode ? renderHostedRelaySetup(relay) : null,
-    renderTwitchConfigurationPanel(config, validationChecks, relayMode),
-    renderTwitchTransportPanel(relay, relayMode),
-    relayMode ? null : renderHostedRelaySetup(relay),
-    card("Runtime Commands", [
-      h("p", {
-        text: "Use Dashboard controls to start or stop the live bot listener. CLI commands remain available when you want terminal runtime control.",
-      }),
-      h("p", {}, [
-        h("code", { text: "npm run check:env" }),
-        " ",
-        h("code", { text: "npm run build" }),
-        " ",
-        h("code", { text: "npm run dev:app-config" }),
-      ]),
-    ]),
+    ...renderSettingsModeBody(
+      setupMode,
+      config,
+      relay,
+      required,
+      validationChecks,
+    ),
     message(),
   ];
 }
 
-function renderTwitchConfigurationPanel(config, validationChecks, hostedMode) {
+function renderSettingsModeBody(
+  setupMode,
+  config,
+  relay,
+  required,
+  validationChecks,
+) {
+  if (setupMode === "local-only") {
+    return [
+      renderLocalSetupCompletion(config, required),
+      renderSetupGuide("local-only"),
+      renderTwitchConfigurationPanel(config, validationChecks),
+      renderAdvancedReadinessDetails(false),
+      renderRuntimeCommandsCard(),
+    ];
+  }
+
+  if (setupMode === "advanced") {
+    return [
+      renderSetupGuide("advanced", { showAdvancedUrls: true }),
+      renderBotCompletionCard("settings"),
+      renderRelaySetupCompletion(relay),
+      renderHostedRelaySetup(relay, { showAdvancedUrls: true }),
+      renderTwitchTransportPanel(relay, false, { showTransportSelect: true }),
+      renderTwitchConfigurationPanel(config, validationChecks, {
+        title: "Local OAuth Fallback",
+      }),
+      renderLocalSetupCompletion(config, required),
+      renderRuntimeCommandsCard(),
+    ];
+  }
+
+  return [
+    renderRelaySetupCompletion(relay),
+    renderSetupGuide("relay-assisted"),
+    renderHostedRelaySetup(relay, { showAdvancedUrls: false }),
+    renderAdvancedReadinessDetails(false),
+  ];
+}
+
+function renderRuntimeCommandsCard() {
+  return card("Runtime Commands", [
+    h("p", {
+      text: "Use Dashboard controls to start or stop the live bot listener. CLI commands remain available when you want terminal runtime control.",
+    }),
+    h("p", {}, [
+      h("code", { text: "npm run check:env" }),
+      " ",
+      h("code", { text: "npm run build" }),
+      " ",
+      h("code", { text: "npm run dev:app-config" }),
+    ]),
+  ]);
+}
+
+function renderTwitchConfigurationPanel(
+  config,
+  validationChecks,
+  options = {},
+) {
+  const title = options.title || "Twitch Configuration";
+  const collapsible = options.collapsible === true;
   const children = [
     h("div", { className: "grid" }, [
       formRow(
@@ -5548,10 +5632,10 @@ function renderTwitchConfigurationPanel(config, validationChecks, hostedMode) {
       ),
     ]),
     callout(
-      hostedMode
+      title !== "Twitch Configuration"
         ? "Hosted Twitch uses Relay's Twitch app and secrets. These local OAuth fields are only for advanced self-hosted or fallback local testing."
         : "Saved Client ID and Client Secret are intentionally not shown. Paste them, click Save settings, then the fields return to saved and masked.",
-      hostedMode ? "muted" : "info",
+      title !== "Twitch Configuration" ? "muted" : "info",
     ),
     oauthAccountCallout(config),
     botLoginReconnectCallout(config),
@@ -5583,13 +5667,27 @@ function renderTwitchConfigurationPanel(config, validationChecks, hostedMode) {
     ),
   ];
 
-  return hostedMode
-    ? advancedPanel("Advanced Local Twitch OAuth", children)
-    : card("Twitch Configuration", children);
+  return collapsible ? advancedPanel(title, children) : card(title, children);
 }
 
-function renderTwitchTransportPanel(relay, hostedMode) {
+function renderTwitchTransportPanel(relay, hostedMode, options = {}) {
+  const showTransportSelect = options.showTransportSelect === true;
   const children = [
+    showTransportSelect
+      ? h("div", { className: "grid" }, [
+          formRow(
+            "Low-level Twitch transport",
+            h(
+              "select",
+              { id: "twitchTransportMode", onChange: updateSettingsDraft },
+              [
+                option("relay-chatbot", "Relay Chat Bot identity"),
+                option("local-user-token", "Local OAuth user token"),
+              ],
+            ),
+          ),
+        ])
+      : null,
     statusGrid([
       [
         "Mode",
@@ -5654,13 +5752,13 @@ function renderTwitchTransportPanel(relay, hostedMode) {
     ]),
     callout(
       relay.identityNotice ||
-        "Local Console chat sends appear as the authorized Twitch user. Relay Assisted mode is required for hosted Twitch Chat Bot identity.",
+        "Local chat sends appear as the authorized Twitch user. Hosted mode is required for Twitch Chat Bot identity.",
       relay.twitchTransportMode === "relay-chatbot" ? "warn" : "muted",
     ),
     callout(
       relay.twitchTransportMode === "relay-chatbot"
         ? "Relay Chat Bot identity sends through hosted Relay with app-token authorization."
-        : "Local Console sends through direct OAuth chat. It can send messages, but Twitch will not label it as the hosted Chat Bot identity.",
+        : "Local sends through direct OAuth chat. It can send messages, but Twitch will not label it as the hosted Chat Bot identity.",
       relay.twitchTransportMode === "relay-chatbot" ? "info" : "muted",
     ),
     relay.readiness?.checks?.length
@@ -5752,8 +5850,8 @@ function renderRelaySetupCompletion(relay = {}) {
   const separateBot = relayReadinessCheck(readiness, "separate-bot-account");
   const relayMode = relay.twitchTransportMode === "relay-chatbot";
   const configured = Boolean(relay.readiness?.ready);
-  const eventSubOk = Boolean(state.relayEventSubResult?.ok);
-  const testSendOk = Boolean(state.relayTestSendResult?.ok);
+  const eventSubOk = relayEventSubRegistered();
+  const testSendOk = relayTestMessageSent();
   const complete = Boolean(
     relayMode &&
     configured &&
@@ -5765,8 +5863,8 @@ function renderRelaySetupCompletion(relay = {}) {
     relay.chatbotIdentityValidatedAt,
   );
   const blockers = [
-    relayMode ? null : "Select Relay Assisted mode.",
-    configured ? null : "Connect hosted Twitch.",
+    relayMode ? null : "Select Hosted mode.",
+    configured ? null : "Start hosted Twitch setup.",
     botGrant?.ok ? null : "Authorize the bot account OAuth grant.",
     broadcasterGrant?.ok
       ? null
@@ -5774,7 +5872,7 @@ function renderRelaySetupCompletion(relay = {}) {
     separateBot?.ok
       ? null
       : "Confirm the bot and broadcaster are separate Twitch accounts.",
-    eventSubOk ? null : "Register Twitch EventSub after both OAuth grants.",
+    eventSubOk ? null : "Register Twitch EventSub after OAuth grants.",
     testSendOk ? null : "Send a Relay test message from Console.",
     relay.chatbotIdentityValidatedAt
       ? null
@@ -5811,16 +5909,8 @@ function renderRelaySetupCompletion(relay = {}) {
         separateBot?.ok ? "confirmed" : "pending",
         Boolean(separateBot?.ok),
       ],
-      [
-        "EventSub",
-        eventSubOk ? "registered this session" : "not recorded",
-        eventSubOk,
-      ],
-      [
-        "Relay test send",
-        testSendOk ? "sent this session" : "not recorded",
-        testSendOk,
-      ],
+      ["EventSub", eventSubOk ? "registered" : "not recorded", eventSubOk],
+      ["Relay test send", testSendOk ? "sent" : "not recorded", testSendOk],
       [
         "Chat Bot live test",
         relay.chatbotIdentityValidatedAt || "not recorded",
@@ -5843,7 +5933,7 @@ function renderWindowsSetupPromptNotice() {
 
   if (isRelayChatbotMode()) {
     return callout(
-      "Relay Assisted mode is selected. Complete the hosted Relay Setup Guide in this window; local Twitch OAuth warnings only apply if you switch back to Local Console mode.",
+      "Hosted mode is selected. Complete the hosted Relay Setup Guide in this window; local Twitch OAuth warnings only apply if you switch to Local mode.",
       "info",
     );
   }
@@ -5854,7 +5944,7 @@ function renderWindowsSetupPromptNotice() {
   );
 }
 
-function renderHostedRelaySetup(relay = {}) {
+function renderHostedRelaySetup(relay = {}, options = {}) {
   const setup = relay.setupUrls || {};
   const remote = state.relayStatus || {};
   const readiness = remote.readiness || {};
@@ -5864,10 +5954,13 @@ function renderHostedRelaySetup(relay = {}) {
   const installation = remote.installation || {};
   const eventSubResult = state.relayEventSubResult || {};
   const testSendResult = state.relayTestSendResult || {};
+  const eventSubOk = relayEventSubRegistered();
+  const testSendOk = relayTestMessageSent();
   const relayConfigured = Boolean(relay.readiness?.ready);
   const relayMode = relay.twitchTransportMode === "relay-chatbot";
   const botOAuthUrl = setup.twitchBotOAuthUrl;
   const broadcasterOAuthUrl = setup.twitchBroadcasterOAuthUrl;
+  const showAdvancedUrls = options.showAdvancedUrls !== false;
 
   return card("Hosted Relay Bot Setup", [
     statusGrid([
@@ -5907,24 +6000,24 @@ function renderHostedRelaySetup(relay = {}) {
     relayMode
       ? callout(
           relayConfigured
-            ? "Hosted Relay is paired. Authorize the bot account, authorize the broadcaster account, then register EventSub and send a test message."
-            : "Connect hosted Twitch to create a Relay installation without showing a Twitch client secret, Relay admin token, installation ID, or Console token.",
+            ? "Hosted Relay is paired. Finish the Twitch account grants, let Relay register EventSub, then send a test message."
+            : "Start hosted Twitch setup to create a Relay installation without showing a Twitch client secret, Relay admin token, installation ID, or Console token.",
           "ok",
         )
       : callout(
-          "Select Relay Assisted mode and save settings before live Chat Bot validation.",
+          "Select Hosted mode and save settings before live Chat Bot validation.",
           "warn",
         ),
     h("div", { className: "actions" }, [
       !relayConfigured
-        ? actionButton("Connect hosted Twitch", {
+        ? actionButton("Start hosted setup", {
             id: "relayHostedConnect",
             busyKey: "relayHostedConnect",
             onClick: () => connectHostedRelay(false),
           })
         : null,
       relayConfigured
-        ? actionButton("Authorize bot account", {
+        ? actionButton("Log in as vaexcorebot", {
             id: "relayAuthorizeBot",
             variant: "secondary",
             disabled: !botOAuthUrl,
@@ -5932,7 +6025,7 @@ function renderHostedRelaySetup(relay = {}) {
           })
         : null,
       relayConfigured
-        ? actionButton("Authorize broadcaster", {
+        ? actionButton("Log in as broadcaster", {
             id: "relayAuthorizeBroadcaster",
             variant: "secondary",
             disabled: !broadcasterOAuthUrl,
@@ -5948,61 +6041,69 @@ function renderHostedRelaySetup(relay = {}) {
           })
         : null,
     ]),
-    h("details", { className: "advanced-panel" }, [
-      h("summary", {}, [h("strong", { text: "Advanced hosted URLs" })]),
-      setupUrlRow(
-        "Twitch callback URL",
-        setup.twitchCallbackUrl,
-        "Already configured for the hosted VaexCore Twitch app. Self-hosted operators can use this for their own app.",
-        [
-          {
-            label: "Copy",
-            onClick: () => copySetupText(setup.twitchCallbackUrl),
-          },
-        ],
-      ),
-      setupUrlRow(
-        "Bot OAuth",
-        botOAuthUrl,
-        "Open while logged into vaexcorebot.",
-        [
-          {
-            label: "Copy",
-            onClick: () => copySetupText(botOAuthUrl),
-          },
-          {
-            label: "Open bot OAuth",
-            onClick: () => openExternalSetupUrl(botOAuthUrl),
-          },
-        ],
-      ),
-      setupUrlRow(
-        "Broadcaster OAuth",
-        broadcasterOAuthUrl,
-        "Open while logged into the broadcaster account.",
-        [
-          {
-            label: "Copy",
-            onClick: () => copySetupText(broadcasterOAuthUrl),
-          },
-          {
-            label: "Open broadcaster OAuth",
-            onClick: () => openExternalSetupUrl(broadcasterOAuthUrl),
-          },
-        ],
-      ),
-      setupUrlRow(
-        "Discord interactions",
-        setup.discordInteractionUrl,
-        "Use after Discord Worker secrets are set.",
-        [
-          {
-            label: "Copy",
-            onClick: () => copySetupText(setup.discordInteractionUrl),
-          },
-        ],
-      ),
-    ]),
+    showAdvancedUrls
+      ? h(
+          "details",
+          disclosureAttributes("settings:hosted-urls", false, {
+            className: "advanced-panel",
+          }),
+          [
+            h("summary", {}, [h("strong", { text: "Advanced hosted URLs" })]),
+            setupUrlRow(
+              "Twitch callback URL",
+              setup.twitchCallbackUrl,
+              "Already configured for the hosted VaexCore Twitch app. Self-hosted operators can use this for their own app.",
+              [
+                {
+                  label: "Copy",
+                  onClick: () => copySetupText(setup.twitchCallbackUrl),
+                },
+              ],
+            ),
+            setupUrlRow(
+              "Bot OAuth",
+              botOAuthUrl,
+              "Open while logged into vaexcorebot.",
+              [
+                {
+                  label: "Copy",
+                  onClick: () => copySetupText(botOAuthUrl),
+                },
+                {
+                  label: "Open bot OAuth",
+                  onClick: () => openExternalSetupUrl(botOAuthUrl),
+                },
+              ],
+            ),
+            setupUrlRow(
+              "Broadcaster OAuth",
+              broadcasterOAuthUrl,
+              "Open while logged into the broadcaster account.",
+              [
+                {
+                  label: "Copy",
+                  onClick: () => copySetupText(broadcasterOAuthUrl),
+                },
+                {
+                  label: "Open broadcaster OAuth",
+                  onClick: () => openExternalSetupUrl(broadcasterOAuthUrl),
+                },
+              ],
+            ),
+            setupUrlRow(
+              "Discord interactions",
+              setup.discordInteractionUrl,
+              "Use after Discord Worker secrets are set.",
+              [
+                {
+                  label: "Copy",
+                  onClick: () => copySetupText(setup.discordInteractionUrl),
+                },
+              ],
+            ),
+          ],
+        )
+      : null,
     remote.error
       ? callout(remote.error, remote.ok === false ? "bad" : "warn")
       : null,
@@ -6023,18 +6124,23 @@ function renderHostedRelaySetup(relay = {}) {
             relay.readiness.ready ? "ok" : "warn",
           )
         : null,
-    eventSubResult.ok
+    eventSubOk
       ? callout("Twitch EventSub registration completed through Relay.", "ok")
       : eventSubResult.error
         ? callout(eventSubResult.error, "bad")
-        : null,
-    testSendResult.ok
+        : botGrant?.ok && broadcasterGrant?.ok && separateBot?.ok
+          ? callout(
+              "Required next step: register Twitch EventSub so Relay can receive channel chat events.",
+              "warn",
+            )
+          : null,
+    testSendOk
       ? callout("Relay test chat message sent.", "ok")
       : testSendResult.error
         ? callout(testSendResult.error, "bad")
         : null,
     h("div", { className: "actions" }, [
-      relayConfigured
+      relayConfigured && showAdvancedUrls
         ? actionButton("Reset hosted pairing", {
             id: "relayHostedConnectReset",
             variant: "secondary",
@@ -6042,16 +6148,23 @@ function renderHostedRelaySetup(relay = {}) {
             onClick: () => connectHostedRelay(true),
           })
         : null,
-      actionButton("Register Twitch EventSub", {
-        id: "relayRegisterEventSub",
-        variant: "secondary",
-        disabled: !relayConfigured,
-        onClick: registerRelayEventSub,
-      }),
+      actionButton(
+        eventSubOk ? "Register Twitch EventSub" : "Register required EventSub",
+        {
+          id: "relayRegisterEventSub",
+          variant: eventSubOk ? "secondary" : undefined,
+          disabled:
+            !relayConfigured ||
+            !botGrant?.ok ||
+            !broadcasterGrant?.ok ||
+            !separateBot?.ok,
+          onClick: registerRelayEventSub,
+        },
+      ),
       actionButton("Send Relay test message", {
         id: "relayTestSend",
         variant: "secondary",
-        disabled: !relayConfigured || !relayMode,
+        disabled: !relayConfigured || !relayMode || !eventSubOk,
         onClick: sendRelayTestMessage,
       }),
       actionButton("Mark Chat Bot identity live-tested", {
@@ -6092,6 +6205,26 @@ function relayReadinessCheck(readiness = {}, key) {
   return (readiness.checks || []).find((check) => check.key === key);
 }
 
+function botCompletionCheck(key) {
+  return (state.botCompletion?.checks || []).find((check) => check.key === key);
+}
+
+function botCompletionComplete(key) {
+  return Boolean(botCompletionCheck(key)?.complete);
+}
+
+function relayEventSubRegistered() {
+  return Boolean(
+    state.relayEventSubResult?.ok || botCompletionComplete("twitch-eventsub"),
+  );
+}
+
+function relayTestMessageSent() {
+  return Boolean(
+    state.relayTestSendResult?.ok || botCompletionComplete("twitch-test-send"),
+  );
+}
+
 function isRelayChatbotMode(config = state.config || {}) {
   return config.relay?.twitchTransportMode === "relay-chatbot";
 }
@@ -6112,8 +6245,8 @@ function getRelaySetupProgress(relay = state.config?.relay || {}) {
       broadcasterGrant?.ok || remote.installation?.broadcasterLogin,
     ),
     separateAccounts: Boolean(separateBot?.ok),
-    eventSubRegistered: Boolean(state.relayEventSubResult?.ok),
-    relayTestSent: Boolean(state.relayTestSendResult?.ok),
+    eventSubRegistered: relayEventSubRegistered(),
+    relayTestSent: relayTestMessageSent(),
     chatbotIdentityValidated: Boolean(relay.chatbotIdentityValidatedAt),
     discordEndpointReady: Boolean(setup.discordInteractionUrl),
   };
@@ -6150,12 +6283,20 @@ function getRelaySetupProgress(relay = state.config?.relay || {}) {
   };
 }
 
-function renderSetupGuide() {
-  const config = state.config || {};
-  if (isRelayChatbotMode(config)) {
-    return renderRelaySetupGuide();
+function renderSetupGuide(mode = selectedSetupMode(), options = {}) {
+  if (mode === "relay-assisted") {
+    return renderRelaySetupGuide(options);
   }
 
+  if (mode === "advanced") {
+    return renderRelaySetupGuide({ showAdvancedUrls: true });
+  }
+
+  return renderLocalSetupGuide();
+}
+
+function renderLocalSetupGuide() {
+  const config = state.config || {};
   const progress = getSetupProgress();
   const activeStep =
     progress.steps.find((step) => !step.complete)?.id || "final";
@@ -6490,7 +6631,7 @@ function renderSetupGuide() {
   ]);
 }
 
-function renderRelaySetupGuide() {
+function renderRelaySetupGuide(options = {}) {
   const config = state.config || {};
   const relay = config.relay || {};
   const setup = relay.setupUrls || {};
@@ -6505,6 +6646,7 @@ function renderRelaySetupGuide() {
   const relayConfigured = Boolean(relay.readiness?.ready);
   const botOauthReady = Boolean(setup.twitchBotOAuthUrl);
   const broadcasterOauthReady = Boolean(setup.twitchBroadcasterOAuthUrl);
+  const showAdvancedUrls = options.showAdvancedUrls === true;
 
   return card("Setup Guide", [
     h("div", { id: "setupGuide", className: "setup-guide" }, [
@@ -6532,15 +6674,15 @@ function renderRelaySetupGuide() {
       setupStep({
         id: "relay-pair",
         number: 1,
-        title: "Connect Hosted Twitch",
+        title: "Start Hosted Twitch Setup",
         active: activeStep === "relay-pair",
         complete: progress.relayMode && progress.relayPaired,
         children: [
           h("p", {
-            text: "Create a hosted Relay installation. Console stores the returned installation token locally and never shows Twitch app secrets.",
+            text: "Create a hosted Relay installation. Console stores only the returned installation token locally and never shows Twitch app secrets.",
           }),
           h("div", { className: "actions" }, [
-            actionButton("Connect hosted Twitch", {
+            actionButton("Start hosted setup", {
               id: "guideRelayHostedConnect",
               busyKey: "relayHostedConnect",
               onClick: () => connectHostedRelay(false),
@@ -6564,23 +6706,33 @@ function renderRelaySetupGuide() {
         disabled: !relayConfigured,
         children: [
           h("p", {
-            text: "Open this while the browser is logged into vaexcorebot. Relay requests only the chat scopes it needs.",
+            text: "Console opens a dedicated bot auth window for vaexcorebot. Relay requests only the chat scopes it needs.",
           }),
-          setupUrlRow(
-            "Bot OAuth URL",
-            setup.twitchBotOAuthUrl,
-            "Use the vaexcorebot account.",
-            [
-              {
-                label: "Copy",
-                onClick: () => copySetupText(setup.twitchBotOAuthUrl),
-              },
-              {
-                label: "Open bot OAuth",
-                onClick: () => openExternalSetupUrl(setup.twitchBotOAuthUrl),
-              },
-            ],
-          ),
+          showAdvancedUrls
+            ? setupUrlRow(
+                "Bot OAuth URL",
+                setup.twitchBotOAuthUrl,
+                "Use the vaexcorebot account.",
+                [
+                  {
+                    label: "Copy",
+                    onClick: () => copySetupText(setup.twitchBotOAuthUrl),
+                  },
+                  {
+                    label: "Open bot OAuth",
+                    onClick: () =>
+                      openExternalSetupUrl(setup.twitchBotOAuthUrl),
+                  },
+                ],
+              )
+            : h("div", { className: "actions" }, [
+                actionButton("Log in as vaexcorebot", {
+                  id: "guideRelayAuthorizeBot",
+                  variant: "secondary",
+                  disabled: !botOauthReady,
+                  onClick: () => openExternalSetupUrl(setup.twitchBotOAuthUrl),
+                }),
+              ]),
           botGrant
             ? callout(botGrant.detail, botGrant.ok ? "ok" : "warn")
             : callout(
@@ -6598,24 +6750,35 @@ function renderRelaySetupGuide() {
         disabled: !progress.botAuthorized && !broadcasterOauthReady,
         children: [
           h("p", {
-            text: "Open this while the browser is logged into the broadcaster account. Relay requests channel:bot so the bot can operate as a channel bot.",
+            text: "Console opens a separate broadcaster auth window. Use the channel owner account here; Relay requests channel:bot so vaexcorebot can operate as your channel bot.",
           }),
-          setupUrlRow(
-            "Broadcaster OAuth URL",
-            setup.twitchBroadcasterOAuthUrl,
-            "Use the channel owner account.",
-            [
-              {
-                label: "Copy",
-                onClick: () => copySetupText(setup.twitchBroadcasterOAuthUrl),
-              },
-              {
-                label: "Open broadcaster OAuth",
-                onClick: () =>
-                  openExternalSetupUrl(setup.twitchBroadcasterOAuthUrl),
-              },
-            ],
-          ),
+          showAdvancedUrls
+            ? setupUrlRow(
+                "Broadcaster OAuth URL",
+                setup.twitchBroadcasterOAuthUrl,
+                "Use the channel owner account.",
+                [
+                  {
+                    label: "Copy",
+                    onClick: () =>
+                      copySetupText(setup.twitchBroadcasterOAuthUrl),
+                  },
+                  {
+                    label: "Open broadcaster OAuth",
+                    onClick: () =>
+                      openExternalSetupUrl(setup.twitchBroadcasterOAuthUrl),
+                  },
+                ],
+              )
+            : h("div", { className: "actions" }, [
+                actionButton("Log in as broadcaster", {
+                  id: "guideRelayAuthorizeBroadcaster",
+                  variant: "secondary",
+                  disabled: !broadcasterOauthReady,
+                  onClick: () =>
+                    openExternalSetupUrl(setup.twitchBroadcasterOAuthUrl),
+                }),
+              ]),
           broadcasterGrant
             ? callout(
                 broadcasterGrant.detail,
@@ -6639,7 +6802,7 @@ function renderRelaySetupGuide() {
         disabled: !progress.botAuthorized || !progress.broadcasterAuthorized,
         children: [
           h("p", {
-            text: "After both OAuth grants are stored, have Relay register the channel.chat.message subscription.",
+            text: "After both OAuth grants are stored, Relay should register this automatically. Use this button if Console still shows EventSub as pending.",
           }),
           h("div", { className: "actions" }, [
             actionButton("Check Relay", {
@@ -6649,9 +6812,8 @@ function renderRelaySetupGuide() {
               disabled: !relayConfigured,
               onClick: checkRelayStatus,
             }),
-            actionButton("Register Twitch EventSub", {
+            actionButton("Register required EventSub", {
               id: "guideRelayRegisterEventSub",
-              variant: "secondary",
               busyKey: "relayRegisterEventSub",
               disabled:
                 !relayConfigured ||
@@ -9421,6 +9583,7 @@ async function checkRelayStatus() {
         ...(state.config || {}),
         relay: result.relay || state.config?.relay,
       };
+      state.botCompletion = await api.botCompletion();
       return result;
     },
     { skipRefresh: true, success: "Relay status checked." },
@@ -9434,6 +9597,7 @@ async function connectHostedRelay(force = false) {
       const result = await api.connectHostedRelay({ force });
       state.config = result.config || state.config;
       state.relayStatus = result.status || state.relayStatus;
+      state.botCompletion = await api.botCompletion();
       const botUrl =
         result.install?.next?.botOAuthUrl ||
         result.relay?.setupUrls?.twitchBotOAuthUrl ||
@@ -9491,7 +9655,7 @@ async function runSetupHealthChecks() {
 async function registerRelayEventSub() {
   if (
     !confirm(
-      "Register the Twitch EventSub chat subscription through Relay? Run this after both Twitch OAuth grants are authorized.",
+      "Register the required Twitch EventSub chat subscription through Relay? This is normally automatic after both Twitch OAuth grants, but it is safe to retry.",
     )
   ) {
     return;
@@ -9503,6 +9667,7 @@ async function registerRelayEventSub() {
       const result = await api.registerRelayEventSub();
       state.relayEventSubResult = result;
       state.relayStatus = await api.relayStatus();
+      state.botCompletion = await api.botCompletion();
       return result;
     },
     { skipRefresh: true, success: "Relay EventSub registered." },
@@ -10055,6 +10220,26 @@ async function disconnectTwitch() {
     { skipRefresh: true, success: "Twitch connection cleared." },
   );
   await refreshAll();
+}
+
+function selectSetupMode(mode) {
+  if (!setupModeIds.includes(mode)) {
+    return;
+  }
+
+  state.settingsDraft.setupMode = mode;
+  if (mode === "relay-assisted") {
+    state.settingsDraft.twitchTransportMode = "relay-chatbot";
+  } else if (mode === "local-only") {
+    state.settingsDraft.twitchTransportMode = "local-user-token";
+  } else if (!state.settingsDraft.twitchTransportMode) {
+    state.settingsDraft.twitchTransportMode =
+      state.config?.relay?.twitchTransportMode || "relay-chatbot";
+  }
+
+  setValue("setupMode", mode);
+  setValue("twitchTransportMode", state.settingsDraft.twitchTransportMode);
+  render();
 }
 
 function updateSettingsDraft(event) {
@@ -11877,6 +12062,12 @@ function updateDisabledState() {
   const failedCritical = criticalGiveawayFailures().length > 0;
   const canSendGiveawayStatus = hasGiveaway && state.validSetup;
   const canPanicResend = failedCritical && state.validSetup;
+  const relayProgress = getRelaySetupProgress(relayConfig);
+  const relayEventSubReady =
+    relayConfig.readiness?.ready &&
+    relayProgress.botAuthorized &&
+    relayProgress.broadcasterAuthorized &&
+    relayProgress.separateAccounts;
 
   setDisabled(
     "gstart",
@@ -12131,59 +12322,61 @@ function updateDisabledState() {
   setDisabled(
     "relayStatus",
     !relayConfig.readiness?.ready,
-    "Connect hosted Twitch before checking Relay.",
+    "Start hosted Twitch setup before checking Relay.",
   );
   setDisabled(
     "settingsRelayStatus",
     !relayConfig.readiness?.ready,
-    "Connect hosted Twitch before checking Relay.",
+    "Start hosted Twitch setup before checking Relay.",
   );
   setDisabled(
     "guideRelayStatus",
     !relayConfig.readiness?.ready,
-    "Connect hosted Twitch before checking Relay.",
+    "Start hosted Twitch setup before checking Relay.",
   );
   setDisabled(
     "guideRelayStatusAfterOAuth",
     !relayConfig.readiness?.ready,
-    "Connect hosted Twitch before checking Relay.",
+    "Start hosted Twitch setup before checking Relay.",
   );
   setDisabled(
     "relayRegisterEventSub",
-    !relayConfig.readiness?.ready,
-    "Connect hosted Twitch before registering EventSub.",
+    !relayEventSubReady,
+    "Complete bot and broadcaster OAuth with separate accounts before registering EventSub.",
   );
   setDisabled(
     "guideRelayRegisterEventSub",
-    !relayConfig.readiness?.ready,
-    "Connect hosted Twitch before registering EventSub.",
+    !relayEventSubReady,
+    "Complete bot and broadcaster OAuth with separate accounts before registering EventSub.",
   );
   setDisabled(
     "relayTestSend",
     relayConfig.twitchTransportMode !== "relay-chatbot" ||
-      !relayConfig.readiness?.ready,
-    "Connect hosted Twitch before sending a Relay test message.",
+      !relayConfig.readiness?.ready ||
+      !relayProgress.eventSubRegistered,
+    "Register Twitch EventSub before sending a Relay test message.",
   );
   setDisabled(
     "guideRelayTestSend",
     relayConfig.twitchTransportMode !== "relay-chatbot" ||
-      !relayConfig.readiness?.ready,
-    "Connect hosted Twitch before sending a Relay test message.",
+      !relayConfig.readiness?.ready ||
+      !relayProgress.eventSubRegistered,
+    "Register Twitch EventSub before sending a Relay test message.",
   );
   setDisabled(
     "relayValidateChatbotIdentity",
     config.relay?.twitchTransportMode !== "relay-chatbot",
-    "Select Relay Assisted mode before recording live Chat Bot validation.",
+    "Select Hosted mode before recording live Chat Bot validation.",
   );
   setDisabled(
     "relayValidateChatbotIdentityHosted",
     config.relay?.twitchTransportMode !== "relay-chatbot",
-    "Select Relay Assisted mode before recording live Chat Bot validation.",
+    "Select Hosted mode before recording live Chat Bot validation.",
   );
   setDisabled(
     "guideRelayValidateChatbotIdentity",
     config.relay?.twitchTransportMode !== "relay-chatbot",
-    "Select Relay Assisted mode before recording live Chat Bot validation.",
+    "Select Hosted mode before recording live Chat Bot validation.",
   );
 
   const connectLinks = [

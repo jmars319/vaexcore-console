@@ -35,27 +35,27 @@ const setupUrls = relaySetupUrls(relayBaseUrl, secrets.relay.installationId);
 
 const sections: ReadinessSection[] = [];
 
-addSection("Local Console Pairing", [
+addSection("Hosted Relay Pairing", [
   check(
     Boolean(relayBaseUrl),
     "Relay URL",
     "saved",
     "missing",
-    "Open Console Settings and click Connect hosted Twitch.",
+    "Open Console Settings and click Start hosted setup.",
   ),
   check(
     Boolean(secrets.relay.installationId),
     "Relay installation",
     "installation ID is saved",
     "installation ID is missing",
-    "Open Console Settings and click Connect hosted Twitch.",
+    "Open Console Settings and click Start hosted setup.",
   ),
   check(
     Boolean(secrets.relay.consoleToken),
     "Relay console token",
     "console token is saved locally",
     "console token is missing",
-    "Open Console Settings and click Connect hosted Twitch.",
+    "Open Console Settings and click Start hosted setup.",
   ),
   {
     label: "Twitch transport",
@@ -65,7 +65,7 @@ addSection("Local Console Pairing", [
     nextAction:
       secrets.relay.twitchTransportMode === "relay-chatbot"
         ? undefined
-        : "Switch Twitch Chat Transport to relay-chatbot before live Chat Bot validation.",
+        : "Select Hosted mode in Console Settings before live Chat Bot validation.",
   },
 ]);
 
@@ -75,7 +75,7 @@ addSection("Twitch Relay Setup URLs", [
     "Twitch callback URL",
     setupUrls.twitchCallbackUrl || "available after hosted Relay pairing",
     "missing",
-    "Connect hosted Twitch from Console.",
+    "Start hosted Twitch setup from Console.",
   ),
   check(
     Boolean(setupUrls.twitchBotOAuthUrl),
@@ -181,7 +181,7 @@ async function addTwitchRelaySection() {
       "Console-to-Relay auth",
       "configured locally",
       "missing local Relay config",
-      "Open Console Settings and click Connect hosted Twitch.",
+      "Open Console Settings and click Start hosted setup.",
     ),
   ];
 
@@ -260,7 +260,7 @@ async function addDiscordRelaySection() {
       label: "Discord Relay status",
       status: "todo",
       detail: "not checked because hosted Relay pairing is incomplete",
-      nextAction: "Open Console Settings and click Connect hosted Twitch.",
+      nextAction: "Open Console Settings and click Start hosted setup.",
     });
   }
 

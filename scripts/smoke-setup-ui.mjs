@@ -64,6 +64,35 @@ async function runSmoke() {
     appJs.includes("Dashboard") && appJs.includes("Giveaways"),
     "browser UI has tabs",
   );
+  assert(appJs.includes("Setup Mode"), "settings UI has setup mode selector");
+  assert(
+    appJs.includes("setup-mode-selector"),
+    "setup mode selector is segmented",
+  );
+  assert(appJs.includes("Hosted"), "settings UI includes Hosted mode");
+  assert(appJs.includes("Assisted"), "settings UI includes Assisted mode");
+  assert(appJs.includes("Local"), "settings UI includes Local mode");
+  assert(
+    appJs.includes("Hosted setup keeps Twitch and Discord service secrets"),
+    "Hosted mode copy keeps hosted setup as the main path",
+  );
+  assert(
+    appJs.includes("Advanced Relay Transport Details"),
+    "Assisted mode includes advanced Relay controls",
+  );
+  assert(
+    appJs.includes("Local OAuth Fallback"),
+    "Assisted mode includes local OAuth fallback controls",
+  );
+  assert(
+    appJs.includes("Twitch Configuration"),
+    "Local mode includes Twitch configuration controls",
+  );
+  assert(
+    appJs.includes("Advanced readiness details") &&
+      appJs.includes('disclosureAttributes("settings:advanced-readiness"'),
+    "advanced readiness disclosure state survives refresh renders",
+  );
   assert(
     appJs.includes("Twitch Creator Ops") && appJs.includes("Start raid"),
     "browser UI exposes Twitch creator ops",

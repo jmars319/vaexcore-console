@@ -445,6 +445,15 @@ button.nav-button.active:hover:not(:disabled) {
   color: var(--text);
   background: rgba(85, 117, 255, 0.18);
 }
+.setup-mode-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.setup-mode-selector button {
+  min-height: 40px;
+}
 .table-actions {
   gap: 6px;
 }

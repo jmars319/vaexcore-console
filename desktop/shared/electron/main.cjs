@@ -7,6 +7,7 @@ const { pathToFileURL } = require("node:url");
 
 let mainWindow;
 let settingsWindow;
+const twitchOAuthWindows = new Map();
 let setupServer;
 let activeSetupUrl;
 let quitting = false;
@@ -276,6 +277,12 @@ const createWindow = async (url) => {
 
 const configureWindowOpenHandler = (window) => {
   window.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
+    const twitchOAuthKind = hostedTwitchOAuthKind(targetUrl);
+    if (twitchOAuthKind) {
+      void createTwitchOAuthWindow(targetUrl, twitchOAuthKind);
+      return { action: "deny" };
+    }
+
     if (
       targetUrl.startsWith("https://id.twitch.tv/") ||
       targetUrl.startsWith("https://discord.com/")
@@ -292,6 +299,57 @@ const configureWindowOpenHandler = (window) => {
 
     return { action: "allow" };
   });
+};
+
+const hostedTwitchOAuthKind = (targetUrl) => {
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.pathname !== "/oauth/twitch/start") {
+      return undefined;
+    }
+    const kind = parsed.searchParams.get("kind");
+    return kind === "bot" || kind === "broadcaster" ? kind : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const createTwitchOAuthWindow = async (targetUrl, kind) => {
+  const existing = twitchOAuthWindows.get(kind);
+  if (existing && !existing.isDestroyed()) {
+    existing.focus();
+    await existing.loadURL(targetUrl);
+    return;
+  }
+
+  const title =
+    kind === "bot" ? "Authorize vaexcorebot" : "Authorize Broadcaster Channel";
+  const icon = resolveWindowIconPath();
+  const authWindow = new BrowserWindow({
+    width: 640,
+    height: 760,
+    minWidth: 560,
+    minHeight: 620,
+    title,
+    backgroundColor: "#090b12",
+    ...(icon ? { icon } : {}),
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      partition: `persist:vaexcore-twitch-${kind}`,
+    },
+  });
+
+  twitchOAuthWindows.set(kind, authWindow);
+  authWindow.on("closed", () => {
+    twitchOAuthWindows.delete(kind);
+  });
+  authWindow.on("page-title-updated", (event) => {
+    event.preventDefault();
+    authWindow.setTitle(title);
+  });
+  await authWindow.loadURL(targetUrl);
 };
 
 const isSettingsUrl = (targetUrl) => {

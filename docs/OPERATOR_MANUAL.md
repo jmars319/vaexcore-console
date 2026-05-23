@@ -273,13 +273,14 @@ Delete and timeout actions only run in live EventSub chat after the feature gate
 
 Open `Settings`, then use `Setup Guide`.
 
-1. Connect hosted Twitch.
-   Click `Connect hosted Twitch`. Relay creates a hosted installation and Console stores only its local pairing token. Users do not need to see a Twitch client ID, Twitch client secret, Relay admin token, installation ID, or console token.
+1. Start hosted Twitch setup.
+   Click `Start hosted setup`. Relay creates a hosted installation and Console stores only its local pairing token. Users do not need to see a Twitch client ID, Twitch client secret, Relay admin token, installation ID, or console token.
 2. Authorize `vaexcorebot`.
-   Click `Authorize vaexcorebot` while the browser is logged into the bot account. Relay requests the chat scopes it needs.
+   Console opens a dedicated bot auth window. Log into `vaexcorebot`; Relay requests the chat scopes it needs.
 3. Authorize the broadcaster channel.
-   Click `Authorize Broadcaster Channel` while the browser is logged into the channel owner account. Relay requests the channel bot grant.
+   Console opens a separate broadcaster auth window. Log into the channel owner account; Relay requests the channel bot grant.
 4. Register EventSub.
+   Relay attempts this automatically after both Twitch OAuth grants. If Console still shows EventSub as pending, click `Register required EventSub`.
    Click `Register Twitch EventSub` after both OAuth grants pass.
 5. Test chat.
    Click `Send Relay test message` and confirm the bot can speak in Twitch chat.
@@ -359,21 +360,21 @@ Common setup errors:
 
 The setup UI never displays tokens after OAuth, never logs tokens, and never stores giveaway prizes.
 
-### Console Operating Modes
+### Console Setup Modes
 
-The `Operating Mode` panel in `Settings` supports three operator-facing modes:
+The `Setup Mode` panel in `Settings` supports three operator-facing modes:
 
-- `Local Console`: chat sends, Discord announcements, Discord layout setup, giveaways, and the OBS overlay run from this machine.
-- `Relay Assisted`: hosted Relay handles public callbacks, Discord slash commands/suggestions, and the Twitch Chat Bot identity path while Console remains the operator surface.
-- `Advanced`: local and Relay readiness are shown side by side for operators who intentionally use both.
+- `Hosted`: hosted Relay handles public callbacks, Discord slash commands/suggestions, and the Twitch Chat Bot identity path while Console remains the operator surface.
+- `Assisted`: hosted setup plus local/manual fallback details are shown side by side for operators who intentionally troubleshoot both.
+- `Local`: chat sends, Discord announcements, Discord layout setup, giveaways, and the OBS overlay run from this machine.
 
 The low-level Twitch transport is still stored as `local-user-token` or `relay-chatbot` for backward compatibility, but the setup UI uses the operator-facing labels above.
 
 ### Twitch Chat Bot Identity Through Relay
 
-Local Console mode can send chat, but Twitch may show the bot account as a normal user. Relay Assisted mode is required for the server-side app-token path that can make `vaexcorebot` appear as a Twitch Chat Bot.
+Local mode can send chat, but Twitch may show the bot account as a normal user. Hosted mode is required for the server-side app-token path that can make `vaexcorebot` appear as a Twitch Chat Bot.
 
-Use `Connect hosted Twitch` in Console to create the Relay pairing. Relay readiness confirms config and authorization state, but Console keeps a separate `Chat Bot identity live test` field until a human validates Twitch’s user list in the real channel. Click `Mark Chat Bot identity live-tested` only after Twitch shows `vaexcorebot` as a Chat Bot.
+Use `Start hosted setup` in Console to create the Relay pairing. Relay readiness confirms config and authorization state, but Console keeps a separate `Chat Bot identity live test` field until a human validates Twitch’s user list in the real channel. Click `Mark Chat Bot identity live-tested` only after Twitch shows `vaexcorebot` as a Chat Bot.
 
 Run `npm run bot:readiness` for a redacted preflight covering Relay health, saved pairing, Twitch OAuth grant readiness, Discord Relay readiness, local Discord setup, and remaining next actions. The exact credential and portal sequence lives in [Bot Live Validation Runbook](BOT_LIVE_VALIDATION.md).
 

@@ -27,21 +27,21 @@ Expected pre-credential blockers:
 ## Phase 6: Twitch Chat Bot Identity
 
 1. Open Console `Settings`.
-2. Click `Connect hosted Twitch`.
-3. In the browser session logged into `vaexcorebot`, approve the bot grant scopes:
+2. Click `Start hosted setup`.
+3. In the dedicated bot auth window, log into `vaexcorebot` and approve the bot grant scopes:
 
 - `user:bot`
 - `user:read:chat`
 - `user:write:chat`
 
-4. Return to Console and click `Authorize broadcaster`.
-5. In a browser session logged into the broadcaster account, approve the broadcaster grant scope:
+4. Return to Console and click `Log in as broadcaster`.
+5. In the dedicated broadcaster auth window, log into the broadcaster account and approve the broadcaster grant scope:
 
 - `channel:bot`
 
 6. Return to Console and click `Check Relay`.
 7. Confirm Relay readiness shows bot grant, broadcaster grant, and separate bot account checks as passing.
-8. Click `Register Twitch EventSub`.
+8. Confirm EventSub is registered automatically, or click `Register required EventSub` if Console still shows it pending.
 9. Click `Send Relay test message`.
 10. Confirm the message appears in the target Twitch chat as `vaexcorebot`.
 11. Confirm Twitch's chat user list labels `vaexcorebot` as a Chat Bot.
@@ -141,5 +141,5 @@ The bot work is functionally complete when all of these are true:
 - Never commit `config/local.secrets.json`.
 - Never paste Worker secrets into docs or issue comments.
 - Do not mark Chat Bot identity complete until Twitch visually confirms the Chat Bot label.
-- Keep `Local Console` available for users who prefer local-only operation; it is not the Twitch Chat Bot identity path.
+- Keep `Local` available for users who prefer local-only operation; it is not the Twitch Chat Bot identity path.
 - Treat `/live`, `/late`, `/cancelled`, and `/scheduled` as guarded operator actions, not public auto-post shortcuts.
