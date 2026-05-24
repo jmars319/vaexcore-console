@@ -100,9 +100,13 @@ async function runSmoke() {
   );
   assert(
     appJs.includes(
-      "Hosted setup keeps Twitch and Discord service secrets in Relay",
+      "Hosted uses Relay-managed Twitch and Discord service credentials.",
     ),
-    "Hosted view copy does not make local token setup the main path",
+    "Hosted mode tooltip keeps the hosted path discoverable without main-page prose",
+  );
+  assert(
+    appJs.includes("/api/setup-mode"),
+    "mode changes use the setup-mode-only API route",
   );
 
   const clean = await json("/api/config");
@@ -130,6 +134,17 @@ async function runSmoke() {
     setupMode: "relay-assisted",
     twitchTransportMode: "relay-chatbot",
     relayBaseUrl: `${fakeRelay.url}/`,
+    clientId: "local-client-id",
+    clientSecret: "local-client-secret",
+    broadcasterLogin: "vaexil",
+    botLogin: "vaexcorebot",
+  });
+  await post("/api/discord/config", {
+    botToken: "local-discord-token",
+    guildId: "1507100366666203217",
+    streamAnnouncementChannelId: "1507100366666203218",
+    generalAnnouncementChannelId: "1507100366666203219",
+    operatorRoleId: "1507100366666203220",
   });
 
   const hostedStart = await post("/api/relay/hosted/connect", {});
@@ -185,6 +200,74 @@ async function runSmoke() {
     "Relay Discord interaction URL is surfaced",
   );
   assertSafePayload(saved);
+
+  const localMode = await post("/api/setup-mode", {
+    setupMode: "local-only",
+  });
+  assert(localMode.config.setupMode === "local-only", "Local mode is saved");
+  assert(
+    localMode.config.relay.twitchTransportMode === "local-user-token",
+    "Local mode derives local user-token transport",
+  );
+  assert(
+    localMode.config.relay.installationId === relayInstallationId,
+    "Local mode switch preserves hosted Relay installation ID",
+  );
+  assert(
+    localMode.config.relay.hasConsoleToken === true,
+    "Local mode switch preserves hosted Relay console token",
+  );
+  assert(
+    localMode.config.hasClientId && localMode.config.hasClientSecret,
+    "Local mode switch preserves local Twitch credentials",
+  );
+  assert(
+    localMode.config.broadcasterLogin === "vaexil" &&
+      localMode.config.botLogin === "vaexcorebot",
+    "Local mode switch preserves Twitch account settings",
+  );
+  assert(
+    localMode.config.discord.guildId === "1507100366666203217" &&
+      localMode.config.discord.hasBotToken,
+    "Local mode switch preserves local Discord settings",
+  );
+  assertSafePayload(localMode);
+
+  const assistedMode = await post("/api/setup-mode", {
+    setupMode: "advanced",
+  });
+  assert(
+    assistedMode.config.setupMode === "advanced",
+    "Assisted mode is saved",
+  );
+  assert(
+    assistedMode.config.relay.twitchTransportMode === "local-user-token",
+    "Assisted mode preserves the current transport",
+  );
+  assertSafePayload(assistedMode);
+
+  const hostedMode = await post("/api/setup-mode", {
+    setupMode: "relay-assisted",
+  });
+  assert(
+    hostedMode.config.setupMode === "relay-assisted",
+    "Hosted mode is saved again",
+  );
+  assert(
+    hostedMode.config.relay.twitchTransportMode === "relay-chatbot",
+    "Hosted mode derives Relay chatbot transport",
+  );
+  assert(
+    hostedMode.config.relay.installationId === relayInstallationId &&
+      hostedMode.config.relay.hasConsoleToken,
+    "Hosted mode switch keeps Relay pairing state",
+  );
+  assert(
+    hostedMode.config.discord.guildId === "1507100366666203217" &&
+      hostedMode.config.discord.hasBotToken,
+    "Hosted mode switch preserves local Discord fallback settings",
+  );
+  assertSafePayload(hostedMode);
 
   const setupModeCheck = await post("/api/setup-mode/check", {
     mode: "relay-assisted",
@@ -417,6 +500,14 @@ function assertSafePayload(payload) {
   const raw = JSON.stringify(payload);
   assert(!raw.includes("relay-console-secret"), "Relay token is not exposed");
   assert(!raw.includes("relay-client-secret"), "client secret is not exposed");
+  assert(
+    !raw.includes("local-client-secret"),
+    "local Twitch secret is not exposed",
+  );
+  assert(
+    !raw.includes("local-discord-token"),
+    "local Discord token is not exposed",
+  );
   assert(!raw.includes("Bearer "), "payload does not expose bearer tokens");
 }
 

@@ -54,8 +54,8 @@ async function runSmoke() {
     "Discord layout preset picker is present",
   );
   assert(
-    appJs.includes("Each preset is a server layout"),
-    "Discord layout presets explain preview behavior",
+    appJs.includes("Preview the plan before applying server changes."),
+    "Discord layout presets keep preview behavior concise",
   );
   assert(
     appJs.includes("Lock Staff category"),

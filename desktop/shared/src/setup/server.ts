@@ -376,6 +376,14 @@ const route = async (request: IncomingMessage, response: ServerResponse) => {
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/setup-mode") {
+    const body = await readJson(request);
+    const saved = saveSetupMode(body);
+    void queueLaunchPreparation("setup_mode_changed");
+    sendJson(response, 200, { ok: true, config: saved });
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/setup-mode/check") {
     const body = await readJson(request);
     sendJson(response, 200, checkSetupModeRoute(body));
@@ -1776,6 +1784,21 @@ const parseSetupMode = (value: unknown, fallback: SetupMode): SetupMode =>
   typeof value === "string" && setupModes.includes(value as SetupMode)
     ? (value as SetupMode)
     : fallback;
+
+const deriveTwitchTransportForSetupMode = (
+  setupMode: SetupMode,
+  existingTransport: LocalSecrets["relay"]["twitchTransportMode"],
+) => {
+  if (setupMode === "relay-assisted") {
+    return "relay-chatbot";
+  }
+
+  if (setupMode === "local-only") {
+    return "local-user-token";
+  }
+
+  return existingTransport;
+};
 
 const getSafeSetupChecks = (secrets = readLocalSecrets()) => ({
   local: safeSetupCheck(secrets.setupChecks.local),
@@ -4835,6 +4858,27 @@ const saveConfig = (body: unknown) => {
   };
 
   writeLocalSecrets(next);
+  return getSafeConfig();
+};
+
+const saveSetupMode = (body: unknown) => {
+  const input = objectInput(body);
+  const existing = readLocalSecrets();
+  const setupMode = parseSetupMode(input.setupMode, getSetupMode(existing));
+  const twitchTransportMode = deriveTwitchTransportForSetupMode(
+    setupMode,
+    existing.relay.twitchTransportMode,
+  );
+
+  writeLocalSecrets({
+    ...existing,
+    setupMode,
+    relay: {
+      ...existing.relay,
+      twitchTransportMode,
+    },
+  });
+
   return getSafeConfig();
 };
 

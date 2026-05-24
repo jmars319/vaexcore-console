@@ -69,12 +69,30 @@ async function runSmoke() {
     appJs.includes("setup-mode-selector"),
     "setup mode selector is segmented",
   );
+  assert(
+    appJs.includes("header-mode-selector"),
+    "main header includes the compact setup mode selector",
+  );
   assert(appJs.includes("Hosted"), "settings UI includes Hosted mode");
   assert(appJs.includes("Assisted"), "settings UI includes Assisted mode");
   assert(appJs.includes("Local"), "settings UI includes Local mode");
   assert(
-    appJs.includes("Hosted setup keeps Twitch and Discord service secrets"),
-    "Hosted mode copy keeps hosted setup as the main path",
+    appJs.includes("api.saveSetupMode"),
+    "setup mode selector persists through the mode-only route",
+  );
+  assert(
+    appJs.includes(
+      "Hosted uses Relay-managed Twitch and Discord service credentials.",
+    ),
+    "Hosted mode explanation is available as compact tooltip copy",
+  );
+  assert(
+    !appJs.includes("Hosted setup keeps Twitch and Discord service secrets"),
+    "main dashboard no longer carries long visible Hosted mode copy",
+  );
+  assert(
+    !appJs.includes("Hosted Relay setup connects Discord without exposing"),
+    "Discord tab no longer carries long visible Hosted mode copy",
   );
   assert(
     appJs.includes("Advanced Relay Transport Details"),
@@ -312,12 +330,34 @@ async function runSmoke() {
     "setup UI keeps background refresh separate from visible busy state",
   );
   assert(
-    appJs.includes("await backgroundRefreshPromise"),
-    "setup UI queues user actions behind in-flight background refreshes",
+    appJs.includes("fetchFreshState") && appJs.includes("applyFreshState"),
+    "background refresh can fetch state without forcing a full render",
   );
   assert(
-    appJs.includes("renderWhenIdle"),
-    "setup UI defers background rerenders during interaction",
+    appJs.includes("foregroundRefreshGeneration"),
+    "background refresh results are guarded against newer foreground actions",
+  );
+  assert(
+    !appJs.includes("await backgroundRefreshPromise"),
+    "foreground actions do not wait behind an in-flight heartbeat",
+  );
+  assert(
+    appJs.includes("hasActiveTextSelection"),
+    "deferred rendering treats selected text as active user interaction",
+  );
+  const refreshAllIndex = appJs.indexOf("async function refreshAll");
+  const refreshAfterActionIndex = appJs.indexOf(
+    "async function refreshAfterAction",
+    refreshAllIndex,
+  );
+  const refreshAllBody = appJs.slice(refreshAllIndex, refreshAfterActionIndex);
+  assert(
+    !refreshAllBody.includes("renderWhenIdle"),
+    "heartbeat does not schedule a UI rebuild",
+  );
+  assert(
+    !refreshAllBody.includes("state.message ="),
+    "heartbeat errors do not overwrite visible messages",
   );
   assert(
     appJs.includes("restoreScrollPosition"),

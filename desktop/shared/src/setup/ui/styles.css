@@ -239,6 +239,7 @@ code {
 .header-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
 }
@@ -453,6 +454,21 @@ button.nav-button.active:hover:not(:disabled) {
 }
 .setup-mode-selector button {
   min-height: 40px;
+}
+.header-mode-selector {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 0;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+.header-mode-selector button {
+  min-height: 30px;
+  padding: 5px 9px;
+  border-color: transparent;
+  font-size: 12px;
 }
 .table-actions {
   gap: 6px;

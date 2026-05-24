@@ -277,6 +277,7 @@ const api = {
     }),
   config: () => api.get("/api/config"),
   saveConfig: (body) => api.post("/api/config", body),
+  saveSetupMode: (setupMode) => api.post("/api/setup-mode", { setupMode }),
   checkSetupMode: (mode) => api.post("/api/setup-mode/check", { mode }),
   disconnectTwitch: () => api.post("/api/auth/twitch/disconnect"),
   validate: () => api.post("/api/validate"),
@@ -436,6 +437,8 @@ const disclosureStates = {};
 let deferredRenderTimer = null;
 let lastUserInteractionAt = 0;
 let backgroundRefreshPromise = null;
+let foregroundRefreshGeneration = 0;
+let lastBackgroundError = "";
 
 function h(tag, attributes = {}, children = []) {
   const element = document.createElement(tag);
@@ -543,7 +546,7 @@ function render(options = {}) {
       h("div", { className: "app-shell settings-shell" }, [
         renderHeader({
           title: "Console Settings",
-          subtitle: "Hosted, assisted, and local setup",
+          subtitle: "Configuration Settings",
           showStatus: false,
         }),
         h("main", { className: "content settings-content" }, [
@@ -589,6 +592,8 @@ function renderHeader(options = {}) {
     options.subtitle || "Live Ops console for Twitch and suite coordination";
   const showStatus = options.showStatus !== false;
   const showSettingsAction = options.showSettingsAction ?? !isSettingsWindow;
+  const showModeSelector = options.showModeSelector !== false;
+  const showLaunchAction = options.showLaunchAction ?? !isSettingsWindow;
   const runtime = state.status?.runtime;
   const giveaway = state.status?.giveaway;
   const launch = currentLaunchPreparation();
@@ -610,8 +615,9 @@ function renderHeader(options = {}) {
         h("p", { className: "subtitle", text: subtitle }),
       ]),
     ]),
-    showStatus || showSettingsAction
+    showStatus || showSettingsAction || showModeSelector || showLaunchAction
       ? h("div", { className: "header-actions" }, [
+          showModeSelector ? renderHeaderModeSelector() : null,
           showStatus
             ? h("div", { className: "header-status" }, [
                 statusPill("Mode", runtime?.mode || "loading"),
@@ -632,16 +638,25 @@ function renderHeader(options = {}) {
                 ),
               ])
             : null,
-          actionButton("Launch Suite", {
-            id: "launchSuite",
-            variant: "secondary",
-            busyKey: "launchSuite",
-            onClick: launchSuite,
-          }),
+          showLaunchAction
+            ? actionButton("Launch Suite", {
+                id: "launchSuite",
+                variant: "secondary",
+                busyKey: "launchSuite",
+                onClick: launchSuite,
+              })
+            : null,
           showSettingsAction ? settingsActionButton() : null,
         ])
       : null,
   ]);
+}
+
+function renderHeaderModeSelector() {
+  return renderSetupModeSelector({
+    className: "header-mode-selector",
+    compact: true,
+  });
 }
 
 function settingsActionButton() {
@@ -740,6 +755,8 @@ function actionButton(label, options = {}) {
     id: options.id,
     type: "button",
     title: options.title,
+    "aria-label": options.ariaLabel,
+    "aria-pressed": options.ariaPressed,
     disabled: options.disabled,
     onClick: options.onClick,
     text: state.busy.has(options.busyKey || options.id) ? "Working..." : label,
@@ -809,15 +826,8 @@ function renderDashboardModeCard() {
   const completion = state.botCompletion || {};
   const mode = completion.setupMode || currentSetupMode(config);
   const checks = completion.setupChecks || config.setupChecks || {};
-  const capabilities = completion.modeCapabilities?.length
-    ? completion.modeCapabilities
-    : setupModeCapabilities(mode).map((item) => item.detail);
 
-  return card("Setup Mode", [
-    h("div", { className: "state-banner compact info" }, [
-      h("strong", { text: setupModeLabel(mode) }),
-      h("span", { text: setupModeSummary(mode) }),
-    ]),
+  return card("Setup Status", [
     statusGrid([
       ["Mode", setupModeLabel(mode), true],
       [
@@ -843,13 +853,6 @@ function renderDashboardModeCard() {
         Boolean(completion.generatedAt),
       ],
     ]),
-    h(
-      "div",
-      { className: "compact-capability-list" },
-      capabilities
-        .slice(0, mode === "advanced" ? 6 : 4)
-        .map((detail) => h("span", { text: detail })),
-    ),
     checks.local?.message ? callout(`Local: ${checks.local.message}`) : null,
     checks.relay?.message ? callout(`Relay: ${checks.relay.message}`) : null,
     h("div", { className: "actions" }, [
@@ -1394,6 +1397,11 @@ function botCompletionTone(stateLabel = "") {
 }
 
 const setupModeIds = ["relay-assisted", "advanced", "local-only"];
+const setupModeOptions = [
+  ["relay-assisted", "Hosted"],
+  ["advanced", "Assisted"],
+  ["local-only", "Local"],
+];
 
 function currentSetupMode(config = state.config || {}) {
   return (
@@ -1423,12 +1431,43 @@ function setupModeSummary(mode = "local-only") {
   return (
     {
       "relay-assisted":
-        "Relay owns hosted Twitch and Discord service secrets for the normal setup path.",
-      advanced:
-        "Shows hosted setup plus local/manual controls for operator troubleshooting.",
-      "local-only":
-        "Runs from this machine with self-hosted Twitch and Discord credentials.",
+        "Hosted uses Relay-managed Twitch and Discord service credentials.",
+      advanced: "Assisted shows hosted and local troubleshooting controls.",
+      "local-only": "Local uses self-hosted credentials on this machine.",
     }[mode] || ""
+  );
+}
+
+function setupModeTooltip(mode = "local-only") {
+  return setupModeSummary(mode);
+}
+
+function renderSetupModeSelector(options = {}) {
+  const mode = selectedSetupMode();
+  const className = ["setup-mode-selector", options.className || ""]
+    .filter(Boolean)
+    .join(" ");
+
+  return h(
+    "div",
+    {
+      className,
+      role: "group",
+      "aria-label": "Setup mode",
+      title:
+        "Switch setup mode. Hosted uses Relay, Assisted shows troubleshooting, Local uses self-hosted credentials.",
+    },
+    setupModeOptions.map(([value, label]) =>
+      actionButton(label, {
+        id: `${options.compact ? "header-" : ""}setupMode-${value}`,
+        className: `segmented-button${mode === value ? " active" : ""}`,
+        title: setupModeTooltip(value),
+        ariaLabel: `${label} setup mode`,
+        ariaPressed: mode === value ? "true" : "false",
+        busyKey: "setupModeSave",
+        onClick: () => persistSetupMode(value),
+      }),
+    ),
   );
 }
 
@@ -4583,11 +4622,16 @@ function renderDiscord() {
     ) ||
     config.setupTemplate ||
     setupTemplates[0];
+  const setupMode = selectedSetupMode(state.config || {});
+  const showHostedDiscord = setupMode !== "local-only";
+  const showLocalDiscord = setupMode !== "relay-assisted";
+  const showAssistedDiscord = setupMode === "advanced";
+  const useHostedSetup = showHostedDiscord && discordHostedConnected();
 
   return [
     sectionHeader(
       "Discord",
-      "Hosted Relay setup connects Discord without exposing a bot token; Advanced self-hosted mode is still available for local Discord bots.",
+      "Server setup, announcements, and slash command status.",
       h("div", { className: "actions section-actions" }, [
         actionButton("Refresh", {
           id: "discordRefresh",
@@ -4595,308 +4639,315 @@ function renderDiscord() {
           busyKey: "refresh",
           onClick: refreshAll,
         }),
-        actionButton("Validate bot", {
-          id: "discordValidateBot",
-          variant: "secondary",
-          onClick: validateDiscordBot,
-        }),
+        showLocalDiscord
+          ? actionButton("Validate bot", {
+              id: "discordValidateBot",
+              variant: "secondary",
+              onClick: validateDiscordBot,
+            })
+          : null,
       ]),
     ),
-    renderDiscordHostedConnectCard(discord),
-    card("Advanced Local Discord Readiness", [
-      callout(
-        "These checks only apply when using the Advanced self-hosted bot token path. Hosted Discord setup uses the Relay status above.",
-        "info",
-      ),
-      statusGrid([
-        [
-          "Bot token",
-          config.hasBotToken ? "saved" : "missing",
-          config.hasBotToken,
-        ],
-        ["Server ID", config.guildId || "missing", Boolean(config.guildId)],
-        [
-          "Stream announcements",
-          config.streamAnnouncementChannelId || "missing",
-          Boolean(config.streamAnnouncementChannelId),
-        ],
-        [
-          "Setup applied",
-          config.setupAppliedAt || "not yet",
-          Boolean(config.setupAppliedAt),
-        ],
-      ]),
-      readiness.checks?.length
-        ? list(
-            readiness.checks.map(
-              (check) =>
-                `${check.ok ? "PASS" : "TODO"} ${check.name}: ${check.detail}`,
-            ),
-            readiness.ready ? "ok" : "warn",
-          )
-        : callout("Discord readiness has not loaded yet."),
-      discord.validationError
-        ? callout(discord.validationError, "bad")
-        : discord.bot
-          ? callout(`Validated as ${discord.bot.username}.`, "ok")
-          : null,
-    ]),
-    renderBotCompletionCard("discord"),
-    renderDiscordRelayPanel(discord),
-    advancedPanel("Advanced Self-Hosted Discord Connection", [
-      h("div", { className: "grid" }, [
-        formRow(
-          "Bot token",
-          h("input", {
-            id: "discordBotToken",
-            type: "password",
-            autocomplete: "new-password",
-            placeholder: config.hasBotToken ? savedCredentialMask : "Bot token",
-            onInput: updateDiscordDraft,
-          }),
-        ),
-        formRow(
-          "Server ID",
-          h("input", {
-            id: "discordGuildId",
-            placeholder: "Discord server ID",
-            onInput: updateDiscordDraft,
-          }),
-        ),
-        formRow(
-          "Stream announcement channel ID",
-          h("input", {
-            id: "discordStreamAnnouncementChannelId",
-            placeholder: "live-now channel ID",
-            onInput: updateDiscordDraft,
-          }),
-        ),
-        formRow(
-          "General announcement channel ID",
-          h("input", {
-            id: "discordGeneralAnnouncementChannelId",
-            placeholder: "announcements channel ID",
-            onInput: updateDiscordDraft,
-          }),
-        ),
-        formRow(
-          "Stream Alerts role ID",
-          h("input", {
-            id: "discordStreamAlertsRoleId",
-            placeholder: "optional role ID",
-            onInput: updateDiscordDraft,
-          }),
-        ),
-        formRow(
-          "Operator role ID",
-          h("input", {
-            id: "discordOperatorRoleId",
-            placeholder: "VaexCore Operator role ID",
-            onInput: updateDiscordDraft,
-          }),
-        ),
-        formRow(
-          "Staff role ID",
-          h("input", {
-            id: "discordStaffRoleId",
-            placeholder: "role that can view STAFF",
-            onInput: updateDiscordDraft,
-          }),
-        ),
-        formRow(
-          "Staff role picker",
-          h(
-            "select",
-            {
-              id: "discordStaffRoleSelect",
-              disabled: !discordStaffRoleOptions().length,
-              onChange: selectDiscordStaffRole,
-            },
-            [
-              option(
-                "",
-                discordStaffRoleOptions().length
-                  ? "Select a loaded role"
-                  : "Load roles first",
-              ),
-              ...discordStaffRoleOptions().map((role) =>
-                option(role.id, `${role.name} (${role.id})`),
-              ),
-            ],
+    showHostedDiscord ? renderDiscordHostedConnectCard(discord) : null,
+    showLocalDiscord
+      ? card("Local Discord Readiness", [
+          callout(
+            "Local Discord setup uses the self-hosted bot token saved on this machine.",
+            "info",
           ),
-        ),
-      ]),
-      state.discordRolesStatus?.error
-        ? callout(state.discordRolesStatus.error, "warn")
-        : state.discordRoles?.length
-          ? callout(
-              `${state.discordRoles.length} Discord roles loaded. Managed roles and @everyone are hidden from the Staff role picker.`,
-              "ok",
-            )
-          : null,
-      callout(
-        "The bot token stays in the local secrets file and is never returned by the setup API. The bot needs View Channels, Manage Channels, Manage Roles, Send Messages, and Embed Links for the full operations setup.",
-        "info",
-      ),
-      h("div", { className: "actions" }, [
-        actionButton("Save Discord settings", {
-          id: "discordSave",
-          onClick: saveDiscordSettings,
-        }),
-        actionButton("Load roles", {
-          id: "discordLoadRoles",
-          variant: "secondary",
-          busyKey: "discordLoadRoles",
-          onClick: loadDiscordRoles,
-        }),
-      ]),
-    ]),
-    card(discordHostedConnected() ? "Hosted Server Layout" : "Server Layout", [
-      selectedSetupTemplate
-        ? h("div", { className: "state-banner compact info" }, [
-            h("strong", { text: selectedSetupTemplate.name }),
-            h("span", {
-              text:
-                selectedSetupTemplate.recommendedFor ||
-                selectedSetupTemplate.description,
-            }),
-          ])
-        : null,
-      setupTemplates.length
-        ? formRow(
-            "Layout preset",
-            h(
-              "select",
-              {
-                id: "discordSetupTemplateId",
-                onChange: updateDiscordDraft,
-              },
-              setupTemplates.map((template) =>
-                option(
-                  template.id,
-                  `${template.name} (${template.categoryCount || 0} sections, ${template.channelCount || 0} channels, ${template.roleCount || 0} roles)`,
+          statusGrid([
+            [
+              "Bot token",
+              config.hasBotToken ? "saved" : "missing",
+              config.hasBotToken,
+            ],
+            ["Server ID", config.guildId || "missing", Boolean(config.guildId)],
+            [
+              "Stream announcements",
+              config.streamAnnouncementChannelId || "missing",
+              Boolean(config.streamAnnouncementChannelId),
+            ],
+            [
+              "Setup applied",
+              config.setupAppliedAt || "not yet",
+              Boolean(config.setupAppliedAt),
+            ],
+          ]),
+          readiness.checks?.length
+            ? list(
+                readiness.checks.map(
+                  (check) =>
+                    `${check.ok ? "PASS" : "TODO"} ${check.name}: ${check.detail}`,
                 ),
+                readiness.ready ? "ok" : "warn",
+              )
+            : callout("Discord readiness has not loaded yet."),
+          discord.validationError
+            ? callout(discord.validationError, "bad")
+            : discord.bot
+              ? callout(`Validated as ${discord.bot.username}.`, "ok")
+              : null,
+        ])
+      : null,
+    showAssistedDiscord ? renderBotCompletionCard("discord") : null,
+    showAssistedDiscord ? renderDiscordRelayPanel(discord) : null,
+    showLocalDiscord
+      ? advancedPanel("Advanced Self-Hosted Discord Connection", [
+          h("div", { className: "grid" }, [
+            formRow(
+              "Bot token",
+              h("input", {
+                id: "discordBotToken",
+                type: "password",
+                autocomplete: "new-password",
+                placeholder: config.hasBotToken
+                  ? savedCredentialMask
+                  : "Bot token",
+                onInput: updateDiscordDraft,
+              }),
+            ),
+            formRow(
+              "Server ID",
+              h("input", {
+                id: "discordGuildId",
+                placeholder: "Discord server ID",
+                onInput: updateDiscordDraft,
+              }),
+            ),
+            formRow(
+              "Stream announcement channel ID",
+              h("input", {
+                id: "discordStreamAnnouncementChannelId",
+                placeholder: "live-now channel ID",
+                onInput: updateDiscordDraft,
+              }),
+            ),
+            formRow(
+              "General announcement channel ID",
+              h("input", {
+                id: "discordGeneralAnnouncementChannelId",
+                placeholder: "announcements channel ID",
+                onInput: updateDiscordDraft,
+              }),
+            ),
+            formRow(
+              "Stream Alerts role ID",
+              h("input", {
+                id: "discordStreamAlertsRoleId",
+                placeholder: "optional role ID",
+                onInput: updateDiscordDraft,
+              }),
+            ),
+            formRow(
+              "Operator role ID",
+              h("input", {
+                id: "discordOperatorRoleId",
+                placeholder: "VaexCore Operator role ID",
+                onInput: updateDiscordDraft,
+              }),
+            ),
+            formRow(
+              "Staff role ID",
+              h("input", {
+                id: "discordStaffRoleId",
+                placeholder: "role that can view STAFF",
+                onInput: updateDiscordDraft,
+              }),
+            ),
+            formRow(
+              "Staff role picker",
+              h(
+                "select",
+                {
+                  id: "discordStaffRoleSelect",
+                  disabled: !discordStaffRoleOptions().length,
+                  onChange: selectDiscordStaffRole,
+                },
+                [
+                  option(
+                    "",
+                    discordStaffRoleOptions().length
+                      ? "Select a loaded role"
+                      : "Load roles first",
+                  ),
+                  ...discordStaffRoleOptions().map((role) =>
+                    option(role.id, `${role.name} (${role.id})`),
+                  ),
+                ],
               ),
             ),
-          )
-        : null,
-      h("label", { className: "inline-check" }, [
-        h("input", {
-          id: "discordCreateStreamAlertsRole",
-          type: "checkbox",
-          onChange: updateDiscordDraft,
-        }),
-        "Create preset roles",
-      ]),
-      h("label", { className: "inline-check" }, [
-        h("input", {
-          id: "discordApplyPermissions",
-          type: "checkbox",
-          onChange: updateDiscordDraft,
-        }),
-        "Apply operations permission matrix",
-      ]),
-      h("label", { className: "inline-check" }, [
-        h("input", {
-          id: "discordPostStarterMessages",
-          type: "checkbox",
-          onChange: updateDiscordDraft,
-        }),
-        "Post starter messages",
-      ]),
-      h("label", { className: "inline-check" }, [
-        h("input", {
-          id: "discordLockStaffCategory",
-          type: "checkbox",
-          onChange: updateDiscordDraft,
-        }),
-        "Lock Staff category to the selected Staff role",
-      ]),
-      callout(
-        discordHostedConnected()
-          ? "Hosted setup runs through Relay with the VaexCore Discord bot token stored as a Worker secret. Preview shows exactly what Relay will create, reuse, skip, or block before anything is applied."
-          : "Each preset is a server layout. Preview shows exactly which categories, text channels, voice channels, roles, permission overwrites, and starter messages will be created, reused, skipped, or blocked before anything is applied.",
-        "info",
-      ),
-      h("div", { className: "actions" }, [
-        actionButton("Preview setup", {
-          id: "discordPreviewSetup",
-          variant: "secondary",
-          onClick: previewDiscordSetup,
-        }),
-        actionButton("Apply setup", {
-          id: "discordApplySetup",
-          onClick: applyDiscordSetup,
-        }),
-      ]),
-      renderDiscordPlan(preview),
-    ]),
-    card("Local Stream Announcements", [
-      h("div", { className: "grid" }, [
-        formRow(
-          "Status",
-          h(
-            "select",
-            {
-              id: "discordAnnouncementKind",
-              onChange: updateDiscordDraft,
-            },
-            [
-              option("live", "Stream is live"),
-              option("late", "Running late"),
-              option("cancelled", "Cancelled"),
-              option("scheduled", "Scheduled"),
-            ],
+          ]),
+          state.discordRolesStatus?.error
+            ? callout(state.discordRolesStatus.error, "warn")
+            : state.discordRoles?.length
+              ? callout(
+                  `${state.discordRoles.length} Discord roles loaded. Managed roles and @everyone are hidden from the Staff role picker.`,
+                  "ok",
+                )
+              : null,
+          callout(
+            "The bot token stays in the local secrets file and is never returned by the setup API. The bot needs View Channels, Manage Channels, Manage Roles, Send Messages, and Embed Links for the full operations setup.",
+            "info",
           ),
-        ),
-        formRow(
-          "Title",
-          h("input", {
-            id: "discordAnnouncementTitle",
-            placeholder: "Stream is live",
-            onInput: updateDiscordDraft,
-          }),
-        ),
-        formRow(
-          "Stream URL",
-          h("input", {
-            id: "discordAnnouncementStreamUrl",
-            placeholder: "https://www.twitch.tv/channel",
-            onInput: updateDiscordDraft,
-          }),
-        ),
-        formRow(
-          "Scheduled time",
-          h("input", {
-            id: "discordAnnouncementScheduledFor",
-            placeholder: "Tonight at 8 PM ET",
-            onInput: updateDiscordDraft,
-          }),
-        ),
-      ]),
-      formRow(
-        "Details",
-        h("textarea", {
-          id: "discordAnnouncementDetail",
-          placeholder: "Short context for the Discord announcement",
-          onInput: updateDiscordDraft,
-        }),
-      ),
-      h("label", { className: "inline-check" }, [
-        h("input", {
-          id: "discordMentionRole",
-          type: "checkbox",
-          onChange: updateDiscordDraft,
-        }),
-        "Mention Stream Alerts role for live announcements",
-      ]),
-      h("div", { className: "actions" }, [
-        actionButton("Send announcement", {
-          id: "discordSendAnnouncement",
-          onClick: sendDiscordStreamAnnouncement,
-        }),
-      ]),
-    ]),
+          h("div", { className: "actions" }, [
+            actionButton("Save Discord settings", {
+              id: "discordSave",
+              onClick: saveDiscordSettings,
+            }),
+            actionButton("Load roles", {
+              id: "discordLoadRoles",
+              variant: "secondary",
+              busyKey: "discordLoadRoles",
+              onClick: loadDiscordRoles,
+            }),
+          ]),
+        ])
+      : null,
+    showLocalDiscord || useHostedSetup
+      ? card(useHostedSetup ? "Hosted Server Layout" : "Server Layout", [
+          selectedSetupTemplate
+            ? h("div", { className: "state-banner compact info" }, [
+                h("strong", { text: selectedSetupTemplate.name }),
+                h("span", {
+                  text:
+                    selectedSetupTemplate.recommendedFor ||
+                    selectedSetupTemplate.description,
+                }),
+              ])
+            : null,
+          setupTemplates.length
+            ? formRow(
+                "Layout preset",
+                h(
+                  "select",
+                  {
+                    id: "discordSetupTemplateId",
+                    onChange: updateDiscordDraft,
+                  },
+                  setupTemplates.map((template) =>
+                    option(
+                      template.id,
+                      `${template.name} (${template.categoryCount || 0} sections, ${template.channelCount || 0} channels, ${template.roleCount || 0} roles)`,
+                    ),
+                  ),
+                ),
+              )
+            : null,
+          h("label", { className: "inline-check" }, [
+            h("input", {
+              id: "discordCreateStreamAlertsRole",
+              type: "checkbox",
+              onChange: updateDiscordDraft,
+            }),
+            "Create preset roles",
+          ]),
+          h("label", { className: "inline-check" }, [
+            h("input", {
+              id: "discordApplyPermissions",
+              type: "checkbox",
+              onChange: updateDiscordDraft,
+            }),
+            "Apply operations permission matrix",
+          ]),
+          h("label", { className: "inline-check" }, [
+            h("input", {
+              id: "discordPostStarterMessages",
+              type: "checkbox",
+              onChange: updateDiscordDraft,
+            }),
+            "Post starter messages",
+          ]),
+          h("label", { className: "inline-check" }, [
+            h("input", {
+              id: "discordLockStaffCategory",
+              type: "checkbox",
+              onChange: updateDiscordDraft,
+            }),
+            "Lock Staff category to the selected Staff role",
+          ]),
+          callout("Preview the plan before applying server changes.", "info"),
+          h("div", { className: "actions" }, [
+            actionButton("Preview setup", {
+              id: "discordPreviewSetup",
+              variant: "secondary",
+              onClick: previewDiscordSetup,
+            }),
+            actionButton("Apply setup", {
+              id: "discordApplySetup",
+              onClick: applyDiscordSetup,
+            }),
+          ]),
+          renderDiscordPlan(preview),
+        ])
+      : null,
+    showLocalDiscord
+      ? card("Local Stream Announcements", [
+          h("div", { className: "grid" }, [
+            formRow(
+              "Status",
+              h(
+                "select",
+                {
+                  id: "discordAnnouncementKind",
+                  onChange: updateDiscordDraft,
+                },
+                [
+                  option("live", "Stream is live"),
+                  option("late", "Running late"),
+                  option("cancelled", "Cancelled"),
+                  option("scheduled", "Scheduled"),
+                ],
+              ),
+            ),
+            formRow(
+              "Title",
+              h("input", {
+                id: "discordAnnouncementTitle",
+                placeholder: "Stream is live",
+                onInput: updateDiscordDraft,
+              }),
+            ),
+            formRow(
+              "Stream URL",
+              h("input", {
+                id: "discordAnnouncementStreamUrl",
+                placeholder: "https://www.twitch.tv/channel",
+                onInput: updateDiscordDraft,
+              }),
+            ),
+            formRow(
+              "Scheduled time",
+              h("input", {
+                id: "discordAnnouncementScheduledFor",
+                placeholder: "Tonight at 8 PM ET",
+                onInput: updateDiscordDraft,
+              }),
+            ),
+          ]),
+          formRow(
+            "Details",
+            h("textarea", {
+              id: "discordAnnouncementDetail",
+              placeholder: "Short context for the Discord announcement",
+              onInput: updateDiscordDraft,
+            }),
+          ),
+          h("label", { className: "inline-check" }, [
+            h("input", {
+              id: "discordMentionRole",
+              type: "checkbox",
+              onChange: updateDiscordDraft,
+            }),
+            "Mention Stream Alerts role for live announcements",
+          ]),
+          h("div", { className: "actions" }, [
+            actionButton("Send announcement", {
+              id: "discordSendAnnouncement",
+              onClick: sendDiscordStreamAnnouncement,
+            }),
+          ]),
+        ])
+      : null,
     message(),
   ];
 }
@@ -4932,12 +4983,7 @@ function renderDiscordHostedConnectCard() {
         Boolean(hosted.setupAppliedAt),
       ],
     ]),
-    callout(
-      connected
-        ? "Console is connected through Relay. Server setup and slash commands use the hosted VaexCore Discord bot; no local bot token is needed."
-        : "Connect Discord to let Relay install the VaexCore bot and remember the selected server. Console will not show or store the hosted bot token.",
-      connected ? "ok" : "info",
-    ),
+    connected ? callout("Connected through Relay.", "ok") : null,
     status.readiness?.checks?.some(
       (check) =>
         !check.ok &&
@@ -5151,6 +5197,13 @@ function discordHostedConfig() {
 function discordHostedConnected() {
   const hosted = discordHostedConfig();
   return Boolean(hosted.connected || hosted.guildId);
+}
+
+function useHostedDiscordSetup() {
+  return (
+    selectedSetupMode(state.config || {}) !== "local-only" &&
+    discordHostedConnected()
+  );
 }
 
 function renderDiscordPlan(result) {
@@ -5388,11 +5441,6 @@ function renderOperatingModeCard(config = state.config || {}) {
     "twitchTransportMode",
     config.relay?.twitchTransportMode || "relay-chatbot",
   );
-  const modeOptions = [
-    ["relay-assisted", "Hosted"],
-    ["advanced", "Assisted"],
-    ["local-only", "Local"],
-  ];
 
   return card("Setup Mode", [
     h("input", {
@@ -5401,19 +5449,6 @@ function renderOperatingModeCard(config = state.config || {}) {
       value: mode,
       onChange: updateSettingsDraft,
     }),
-    h("div", { className: "setup-mode-selector" }, [
-      ...modeOptions.map(([value, label]) =>
-        actionButton(label, {
-          id: `setupMode-${value}`,
-          className: `segmented-button${mode === value ? " active" : ""}`,
-          onClick: () => selectSetupMode(value),
-        }),
-      ),
-    ]),
-    h("div", { className: "state-banner compact info" }, [
-      h("strong", { text: setupModeLabel(mode) }),
-      h("span", { text: setupModeSummary(mode) }),
-    ]),
     statusGrid(
       [
         ["Selected mode", setupModeLabel(mode), setupModeIds.includes(mode)],
@@ -5472,17 +5507,11 @@ function renderSettings() {
   const setupMode = selectedSetupMode(config);
   const required = missingConfigFields(config);
   const validationChecks = visibleValidationChecks();
-  const modeDescription =
-    setupMode === "relay-assisted"
-      ? "Hosted setup keeps Twitch and Discord service secrets in Relay and shows only the live setup steps needed here."
-      : setupMode === "advanced"
-        ? "Assisted setup shows hosted controls plus local/manual fallback details for troubleshooting."
-        : "Local setup uses self-hosted Twitch credentials and local OAuth on this machine.";
 
   return [
     sectionHeader(
       "Console Settings",
-      modeDescription,
+      "Connection, setup, and runtime configuration.",
       setupMode === "relay-assisted"
         ? actionButton("Check Relay", {
             id: "settingsRelayStatus",
@@ -8444,7 +8473,7 @@ function desktopUpdateNote(platform) {
   return "Manual updates should replace only the app files. Keep the app data folder unless you intentionally want to reset Twitch setup and local data.";
 }
 
-async function loadFreshState() {
+async function fetchFreshState() {
   const [
     config,
     status,
@@ -8488,6 +8517,54 @@ async function loadFreshState() {
     api.discordRelayStatus(),
     api.botCompletion(),
   ]);
+  return {
+    config,
+    status,
+    launchPreparation,
+    giveaway,
+    commands,
+    timers,
+    moderation,
+    templates,
+    operatorMessages,
+    reminder,
+    audit,
+    outbound,
+    diagnostics,
+    featureGateResult,
+    streamPresetResult,
+    suiteStatus,
+    twitchOps,
+    discordStatus,
+    discordRelayStatus,
+    botCompletion,
+  };
+}
+
+function applyFreshState(snapshot) {
+  const {
+    config,
+    status,
+    launchPreparation,
+    giveaway,
+    commands,
+    timers,
+    moderation,
+    templates,
+    operatorMessages,
+    reminder,
+    audit,
+    outbound,
+    diagnostics,
+    featureGateResult,
+    streamPresetResult,
+    suiteStatus,
+    twitchOps,
+    discordStatus,
+    discordRelayStatus,
+    botCompletion,
+  } = snapshot;
+
   state.config = config;
   state.status = status;
   syncLaunchPreparation(launchPreparation);
@@ -8512,6 +8589,11 @@ async function loadFreshState() {
   syncLaunchPreparation(status);
   syncLaunchPreparation(diagnostics);
   state.validSetup = isValidationPassed();
+}
+
+async function loadFreshState() {
+  const snapshot = await fetchFreshState();
+  applyFreshState(snapshot);
   return { ok: true };
 }
 
@@ -8521,17 +8603,27 @@ async function refreshAll(options = {}) {
       return backgroundRefreshPromise;
     }
 
-    backgroundRefreshPromise = loadFreshState()
+    const refreshGeneration = foregroundRefreshGeneration;
+    backgroundRefreshPromise = fetchFreshState()
+      .then((snapshot) => {
+        if (
+          refreshGeneration === foregroundRefreshGeneration &&
+          state.busy.size === 0
+        ) {
+          applyFreshState(snapshot);
+        }
+        return { ok: true };
+      })
       .catch((error) => {
-        state.message = {
-          text: error.message || "Refresh failed.",
-          tone: "bad",
-        };
+        lastBackgroundError = error.message || "Refresh failed.";
+        console.debug(
+          "Background refresh skipped visible update:",
+          lastBackgroundError,
+        );
         return null;
       })
       .finally(() => {
         backgroundRefreshPromise = null;
-        renderWhenIdle();
       });
 
     return backgroundRefreshPromise;
@@ -8708,6 +8800,9 @@ function setModerationState(result = {}) {
 }
 
 async function runAction(key, fn, options = {}) {
+  if (!options.background) {
+    foregroundRefreshGeneration += 1;
+  }
   state.busy.add(key);
   if (!options.quiet) state.message = { text: "Working...", tone: "muted" };
   if (!options.background) {
@@ -8715,9 +8810,6 @@ async function runAction(key, fn, options = {}) {
   }
 
   try {
-    if (!options.background && backgroundRefreshPromise) {
-      await backgroundRefreshPromise;
-    }
     const result = await fn();
     if (result && result.ok === false) {
       throw new Error(result.error || "Action failed");
@@ -8734,9 +8826,7 @@ async function runAction(key, fn, options = {}) {
     return null;
   } finally {
     state.busy.delete(key);
-    if (options.background) {
-      renderWhenIdle();
-    } else {
+    if (!options.background) {
       render();
     }
   }
@@ -10040,11 +10130,12 @@ async function previewDiscordSetup() {
     "discordPreviewSetup",
     async () => {
       const payload = readDiscordSetupPayload();
-      const result = discordHostedConnected()
+      const hostedSetup = useHostedDiscordSetup();
+      const result = hostedSetup
         ? await api.previewDiscordRelaySetup(payload)
         : await api.previewDiscordSetup(payload);
       state.discordSetupPreview = result;
-      if (discordHostedConnected()) {
+      if (hostedSetup) {
         state.discordRelayStatus = await api.discordRelayStatus();
       } else {
         state.discord = {
@@ -10071,11 +10162,12 @@ async function applyDiscordSetup() {
     "discordApplySetup",
     async () => {
       const payload = readDiscordSetupPayload();
-      const result = discordHostedConnected()
+      const hostedSetup = useHostedDiscordSetup();
+      const result = hostedSetup
         ? await api.applyDiscordRelaySetup(payload)
         : await api.applyDiscordSetup(payload);
       state.discordSetupPreview = result;
-      if (discordHostedConnected()) {
+      if (hostedSetup) {
         state.discordRelayStatus = await api.discordRelayStatus();
       } else {
         state.discord = await api.discordStatus();
@@ -10223,24 +10315,74 @@ async function disconnectTwitch() {
   await refreshAll();
 }
 
-function selectSetupMode(mode) {
+function derivedTransportForSetupMode(mode) {
+  if (mode === "relay-assisted") return "relay-chatbot";
+  if (mode === "local-only") return "local-user-token";
+  return state.config?.relay?.twitchTransportMode || "relay-chatbot";
+}
+
+async function persistSetupMode(mode) {
   if (!setupModeIds.includes(mode)) {
     return;
   }
 
+  if (
+    mode === currentSetupMode(state.config || {}) &&
+    !state.settingsDraft.setupMode
+  ) {
+    return;
+  }
+
+  const hadModeDraft = Object.hasOwn(state.settingsDraft, "setupMode");
+  const hadTransportDraft = Object.hasOwn(
+    state.settingsDraft,
+    "twitchTransportMode",
+  );
+  const previousModeDraft = state.settingsDraft.setupMode;
+  const previousTransportDraft = state.settingsDraft.twitchTransportMode;
+  const derivedTransport = derivedTransportForSetupMode(mode);
+
   state.settingsDraft.setupMode = mode;
   if (mode === "relay-assisted") {
-    state.settingsDraft.twitchTransportMode = "relay-chatbot";
+    state.settingsDraft.twitchTransportMode = derivedTransport;
   } else if (mode === "local-only") {
-    state.settingsDraft.twitchTransportMode = "local-user-token";
+    state.settingsDraft.twitchTransportMode = derivedTransport;
   } else if (!state.settingsDraft.twitchTransportMode) {
-    state.settingsDraft.twitchTransportMode =
-      state.config?.relay?.twitchTransportMode || "relay-chatbot";
+    state.settingsDraft.twitchTransportMode = derivedTransport;
   }
 
   setValue("setupMode", mode);
   setValue("twitchTransportMode", state.settingsDraft.twitchTransportMode);
-  render();
+
+  const result = await runAction(
+    "setupModeSave",
+    async () => {
+      const saved = await api.saveSetupMode(mode);
+      state.config = saved.config || state.config;
+      delete state.settingsDraft.setupMode;
+      delete state.settingsDraft.twitchTransportMode;
+      state.botCompletion = await api.botCompletion();
+      return saved;
+    },
+    {
+      skipRefresh: true,
+      success: `${setupModeLabel(mode)} mode selected.`,
+    },
+  );
+
+  if (!result) {
+    if (hadModeDraft) {
+      state.settingsDraft.setupMode = previousModeDraft;
+    } else {
+      delete state.settingsDraft.setupMode;
+    }
+    if (hadTransportDraft) {
+      state.settingsDraft.twitchTransportMode = previousTransportDraft;
+    } else {
+      delete state.settingsDraft.twitchTransportMode;
+    }
+    render();
+  }
 }
 
 function updateSettingsDraft(event) {
@@ -12416,9 +12558,15 @@ function isEditingFormField() {
   );
 }
 
+function hasActiveTextSelection() {
+  const selection = window.getSelection?.();
+  return Boolean(selection && !selection.isCollapsed && String(selection));
+}
+
 function isUserInteracting() {
   return (
     isEditingFormField() ||
+    hasActiveTextSelection() ||
     Date.now() - lastUserInteractionAt < interactionQuietMs
   );
 }
