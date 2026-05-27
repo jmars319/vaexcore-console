@@ -9,6 +9,14 @@ verify:
 doctor:
     npm run check:env
 
+credentials:
+    @if [ -x "$HOME/.local/bin/codex-jamarq" ]; then \
+        "$HOME/.local/bin/codex-jamarq" --jamarq-env-check; \
+    else \
+        echo "Missing $HOME/.local/bin/codex-jamarq"; \
+        exit 1; \
+    fi
+
 actions:
     actionlint
 

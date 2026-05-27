@@ -4,3 +4,4 @@
 - Do not create or switch to a new branch or git worktree unless explicitly requested.
 - If work exists on another branch, preserve it on `main` before removing the extra branch.
 - Follow [docs/development-guidelines.md](docs/development-guidelines.md) for vaexcore console milestone work.
+- Keep Twitch runtime secrets in `.env` or the app setup store, and keep JAMARQ provider env files under `$HOME/.config/jamarq/*.env`. Use `just credentials` to list available provider variable names without exposing values.

@@ -43,6 +43,8 @@ Edit `.env` before live startup:
 - `COMMAND_PREFIX`: Optional command prefix. Defaults to `!`.
 - `LOG_LEVEL`: Optional logger level. Defaults to `info`.
 
+JAMARQ-wide provider values used by Codex, Cloudflare, Vercel, Turso, GitHub, or other local CLIs live outside this repo under `$HOME/.config/jamarq/*.env`. They are loaded for Codex through `$HOME/.local/bin/codex-jamarq` and can be inspected safely with `just credentials`, which prints variable names only. Those shared values do not replace vaexcore console runtime configuration; use `.env` or the app setup UI for Twitch bot runtime secrets.
+
 The Twitch user access token must belong to the bot user and include these scopes:
 
 - `user:read:chat`

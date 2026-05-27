@@ -55,10 +55,13 @@ npm run check:env
 npm run dev:local
 npm run dev
 npm run ci
+just credentials
 npm run release:check
 ```
 
 Use local mode before connecting to Twitch. Live mode should only run after token scopes and channel IDs have been verified.
+
+`just credentials` is a safe visibility check for the shared JAMARQ provider env pool used by Codex and local CLIs. It prints variable names only. vaexcore console runtime secrets still belong in this repo's `.env` or the app setup store.
 
 ## Direction
 

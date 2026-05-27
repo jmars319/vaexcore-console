@@ -7,6 +7,7 @@ vaexcore console is designed as a local-first Twitch bot. The setup/operator con
 - Do not commit `.env`, `config/local.secrets.json`, SQLite databases, logs, or packaged runtime data.
 - OAuth access tokens, refresh tokens, client secrets, and OAuth codes must not be posted in chat, logs, audit metadata, screenshots, or issue reports.
 - The setup API only returns safe config status and masked token status.
+- Shared JAMARQ provider env files under `$HOME/.config/jamarq/*.env` are for local agents and CLIs. Do not copy those files or values into this repository; use `just credentials` when you only need to confirm available variable names.
 
 ## Local Console
 
