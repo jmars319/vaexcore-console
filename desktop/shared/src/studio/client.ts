@@ -28,6 +28,16 @@ export type StudioMarkerInput = {
   metadata?: Record<string, unknown> | null;
 };
 
+export type StudioMarkersSnapshot = {
+  markers: StudioMarker[];
+};
+
+export type StudioMarkerListOptions = {
+  sourceApp?: string | undefined;
+  sourceEventId?: string | undefined;
+  limit?: number | undefined;
+};
+
 type StudioApiResponse<T> = {
   ok: boolean;
   data: T | null;
@@ -65,6 +75,16 @@ export class StudioClient {
       method: "POST",
       body: JSON.stringify(body),
     });
+  }
+
+  async markers(options: StudioMarkerListOptions = {}) {
+    const params = new URLSearchParams();
+    if (options.sourceApp) params.set("source_app", options.sourceApp);
+    if (options.sourceEventId) params.set("source_event_id", options.sourceEventId);
+    if (typeof options.limit === "number") params.set("limit", String(options.limit));
+    const query = params.toString();
+
+    return this.request<StudioMarkersSnapshot>(query ? `/markers?${query}` : "/markers");
   }
 
   private async request<T>(path: string, init: RequestInit = {}) {
