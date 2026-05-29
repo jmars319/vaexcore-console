@@ -725,7 +725,14 @@ VAEXCORE_STUDIO_API_URL=http://127.0.0.1:51287
 VAEXCORE_STUDIO_API_TOKEN=
 ```
 
-Use `!vcstudio` to check reachability and `!vcmark clutch round` to write a marker into Studio. Console sends `source_app=vaexcore-console`, a stable chat source event id, and chat command metadata with each marker.
+Use `!vcstudio` to check reachability and `!vcmark clutch round` to write a marker into Studio. Console sends `source_app=vaexcore-console`, a stable chat source event id, and `vaexcore.studio.marker.v1` metadata with each marker.
+
+Console marker event types:
+
+- `console.chat.marker`: manual `!vcmark` chat markers. `source_event_id` is `chat:<message-id>` when Twitch supplies a message id, otherwise `chat:<source>:<user-login>:<received-at>`.
+- `console.giveaway.start`, `console.giveaway.close`, `console.giveaway.last-call`, `console.giveaway.draw`, `console.giveaway.reroll`, `console.giveaway.end`: giveaway lifecycle event markers. `source_event_id` is `vaexcore-console:giveaway:<giveaway-id>:<action>:<stable-suffix>`.
+
+Studio keeps marker idempotency on `source_app + source_event_id`; repeated submissions return the existing marker instead of creating duplicates.
 
 ## Roadmap
 

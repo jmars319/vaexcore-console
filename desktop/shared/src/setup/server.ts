@@ -84,7 +84,7 @@ import {
   StudioClient,
   type StudioMarkerInput,
 } from "../studio/client";
-import { studioConsoleMarkerMetadata } from "../studio/markerMetadata";
+import { buildConsoleGiveawayStudioMarker } from "../studio/markerPayloads";
 import {
   validateSuiteCommandDocument,
   type SuiteCommandDocument,
@@ -10176,55 +10176,7 @@ const giveawayAnnouncement = (
   },
 });
 
-type GiveawayStudioAction =
-  | "start"
-  | "close"
-  | "last-call"
-  | "draw"
-  | "reroll"
-  | "end";
-
-type GiveawayStudioMarkerOptions = {
-  statusTimestamp?: string | null;
-  sourceEventSuffix?: string;
-  metadata?: Record<string, unknown>;
-};
-
-const giveawayStudioActionLabels: Record<GiveawayStudioAction, string> = {
-  start: "started",
-  close: "closed",
-  "last-call": "last call",
-  draw: "draw",
-  reroll: "reroll",
-  end: "ended",
-};
-
-const giveawayStudioMarker = (
-  action: GiveawayStudioAction,
-  giveaway: Giveaway,
-  options: GiveawayStudioMarkerOptions = {},
-): StudioMarkerInput => {
-  const timestamp = options.statusTimestamp ?? new Date().toISOString();
-  const sourceEventSuffix =
-    options.sourceEventSuffix ?? safeStudioSourceEventPart(timestamp);
-
-  return {
-    label: sanitizeText(
-      `Console giveaway ${giveawayStudioActionLabels[action]}: ${giveaway.title}`,
-      {
-        field: "Studio marker label",
-        maxLength: 140,
-        required: true,
-      },
-    ),
-    source_app: "vaexcore-console",
-    source_event_id: `vaexcore-console:giveaway:${giveaway.id}:${action}:${sourceEventSuffix}`,
-    metadata: studioConsoleMarkerMetadata(`console.giveaway.${action}`, {
-      giveaway: giveawayMetadata(giveaway),
-      ...options.metadata,
-    }),
-  };
-};
+const giveawayStudioMarker = buildConsoleGiveawayStudioMarker;
 
 const maybeCreateStudioEventMarker = (
   marker: StudioMarkerInput | undefined,
@@ -10244,22 +10196,6 @@ const maybeCreateStudioEventMarker = (
     );
   });
 };
-
-const giveawayMetadata = (giveaway: Giveaway) => ({
-  id: giveaway.id,
-  title: giveaway.title,
-  keyword: giveaway.keyword,
-  status: giveaway.status,
-  winnerCount: giveaway.winner_count,
-  itemName: giveaway.item_name,
-  itemEdition: giveaway.item_edition,
-  gameName: giveaway.game_name,
-  prizeType: giveaway.prize_type,
-  createdAt: giveaway.created_at,
-  openedAt: giveaway.opened_at,
-  closedAt: giveaway.closed_at,
-  endedAt: giveaway.ended_at,
-});
 
 const giveawayWinnerMetadata = (winner: GiveawayWinner) => ({
   id: winner.id,
@@ -10283,12 +10219,6 @@ const drawSourceEventSuffix = (winners: GiveawayWinner[]) =>
   winners.length > 0
     ? `winners-${winners.map((winner) => winner.id).join("-")}`
     : `winners-none-${Date.now()}`;
-
-const safeStudioSourceEventPart = (value: string) =>
-  value
-    .replace(/[^a-zA-Z0-9._-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
 
 const maybeQueueGiveawayAnnouncements = (
   messages:

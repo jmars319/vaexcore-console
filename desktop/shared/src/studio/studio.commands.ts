@@ -2,8 +2,7 @@ import { PermissionLevel } from "../core/permissions";
 import type { CommandRouter } from "../core/commandRouter";
 import type { Logger } from "../core/logger";
 import { loadStudioIntegrationConfig, StudioClient } from "./client";
-import { sanitizeText } from "../core/security";
-import { studioConsoleMarkerMetadata } from "./markerMetadata";
+import { buildConsoleChatStudioMarker } from "./markerPayloads";
 
 type RegisterStudioCommandsOptions = {
   router: CommandRouter;
@@ -43,51 +42,18 @@ export const registerStudioCommands = ({
         return;
       }
 
-      const label = markerLabel(rawArgs, message.userDisplayName);
+      const marker = buildConsoleChatStudioMarker({
+        message,
+        rawLabel: rawArgs,
+      });
 
       try {
-        await client.createMarker({
-          label,
-          source_app: "vaexcore-console",
-          source_event_id: markerSourceEventId(message),
-          metadata: studioConsoleMarkerMetadata(
-            "console.chat.marker",
-            {
-              command: "vcmark",
-              chatSource: message.source,
-              userLogin: message.userLogin,
-              userDisplayName: message.userDisplayName,
-              receivedAt: message.receivedAt.toISOString(),
-            },
-            {
-              workflow: "manual-chat-marker",
-            },
-          ),
-        });
-        reply(`Studio marker created: ${label}`);
+        await client.createMarker(marker);
+        reply(`Studio marker created: ${marker.label}`);
       } catch (error) {
-        logger.warn({ error, label }, "Studio marker creation failed");
+        logger.warn({ error, label: marker.label }, "Studio marker creation failed");
         reply("Studio marker could not be created.");
       }
     },
   );
-};
-
-const markerSourceEventId = (message: {
-  id?: string;
-  source: string;
-  userLogin: string;
-  receivedAt: Date;
-}) =>
-  message.id
-    ? `chat:${message.id}`
-    : `chat:${message.source}:${message.userLogin}:${message.receivedAt.toISOString()}`;
-
-const markerLabel = (rawArgs: string, displayName: string) => {
-  const fallback = `chat marker from ${displayName}`;
-  return sanitizeText(rawArgs || fallback, {
-    field: "Studio marker label",
-    maxLength: 120,
-    required: true,
-  });
 };
