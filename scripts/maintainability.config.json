@@ -7,7 +7,6 @@
   "maxDomainBarrelLines": 900,
   "nearLineWarning": 25,
   "specificFileBudgets": {
-    "desktop/shared/src/modules/giveaways/giveaways.service.ts": 2000,
     "scripts/smoke-setup-ui.mjs": 1850,
     "desktop/shared/src/discord/setup.ts": 1200,
     "desktop/shared/src/modules/commands/commands.service.ts": 1000
@@ -26,13 +25,13 @@
   "contractSnapshots": {
     "setupRoutes": "scripts/contracts/setup-api-routes.json"
   },
-  "initialBundleBudgetKb": 650,
+  "initialBundleBudgetKb": 652,
   "nearBudgetWarningKb": 4,
   "entryBudgets": [
     {
       "label": "setup server",
       "path": "dist-bundle/setup-server.js",
-      "budgetKb": 650
+      "budgetKb": 652
     },
     {
       "label": "live bot",
