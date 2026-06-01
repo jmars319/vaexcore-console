@@ -25,7 +25,9 @@ for (const file of files) {
   const source =
     file === "desktop/shared/src/setup/ui/app.js"
       ? readSetupUiSource(file)
-      : readFileSync(resolve(file), "utf8");
+      : file === "scripts/smoke-setup-ui.mjs"
+        ? readScriptWithSupportSource(file)
+        : readFileSync(resolve(file), "utf8");
   for (const scope of requiredScopes) {
     if (!source.includes(scope)) {
       errors.push(`${file} is missing required Twitch scope ${scope}`);
@@ -83,6 +85,16 @@ function readSetupUiSource(entryFile) {
     readFileSync(resolve(baseDir, match[1]), "utf8"),
   );
   return [source, ...chunks].join("\n");
+}
+
+function readScriptWithSupportSource(entryFile) {
+  const entryPath = resolve(entryFile);
+  const supportDir = resolve(dirname(entryPath), "support");
+  const supportModules = readdirSync(supportDir)
+    .filter((file) => file.endsWith(".mjs"))
+    .sort()
+    .map((file) => readFileSync(resolve(supportDir, file), "utf8"));
+  return [readFileSync(entryPath, "utf8"), ...supportModules].join("\n");
 }
 
 function readSetupServerSource(entryFile) {

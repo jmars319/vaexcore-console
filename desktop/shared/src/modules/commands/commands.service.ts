@@ -1,93 +1,44 @@
-import type { ChatMessage } from "../../core/chatMessage";
-import type { MessageQueueMetadata } from "../../core/messageQueue";
-import {
-  getPermissionLevel,
-  hasPermission,
-  PermissionLevel,
-} from "../../core/permissions";
+import { getPermissionLevel, hasPermission } from "../../core/permissions";
 import {
   limits,
-  assertNoSecretLikeContent,
   normalizeCommandName,
   parseSafeInteger,
   sanitizeChatMessage,
 } from "../../core/security";
+import type { ChatMessage } from "../../core/chatMessage";
 import type { DbClient } from "../../db/client";
 import { getProtectedCommandNames } from "../../core/protectedCommands";
 import { writeAuditLog } from "../../core/auditLog";
 import type { FeatureGateStore } from "../../core/featureGates";
+import { invocationFromRow } from "./commands.mappers";
+import {
+  normalizeAliasList,
+  normalizeCooldown,
+  normalizePermission,
+  normalizeResponseList,
+  previewActor,
+  sanitizePreviewArgs,
+  timestamp,
+  userKey,
+} from "./commands.normalization";
+import { renderTemplate } from "./commands.template";
+import type {
+  CustomCommandContext,
+  CustomCommandDefinition,
+  CustomCommandInvocation,
+  CustomCommandInvocationRow,
+  CustomCommandRow,
+  CustomCommandSaveInput,
+} from "./commands.types";
 
-const permissionValues = new Set(Object.values(PermissionLevel));
-
-type CustomCommandRow = {
-  id: number;
-  name: string;
-  permission: PermissionLevel;
-  enabled: number;
-  global_cooldown_seconds: number;
-  user_cooldown_seconds: number;
-  use_count: number;
-  last_used_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type CustomCommandInvocationRow = {
-  id: number;
-  command_id: number | null;
-  command_name: string;
-  alias_used: string;
-  user_key: string;
-  user_login: string;
-  response_text: string;
-  created_at: string;
-};
-
-export type CustomCommandDefinition = {
-  id: number;
-  name: string;
-  permission: PermissionLevel;
-  enabled: boolean;
-  globalCooldownSeconds: number;
-  userCooldownSeconds: number;
-  useCount: number;
-  lastUsedAt: string;
-  createdAt: string;
-  updatedAt: string;
-  aliases: string[];
-  responses: string[];
-};
-
-export type CustomCommandSaveInput = {
-  id?: number;
-  name?: unknown;
-  permission?: unknown;
-  enabled?: unknown;
-  globalCooldownSeconds?: unknown;
-  userCooldownSeconds?: unknown;
-  aliases?: unknown;
-  responses?: unknown;
-  responseText?: unknown;
-};
-
-export type CustomCommandInvocation = {
-  id: number;
-  commandId?: number;
-  commandName: string;
-  aliasUsed: string;
-  userKey: string;
-  userLogin: string;
-  responseText: string;
-  createdAt: string;
-};
-
-export type CustomCommandContext = {
-  message: ChatMessage;
-  name: string;
-  args: string[];
-  rawArgs: string;
-  reply: (message: string, metadata?: MessageQueueMetadata) => void;
-};
+export type {
+  CustomCommandContext,
+  CustomCommandDefinition,
+  CustomCommandInvocation,
+  CustomCommandInvocationRow,
+  CustomCommandRow,
+  CustomCommandSaveInput,
+} from "./commands.types";
 
 export class CustomCommandsService {
   constructor(
@@ -800,148 +751,3 @@ export class CustomCommandsService {
 }
 
 export const getReservedCustomCommandNames = () => getProtectedCommandNames();
-
-const normalizePermission = (value: unknown) => {
-  const permission = typeof value === "string" ? value : PermissionLevel.Viewer;
-
-  if (!permissionValues.has(permission as PermissionLevel)) {
-    throw new Error(
-      "Permission must be viewer, moderator, broadcaster, or admin.",
-    );
-  }
-
-  return permission as PermissionLevel;
-};
-
-const normalizeCooldown = (value: unknown, fallback: number, field: string) =>
-  parseSafeInteger(value, {
-    field,
-    fallback,
-    min: 0,
-    max: limits.customCommandCooldownMaxSeconds,
-  });
-
-const normalizeAliasList = (value: unknown) => {
-  const raw = Array.isArray(value)
-    ? value
-    : typeof value === "string"
-      ? value.split(/[,\n]/)
-      : [];
-  const aliases = raw
-    .map((item) => String(item ?? "").trim())
-    .filter(Boolean)
-    .map((item) => normalizeCommandName(item, "Alias"))
-    .filter(Boolean);
-  const unique = [...new Set(aliases)];
-
-  if (unique.length > limits.customCommandAliasesMax) {
-    throw new Error(`Use ${limits.customCommandAliasesMax} aliases or fewer.`);
-  }
-
-  return unique;
-};
-
-const normalizeResponseList = (value: unknown) => {
-  const raw = Array.isArray(value)
-    ? value
-    : typeof value === "string"
-      ? value.split(/\n+/)
-      : [];
-  const responses = raw
-    .map((item) => String(item ?? "").trim())
-    .filter(Boolean)
-    .map((item) => {
-      const response = sanitizeChatMessage(item);
-      assertNoSecretLikeContent(response, "Custom command response");
-      return response;
-    })
-    .filter(Boolean);
-
-  if (responses.length === 0) {
-    throw new Error("At least one response is required.");
-  }
-
-  if (responses.length > limits.customCommandResponsesMax) {
-    throw new Error(
-      `Use ${limits.customCommandResponsesMax} response variants or fewer.`,
-    );
-  }
-
-  return responses;
-};
-
-const sanitizePreviewArgs = (value: unknown) =>
-  typeof value === "string"
-    ? value
-        .trim()
-        .replace(/[\r\n]+/g, " ")
-        .slice(0, 200)
-    : "";
-
-const userKey = (message: ChatMessage) => message.userId || message.userLogin;
-
-const renderTemplate = (
-  template: string,
-  input: {
-    message: ChatMessage;
-    args: string[];
-    rawArgs: string;
-    count: number;
-  },
-) => {
-  const target =
-    input.args[0]?.replace(/^@/, "") || input.message.userDisplayName;
-  const values: Record<string, string> = {
-    user: input.message.userDisplayName || input.message.userLogin,
-    displayName: input.message.userDisplayName || input.message.userLogin,
-    login: input.message.userLogin,
-    args: input.rawArgs,
-    target,
-    count: String(input.count),
-  };
-
-  input.args.slice(0, 9).forEach((arg, index) => {
-    values[`arg${index + 1}`] = arg;
-  });
-
-  const rendered = template.replace(
-    /\{([a-zA-Z][a-zA-Z0-9]*)\}/g,
-    (match, key) =>
-      Object.prototype.hasOwnProperty.call(values, key)
-        ? (values[key] ?? "")
-        : match,
-  );
-
-  return sanitizeChatMessage(rendered);
-};
-
-const invocationFromRow = (
-  row: CustomCommandInvocationRow,
-): CustomCommandInvocation => ({
-  id: row.id,
-  commandId: row.command_id ?? undefined,
-  commandName: row.command_name,
-  aliasUsed: row.alias_used,
-  userKey: row.user_key,
-  userLogin: row.user_login,
-  responseText: row.response_text,
-  createdAt: row.created_at,
-});
-
-const previewActor: ChatMessage = {
-  id: "preview",
-  text: "",
-  userId: "preview",
-  userLogin: "viewer",
-  userDisplayName: "Viewer",
-  broadcasterUserId: "preview-broadcaster",
-  badges: [],
-  isBroadcaster: false,
-  isMod: false,
-  isVip: false,
-  isSubscriber: false,
-  source: "local",
-  receivedAt: new Date(),
-};
-
-const timestamp = () => new Date().toISOString();

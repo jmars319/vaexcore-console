@@ -1,18 +1,14 @@
 {
   "label": "vaexcore-console",
-  "maxImplementationFileLines": 900,
+  "maxImplementationFileLines": 835,
   "maxStyleFileLines": 400,
   "maxAppShellLines": 350,
   "maxDesktopMainLines": 450,
   "maxDomainBarrelLines": 900,
   "nearLineWarning": 25,
-  "specificFileBudgets": {
-    "scripts/smoke-setup-ui.mjs": 1850,
-    "desktop/shared/src/discord/setup.ts": 1200,
-    "desktop/shared/src/modules/commands/commands.service.ts": 1000
-  },
+  "specificFileBudgets": {},
   "assetBudgets": [
-    { "path": "desktop/shared/assets/logo.jpg", "budgetKb": 1700 },
+    { "path": "desktop/shared/assets/logo.jpg", "budgetKb": 1600 },
     { "path": "desktop/macOS/assets/icon.icns", "budgetKb": 2600 },
     { "path": "desktop/windows/assets/icon.ico", "budgetKb": 210 }
   ],
