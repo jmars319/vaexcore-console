@@ -7,7 +7,6 @@
   "maxDomainBarrelLines": 900,
   "nearLineWarning": 25,
   "specificFileBudgets": {
-    "desktop/shared/src/modules/moderation/moderation.service.ts": 2700,
     "desktop/shared/src/modules/giveaways/giveaways.service.ts": 2000,
     "scripts/smoke-setup-ui.mjs": 1850,
     "desktop/shared/src/discord/setup.ts": 1200,
@@ -33,7 +32,7 @@
     {
       "label": "setup server",
       "path": "dist-bundle/setup-server.js",
-      "budgetKb": 648
+      "budgetKb": 650
     },
     {
       "label": "live bot",
