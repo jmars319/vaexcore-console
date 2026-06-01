@@ -484,7 +484,7 @@ function renderReadyForStreamCard(runtime = {}, readiness = {}) {
       ? list(
           rehearsal.steps.map(
             (step) =>
-              `${step.ok ? "PASS" : "CHECK"} ${step.label}: ${step.detail}`,
+              `${step.ok ? "Ready" : "Check"} ${step.label}: ${step.detail}`,
           ),
           rehearsalReady ? "ok" : "warn",
         )

@@ -192,7 +192,8 @@ export const customCommandPresetPackDefinitions = [
   {
     id: "support-links",
     label: "Support Links Pack",
-    description: "YouTube, tips, merch, and setup/specs placeholders.",
+    description:
+      "Draft YouTube, tips, merch, and setup/specs links for review.",
     presetIds: ["youtube", "tip", "merch", "specs"],
   },
 ] as const;
@@ -226,7 +227,7 @@ export const inspectCustomCommandPreset = (
     ...preset,
     inspection: {
       status: conflicts.length ? "blocked" : "ready",
-      detail: conflicts.join("; ") || "Ready to create disabled.",
+      detail: conflicts.join("; ") || "Ready to create as disabled drafts.",
       nextAction: conflicts.length
         ? "Resolve the command or alias conflict first."
         : "Create, edit links/copy, then enable when tested.",
@@ -275,7 +276,7 @@ export const inspectCustomCommandPresetPack = (
         ? `${ready.length} ready, ${blocked.length} already present or blocked.`
         : `${ready.length} commands ready to create disabled.`,
       nextAction: ready.length
-        ? "Create ready commands disabled, edit placeholder links/copy, then enable after local tests."
+        ? "Create ready commands as disabled drafts, review links and copy, then enable after local tests."
         : "Resolve command or alias conflicts before creating this pack.",
     },
   };

@@ -116,7 +116,7 @@ function renderDiscordRelayPanel(discord) {
       ? list(
           readiness.checks.map(
             (check) =>
-              `${check.ok ? "PASS" : "TODO"} ${check.key}: ${check.detail}`,
+              `${check.ok ? "Ready" : "Needs setup"} ${check.key}: ${check.detail}`,
           ),
           readiness.ready ? "ok" : "warn",
         )
@@ -124,7 +124,7 @@ function renderDiscordRelayPanel(discord) {
         ? list(
             localReadiness.checks.map(
               (check) =>
-                `${check.ok ? "PASS" : "TODO"} ${check.key}: ${check.detail}`,
+                `${check.ok ? "Ready" : "Needs setup"} ${check.key}: ${check.detail}`,
             ),
             localReadiness.ready ? "ok" : "warn",
           )

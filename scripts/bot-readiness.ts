@@ -432,9 +432,9 @@ function printReport() {
 }
 
 function statusLabel(status: CheckStatus) {
-  if (status === "pass") return "PASS";
+  if (status === "pass") return "READY";
   if (status === "warn") return "WARN";
-  return "TODO";
+  return "NEEDS SETUP";
 }
 
 function safeError(error: unknown) {

@@ -193,7 +193,7 @@ function renderRelaySetupGuide(options = {}) {
             ? list(
                 readiness.checks.map(
                   (check) =>
-                    `${check.ok ? "PASS" : "TODO"} ${check.key}: ${check.detail}`,
+                    `${check.ok ? "Ready" : "Needs setup"} ${check.key}: ${check.detail}`,
                 ),
                 readiness.ready ? "ok" : "warn",
               )
@@ -291,7 +291,7 @@ function renderValidationSummary() {
       validationChecks.map((check) =>
         h("li", {
           className: check.ok ? "ok" : "bad",
-          text: `${check.ok ? "PASS" : "FAIL"} ${check.name}: ${check.detail}`,
+          text: `${check.ok ? "Ready" : "Needs attention"} ${check.name}: ${check.detail}`,
         }),
       ),
     );

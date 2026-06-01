@@ -3,7 +3,7 @@ function renderCommandPresetPackCard() {
 
   return card("Utility Packs", [
     callout(
-      "Packs create ready commands disabled. Review placeholder links/copy, then enable only after local tests.",
+      "Packs create commands as disabled drafts. Review links and copy, then enable only after local tests.",
       "muted",
     ),
     packs.length

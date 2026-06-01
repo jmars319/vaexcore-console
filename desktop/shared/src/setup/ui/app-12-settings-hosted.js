@@ -183,7 +183,7 @@ function renderHostedRelaySetup(relay = {}, options = {}) {
       ? list(
           readiness.checks.map(
             (check) =>
-              `${check.ok ? "PASS" : "TODO"} ${check.key}: ${check.detail}`,
+              `${check.ok ? "Ready" : "Needs setup"} ${check.key}: ${check.detail}`,
           ),
           readiness.ready ? "ok" : "warn",
         )
@@ -191,7 +191,7 @@ function renderHostedRelaySetup(relay = {}, options = {}) {
         ? list(
             relay.readiness.checks.map(
               (check) =>
-                `${check.ok ? "PASS" : "TODO"} ${check.key}: ${check.detail}`,
+                `${check.ok ? "Ready" : "Needs setup"} ${check.key}: ${check.detail}`,
             ),
             relay.readiness.ready ? "ok" : "warn",
           )

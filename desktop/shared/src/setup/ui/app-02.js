@@ -269,7 +269,7 @@ function renderBotCompletionContent() {
       ? list(
           state.botRehearsal.steps.map(
             (step) =>
-              `${step.ok ? "PASS" : "TODO"} ${step.label}: ${step.detail}`,
+              `${step.ok ? "Ready" : "Needs setup"} ${step.label}: ${step.detail}`,
           ),
           state.botRehearsal.steps.every((step) => step.ok) ? "ok" : "warn",
         )

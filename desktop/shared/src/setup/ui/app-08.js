@@ -61,7 +61,7 @@ function renderTwitchOps() {
         ? list(
             readiness.checks.map(
               (check) =>
-                `${check.ok ? "PASS" : "FAIL"} ${check.name}: ${check.detail}`,
+                `${check.ok ? "Ready" : "Needs attention"} ${check.name}: ${check.detail}`,
             ),
             readiness.ready ? "ok" : "warn",
           )
@@ -324,7 +324,7 @@ function renderDiscord() {
             ? list(
                 readiness.checks.map(
                   (check) =>
-                    `${check.ok ? "PASS" : "TODO"} ${check.name}: ${check.detail}`,
+                    `${check.ok ? "Ready" : "Needs setup"} ${check.name}: ${check.detail}`,
                 ),
                 readiness.ready ? "ok" : "warn",
               )

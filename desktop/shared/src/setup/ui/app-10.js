@@ -255,7 +255,7 @@ function renderTwitchConfigurationPanel(
       validationChecks.map((check) =>
         h("li", {
           className: check.ok ? "ok" : "bad",
-          text: `${check.ok ? "PASS" : "FAIL"} ${check.name}: ${check.detail}`,
+          text: `${check.ok ? "Ready" : "Needs attention"} ${check.name}: ${check.detail}`,
         }),
       ),
     ),
@@ -359,7 +359,7 @@ function renderTwitchTransportPanel(relay, hostedMode, options = {}) {
       ? list(
           relay.readiness.checks.map(
             (check) =>
-              `${check.ok ? "PASS" : "FAIL"} ${check.key}: ${check.detail}`,
+              `${check.ok ? "Ready" : "Needs attention"} ${check.key}: ${check.detail}`,
           ),
           relay.readiness.ready ? "ok" : "warn",
         )
