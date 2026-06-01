@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 const requiredScopes = [
   "user:read:chat",
@@ -22,7 +22,10 @@ const importerFiles = ["desktop/shared/src/setup/server.ts"];
 const errors = [];
 
 for (const file of files) {
-  const source = readFileSync(resolve(file), "utf8");
+  const source =
+    file === "desktop/shared/src/setup/ui/app.js"
+      ? readSetupUiSource(file)
+      : readFileSync(resolve(file), "utf8");
   for (const scope of requiredScopes) {
     if (!source.includes(scope)) {
       errors.push(`${file} is missing required Twitch scope ${scope}`);
@@ -68,3 +71,13 @@ if (errors.length > 0) {
 }
 
 console.log("Required Twitch scopes are aligned.");
+
+function readSetupUiSource(entryFile) {
+  const entryPath = resolve(entryFile);
+  const source = readFileSync(entryPath, "utf8");
+  const baseDir = dirname(entryPath);
+  const chunks = [...source.matchAll(/"\/ui\/([^"]+\.js)"/g)].map((match) =>
+    readFileSync(resolve(baseDir, match[1]), "utf8"),
+  );
+  return [source, ...chunks].join("\n");
+}

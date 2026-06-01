@@ -1,11 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { electronMainSource } from "./support/electron-source.mjs";
 
 const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
-const electronMain = readFileSync(
-  resolve("desktop/shared/electron/main.cjs"),
-  "utf8",
-);
+const electronMain = electronMainSource();
 
 assert(
   packageJson.scripts["app:build"] === "npm run app:build:mac",

@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { setupUiJavaScriptSource } from "./support/setup-ui-source.mjs";
 
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-moderation-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
@@ -25,7 +26,7 @@ try {
 }
 
 async function runSmoke() {
-  const appJs = await text("/ui/app.js");
+  const appJs = await setupUiJavaScriptSource(text);
   assert(appJs.includes("Moderation"), "Moderation tab renders");
   assert(
     appJs.includes("Run moderation test"),

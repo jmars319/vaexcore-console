@@ -8,9 +8,7 @@ const configPath = path.join(root, "scripts", "maintainability.config.json");
 const config = fs.existsSync(configPath)
   ? JSON.parse(fs.readFileSync(configPath, "utf8"))
   : {};
-const budgetBytes =
-  Number(process.env.BUNDLE_BUDGET_KB ?? config.initialBundleBudgetKb ?? 450) *
-  1024;
+const nearBudgetWarningBytes = Number(config.nearBudgetWarningKb ?? 0) * 1024;
 const candidateAssetDirs = config.assetDirs ?? [
   "dist/assets",
   "build/assets",
@@ -21,88 +19,198 @@ const candidateAssetDirs = config.assetDirs ?? [
   "desktop/shared/src/setup/ui/dist/assets",
 ];
 
-function sizeRecord(base, file) {
-  const absolute = path.join(base, file);
-  const raw = fs.readFileSync(absolute);
+function sizeBuffer(buffer) {
   return {
-    file: path.relative(root, absolute).replaceAll("\\", "/"),
-    rawBytes: raw.byteLength,
-    gzipBytes: zlib.gzipSync(raw).byteLength,
+    rawBytes: buffer.byteLength,
+    gzipBytes: zlib.gzipSync(buffer).byteLength,
   };
 }
 
-const assets = [];
-for (const dir of candidateAssetDirs) {
-  const absolute = path.join(root, dir);
-  if (!fs.existsSync(absolute)) continue;
-  for (const file of fs.readdirSync(absolute)) {
-    if (file.endsWith(".js")) assets.push(sizeRecord(absolute, file));
-  }
+function formatBytes(bytes) {
+  return (bytes / 1024).toFixed(2) + " kB";
 }
 
+function fileSizeRecord(file) {
+  const absolute = path.join(root, file);
+  if (!fs.existsSync(absolute)) {
+    return undefined;
+  }
+  return {
+    file,
+    ...sizeBuffer(fs.readFileSync(absolute)),
+  };
+}
+
+function directorySizeRecord(entry) {
+  const absolute = path.join(root, entry.directory);
+  if (!fs.existsSync(absolute)) {
+    return undefined;
+  }
+  const extension = entry.extension ?? ".js";
+  const files = fs
+    .readdirSync(absolute)
+    .filter((file) => file.endsWith(extension))
+    .sort();
+  const records = files
+    .map((file) => fileSizeRecord(path.join(entry.directory, file)))
+    .filter(Boolean);
+  const rawBytes = records.reduce(
+    (total, record) => total + record.rawBytes,
+    0,
+  );
+  const gzipBytes = records.reduce(
+    (total, record) => total + record.gzipBytes,
+    0,
+  );
+  return {
+    file: `${entry.directory}/*${extension}`,
+    rawBytes,
+    gzipBytes,
+    children: records,
+  };
+}
+
+function collectBuiltJsAssets() {
+  const assets = [];
+  for (const dir of candidateAssetDirs) {
+    const absolute = path.join(root, dir);
+    if (!fs.existsSync(absolute)) continue;
+    for (const file of fs.readdirSync(absolute)) {
+      const candidate = path.join(absolute, file);
+      if (fs.statSync(candidate).isDirectory()) {
+        for (const nested of fs.readdirSync(candidate)) {
+          if (nested.endsWith(".js")) {
+            assets.push(
+              fileSizeRecord(
+                path.join(dir, file, nested).replaceAll("\\", "/"),
+              ),
+            );
+          }
+        }
+        continue;
+      }
+      if (file.endsWith(".js"))
+        assets.push(fileSizeRecord(path.join(dir, file)));
+    }
+  }
+  const byFile = new Map();
+  for (const asset of assets.filter(Boolean)) byFile.set(asset.file, asset);
+  return [...byFile.values()];
+}
+
+function defaultLargestAssetReport(assets) {
+  const budgetBytes =
+    Number(
+      process.env.BUNDLE_BUDGET_KB ?? config.initialBundleBudgetKb ?? 450,
+    ) * 1024;
+  const sorted = assets.sort((a, b) => b.rawBytes - a.rawBytes);
+  const initialPattern = config.initialChunkPattern
+    ? new RegExp(config.initialChunkPattern)
+    : /(^|\/)index-[\w-]+\.js$/;
+  const initial =
+    sorted.find((asset) => initialPattern.test(asset.file)) ?? sorted[0];
+  console.log(
+    "Initial/largest route chunk: " +
+      initial.file +
+      " " +
+      formatBytes(initial.rawBytes) +
+      " raw / " +
+      formatBytes(initial.gzipBytes) +
+      " gzip",
+  );
+  console.log("Target: " + formatBytes(budgetBytes) + " raw");
+  console.log("");
+  return { initial, budgetBytes, sorted };
+}
+
+function entryBudgetReport() {
+  const entries = Array.isArray(config.entryBudgets) ? config.entryBudgets : [];
+  const results = entries.map((entry) => {
+    const record = entry.directory
+      ? directorySizeRecord(entry)
+      : fileSizeRecord(entry.path);
+    return { entry, record };
+  });
+
+  if (!results.length) return [];
+
+  console.log("Entrypoint budgets:");
+  for (const { entry, record } of results) {
+    if (!record) {
+      console.log(
+        `- ${entry.label}: missing (${entry.path ?? entry.directory})`,
+      );
+      continue;
+    }
+    console.log(
+      `- ${entry.label}: ${formatBytes(record.rawBytes)} raw / ${formatBytes(
+        record.gzipBytes,
+      )} gzip (budget ${entry.budgetKb} kB)`,
+    );
+  }
+  console.log("");
+  return results;
+}
+
+console.log((config.label ?? path.basename(root)) + " build size report");
+const assets = collectBuiltJsAssets();
 if (assets.length === 0) {
-  const entryCandidates = config.entryFiles ?? [
-    "src/index.ts",
-    "src/index.js",
-    "src/App.tsx",
-    "apps/desktop/src/App.tsx",
-    "apps/desktopapp/src/App.tsx",
-  ];
-  const entries = entryCandidates
-    .filter((entry) => fs.existsSync(path.join(root, entry)))
-    .map((entry) => ({
-      entry,
-      lines: fs.readFileSync(path.join(root, entry), "utf8").split(/\r?\n/)
-        .length,
-    }));
-  console.log((config.label ?? path.basename(root)) + " build size report");
   console.log(
     "No built JavaScript assets found. Run the app build first for bundle sizes.",
   );
-  for (const entry of entries)
-    console.log("- " + entry.entry + ": " + entry.lines + " source lines");
   if (strict && config.requireBuiltAssets === true) process.exit(1);
   process.exit(0);
 }
 
-const sorted = assets.sort((a, b) => b.rawBytes - a.rawBytes);
-const initialPattern = config.initialChunkPattern
-  ? new RegExp(config.initialChunkPattern)
-  : /(^|\/)index-[\w-]+\.js$/;
-const initial =
-  sorted.find((asset) => initialPattern.test(asset.file)) ?? sorted[0];
-console.log((config.label ?? path.basename(root)) + " web bundle report");
-console.log(
-  "Initial/largest route chunk: " +
-    initial.file +
-    " " +
-    (initial.rawBytes / 1024).toFixed(2) +
-    " kB raw / " +
-    (initial.gzipBytes / 1024).toFixed(2) +
-    " kB gzip",
-);
-console.log("Target: " + (budgetBytes / 1024).toFixed(0) + " kB raw");
-console.log("");
+const entryResults = entryBudgetReport();
+const { sorted } = defaultLargestAssetReport(assets);
+
 console.log("Largest JavaScript chunks:");
-for (const asset of sorted.slice(0, 12))
+for (const asset of sorted.slice(0, 12)) {
   console.log(
     "- " +
       asset.file +
       ": " +
-      (asset.rawBytes / 1024).toFixed(2) +
-      " kB raw / " +
-      (asset.gzipBytes / 1024).toFixed(2) +
-      " kB gzip",
+      formatBytes(asset.rawBytes) +
+      " raw / " +
+      formatBytes(asset.gzipBytes) +
+      " gzip",
   );
+}
 
-if (initial.rawBytes > budgetBytes) {
-  const message =
-    "Initial/largest route chunk exceeds target by " +
-    ((initial.rawBytes - budgetBytes) / 1024).toFixed(2) +
-    " kB.";
-  if (strict) {
-    console.error(message);
-    process.exit(1);
+const violations = [];
+const warnings = [];
+for (const { entry, record } of entryResults) {
+  if (!record) {
+    violations.push(`${entry.label} output is missing.`);
+    continue;
   }
-  console.warn(message);
+  const budgetBytes = Number(entry.budgetKb) * 1024;
+  if (record.rawBytes > budgetBytes) {
+    violations.push(
+      `${entry.label} exceeds budget by ${formatBytes(record.rawBytes - budgetBytes)}.`,
+    );
+  } else if (
+    nearBudgetWarningBytes > 0 &&
+    budgetBytes - record.rawBytes <= nearBudgetWarningBytes
+  ) {
+    warnings.push(
+      `${entry.label} is within ${formatBytes(budgetBytes - record.rawBytes)} of budget.`,
+    );
+  }
+}
+
+if (warnings.length > 0) {
+  console.log("");
+  console.log("Near-budget warnings:");
+  for (const warning of warnings) console.log("- " + warning);
+}
+
+if (violations.length > 0 || (strict && warnings.length > 0)) {
+  if (violations.length > 0) {
+    console.log("");
+    console.log("Bundle budget violations:");
+    for (const violation of violations) console.log("- " + violation);
+  }
+  if (strict) process.exit(1);
 }

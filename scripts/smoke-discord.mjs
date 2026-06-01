@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { setupUiJavaScriptSource } from "./support/setup-ui-source.mjs";
 
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-discord-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
@@ -34,7 +35,7 @@ try {
 }
 
 async function runSmoke() {
-  const appJs = await text("/ui/app.js");
+  const appJs = await setupUiJavaScriptSource(text);
   assert(appJs.includes('["discord", "Discord"]'), "Discord tab is registered");
   assert(appJs.includes("Server Layout"), "Discord setup UI is present");
   assert(

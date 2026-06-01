@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { setupUiJavaScriptSource } from "./support/setup-ui-source.mjs";
 
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-twitch-ops-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
@@ -32,7 +33,7 @@ try {
 }
 
 async function runSmoke() {
-  const appJs = await text("/ui/app.js");
+  const appJs = await setupUiJavaScriptSource(text);
   assert(appJs.includes('["twitch-ops", "Twitch Ops"]'), "tab is registered");
   assert(appJs.includes("Start raid"), "raid control is present");
   assert(appJs.includes("Guarded live controls"), "guarded UI copy is present");

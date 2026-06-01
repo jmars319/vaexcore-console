@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { setupUiJavaScriptSource } from "./support/setup-ui-source.mjs";
 
 const require = createRequire(import.meta.url);
 const Database = require("better-sqlite3");
@@ -38,7 +39,7 @@ async function runSmoke() {
 }
 
 async function verifyUiAndSafetyCopy() {
-  const appJs = await text("/ui/app.js");
+  const appJs = await setupUiJavaScriptSource(text);
 
   assert(appJs.includes("Giveaways"), "Giveaways tab renders");
   assert(appJs.includes("Readiness Checklist"), "readiness checklist renders");

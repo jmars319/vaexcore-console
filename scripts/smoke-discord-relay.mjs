@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { setupUiJavaScriptSource } from "./support/setup-ui-source.mjs";
 
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-discord-relay-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
@@ -30,7 +31,7 @@ try {
 }
 
 async function runSmoke() {
-  const appJs = await text("/ui/app.js");
+  const appJs = await setupUiJavaScriptSource(text);
   assert(appJs.includes("Relay Slash Commands"), "Discord Relay UI exists");
   assert(
     appJs.includes("Relay Slash Commands And Suggestions"),

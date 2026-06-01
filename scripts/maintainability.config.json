@@ -1,11 +1,58 @@
 {
   "label": "vaexcore-console",
-  "maxImplementationFileLines": 13000,
-  "maxStyleFileLines": 1200,
-  "maxAppShellLines": 1400,
-  "maxDesktopMainLines": 600,
+  "maxImplementationFileLines": 900,
+  "maxStyleFileLines": 400,
+  "maxAppShellLines": 350,
+  "maxDesktopMainLines": 450,
   "maxDomainBarrelLines": 900,
-  "initialBundleBudgetKb": 900,
+  "nearLineWarning": 25,
+  "specificFileBudgets": {
+    "desktop/shared/src/setup/server.ts": 12000,
+    "desktop/shared/src/modules/moderation/moderation.service.ts": 2700,
+    "desktop/shared/src/modules/giveaways/giveaways.service.ts": 2000,
+    "scripts/smoke-setup-ui.mjs": 1850,
+    "desktop/shared/src/discord/setup.ts": 1200,
+    "desktop/shared/src/modules/commands/commands.service.ts": 1000
+  },
+  "assetBudgets": [
+    { "path": "desktop/shared/assets/logo.jpg", "budgetKb": 1700 },
+    { "path": "desktop/macOS/assets/icon.icns", "budgetKb": 2600 },
+    { "path": "desktop/windows/assets/icon.ico", "budgetKb": 210 }
+  ],
+  "bannedImportPatterns": [
+    "dist/",
+    "dist-bundle/",
+    "node_modules/",
+    "release/"
+  ],
+  "contractSnapshots": {
+    "setupRoutes": "scripts/contracts/setup-api-routes.json"
+  },
+  "initialBundleBudgetKb": 650,
+  "nearBudgetWarningKb": 4,
+  "entryBudgets": [
+    {
+      "label": "setup server",
+      "path": "dist-bundle/setup-server.js",
+      "budgetKb": 645
+    },
+    {
+      "label": "live bot",
+      "path": "dist-bundle/live-bot.js",
+      "budgetKb": 300
+    },
+    {
+      "label": "setup UI loader",
+      "path": "dist-bundle/setup-ui/app.js",
+      "budgetKb": 8
+    },
+    {
+      "label": "setup UI total JS",
+      "directory": "dist-bundle/setup-ui",
+      "extension": ".js",
+      "budgetKb": 390
+    }
+  ],
   "ignoredSegments": [],
   "allowedGenerated": [
     "src/vite-env.d.ts",

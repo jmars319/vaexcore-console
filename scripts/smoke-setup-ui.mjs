@@ -50,8 +50,8 @@ async function runSmoke() {
   assert(shell.includes("/ui/styles.css"), "setup shell references styles.css");
   assert(shell.includes("/ui/logo.jpg"), "setup shell references logo asset");
 
-  const appJs = await text("/ui/app.js");
-  const styles = await text("/ui/styles.css");
+  const appJs = await setupUiJavaScriptSource(await text("/ui/app.js"));
+  const styles = await setupUiStyleSource(await text("/ui/styles.css"));
   const logo = await binary("/ui/logo.jpg");
   assert(logo.contentType === "image/jpeg", "logo asset is served as a JPEG");
   assert(logo.byteLength > 1000, "logo asset is not empty");
@@ -1705,6 +1705,24 @@ async function expectOk(path, body = {}) {
   const result = await json(path, { method: "POST", body });
   assert(result.ok === true, `${path} returns ok`);
   return result;
+}
+
+async function setupUiJavaScriptSource(loaderSource) {
+  const chunkPaths = [...loaderSource.matchAll(/"\/ui\/([^"]+\.js)"/g)].map(
+    (match) => `/ui/${match[1]}`,
+  );
+  const chunkSources = await Promise.all(chunkPaths.map((path) => text(path)));
+  return [loaderSource, ...chunkSources].join("\n");
+}
+
+async function setupUiStyleSource(entrySource) {
+  const importPaths = [
+    ...entrySource.matchAll(/@import\s+url\("([^"]+)"\);/g),
+  ].map((match) => `/ui/${match[1].replace(/^\.\//, "")}`);
+  const importedSources = await Promise.all(
+    importPaths.map((path) => text(path)),
+  );
+  return [entrySource, ...importedSources].join("\n");
 }
 
 async function text(path) {

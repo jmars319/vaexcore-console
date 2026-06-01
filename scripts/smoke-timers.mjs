@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { setupUiJavaScriptSource } from "./support/setup-ui-source.mjs";
 
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-timers-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
@@ -44,7 +45,7 @@ try {
 }
 
 async function runApiSmoke() {
-  const appJs = await text("/ui/app.js");
+  const appJs = await setupUiJavaScriptSource(text);
   assert(appJs.includes("Timers"), "Timers tab renders");
   assert(appJs.includes("Save timer"), "Timers tab exposes save");
   assert(appJs.includes("Send now"), "Timers tab exposes manual send");

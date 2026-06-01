@@ -1,8 +1,10 @@
 import { createServer } from "node:http";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { electronMainSource } from "./support/electron-source.mjs";
+import { setupUiJavaScriptSource } from "./support/setup-ui-source.mjs";
 
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-relay-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
@@ -30,11 +32,8 @@ try {
 }
 
 async function runSmoke() {
-  const appJs = await text("/ui/app.js");
-  const electronMain = readFileSync(
-    resolve("desktop/shared/electron/main.cjs"),
-    "utf8",
-  );
+  const appJs = await setupUiJavaScriptSource(text);
+  const electronMain = electronMainSource();
   assert(
     appJs.includes("Twitch Chat Transport"),
     "Assisted transport UI exists",
