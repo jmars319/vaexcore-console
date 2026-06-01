@@ -27,14 +27,15 @@ export type ConsoleGiveawayStudioMarkerOptions = {
   metadata?: Record<string, unknown> | undefined;
 };
 
-const giveawayStudioActionLabels: Record<ConsoleGiveawayStudioAction, string> = {
-  start: "started",
-  close: "closed",
-  "last-call": "last call",
-  draw: "draw",
-  reroll: "reroll",
-  end: "ended",
-};
+const giveawayStudioActionLabels: Record<ConsoleGiveawayStudioAction, string> =
+  {
+    start: "started",
+    close: "closed",
+    "last-call": "last call",
+    draw: "draw",
+    reroll: "reroll",
+    end: "ended",
+  };
 
 export const safeStudioSourceEventPart = (value: string) =>
   value
@@ -121,10 +122,13 @@ export function buildConsoleGiveawayStudioMarker(
       action,
       sourceEventSuffix,
     }),
-    metadata: studioConsoleMarkerMetadata(consoleGiveawayMarkerEventType(action), {
-      giveaway: giveawayMetadata(giveaway),
-      ...options.metadata,
-    }),
+    metadata: studioConsoleMarkerMetadata(
+      consoleGiveawayMarkerEventType(action),
+      {
+        giveaway: giveawayMetadata(giveaway),
+        ...options.metadata,
+      },
+    ),
   };
 }
 

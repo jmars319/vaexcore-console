@@ -59,11 +59,19 @@ assert.equal(
 assert.equal(giveaway.metadata.contract, "vaexcore.studio.marker.v1");
 assert.equal(giveaway.metadata.eventType, "console.giveaway.draw");
 
-const markers = await client.markers({ sourceApp: "vaexcore-console", limit: 20 });
-const sourceEventIds = new Set(markers.markers.map((marker) => marker.source_event_id));
+const markers = await client.markers({
+  sourceApp: "vaexcore-console",
+  limit: 20,
+});
+const sourceEventIds = new Set(
+  markers.markers.map((marker) => marker.source_event_id),
+);
 assert.equal(markers.markers.length, 2);
 assert.equal(sourceEventIds.has("chat:rehearsal-message-1"), true);
-assert.equal(sourceEventIds.has("vaexcore-console:giveaway:42:draw:winner-7"), true);
+assert.equal(
+  sourceEventIds.has("vaexcore-console:giveaway:42:draw:winner-7"),
+  true,
+);
 
 console.log("console studio marker rehearsal passed");
 

@@ -19,7 +19,7 @@
     "app:dist": "npm run app:dist:mac",
     "app:dist:mac": "npm run build && node scripts/run-electron-builder.mjs --mac dir && node desktop/macOS/scripts/install-electron-better-sqlite3.mjs && node desktop/macOS/scripts/build-mac-dmg-from-app.mjs",
     "app:zip": "npm run app:build && node desktop/macOS/scripts/package-unsigned-mac.mjs",
-    "ci": "npm run lint && npm run check:scopes && npm run typecheck && npm run smoke:ci",
+    "ci": "npm run lint && npm run check:scopes && npm run typecheck && npm run smoke:ci && npm run audit:maintainability && npm run budget:bundle",
     "bot:readiness": "tsx scripts/bot-readiness.ts",
     "check:env": "tsx desktop/shared/src/cli/checkEnv.ts",
     "check:scopes": "node scripts/check-twitch-scopes.mjs",
@@ -58,7 +58,10 @@
     "smoke:unsigned-release": "npm run app:zip && node desktop/macOS/scripts/smoke-unsigned-release.mjs",
     "smoke:cli-env": "npm run build && tsx scripts/smoke-cli-env-bootstrap.mjs",
     "start": "node --enable-source-maps dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "analyze:bundle": "node scripts/analyze-build.mjs",
+    "budget:bundle": "node scripts/analyze-build.mjs --strict",
+    "audit:maintainability": "node scripts/audit-maintainability.mjs --strict"
   },
   "engines": {
     "node": ">=22.0.0"

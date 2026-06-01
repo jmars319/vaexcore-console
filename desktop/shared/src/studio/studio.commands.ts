@@ -51,7 +51,10 @@ export const registerStudioCommands = ({
         await client.createMarker(marker);
         reply(`Studio marker created: ${marker.label}`);
       } catch (error) {
-        logger.warn({ error, label: marker.label }, "Studio marker creation failed");
+        logger.warn(
+          { error, label: marker.label },
+          "Studio marker creation failed",
+        );
         reply("Studio marker could not be created.");
       }
     },

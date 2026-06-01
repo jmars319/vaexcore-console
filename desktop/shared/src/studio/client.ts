@@ -80,11 +80,15 @@ export class StudioClient {
   async markers(options: StudioMarkerListOptions = {}) {
     const params = new URLSearchParams();
     if (options.sourceApp) params.set("source_app", options.sourceApp);
-    if (options.sourceEventId) params.set("source_event_id", options.sourceEventId);
-    if (typeof options.limit === "number") params.set("limit", String(options.limit));
+    if (options.sourceEventId)
+      params.set("source_event_id", options.sourceEventId);
+    if (typeof options.limit === "number")
+      params.set("limit", String(options.limit));
     const query = params.toString();
 
-    return this.request<StudioMarkersSnapshot>(query ? `/markers?${query}` : "/markers");
+    return this.request<StudioMarkersSnapshot>(
+      query ? `/markers?${query}` : "/markers",
+    );
   }
 
   private async request<T>(path: string, init: RequestInit = {}) {
