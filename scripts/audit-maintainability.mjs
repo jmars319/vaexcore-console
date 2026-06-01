@@ -274,8 +274,7 @@ if (config.contractSnapshots?.setupRoutes) {
         config.contractSnapshots.setupRoutes,
     );
   } else if (fs.existsSync(serverPath)) {
-    const source = fs.readFileSync(serverPath, "utf8");
-    const routes = extractSetupRoutes(source);
+    const routes = extractSetupRoutes();
     const expected = JSON.parse(fs.readFileSync(snapshotPath, "utf8"));
     const routeText = JSON.stringify(routes);
     const expectedText = JSON.stringify(expected);
@@ -341,8 +340,37 @@ if (violations.length > 0 || (strict && warnings.length > 0)) {
   if (strict) process.exit(1);
 }
 
-function extractSetupRoutes(source) {
+function extractSetupRoutes() {
   const routes = new Set();
+  const setupDir = path.join(root, "desktop/shared/src/setup");
+  const routeFiles = fs
+    .readdirSync(setupDir)
+    .filter((file) => /^server.*Routes\.ts$/.test(file))
+    .map((file) => path.join(setupDir, file));
+  const routeSources =
+    routeFiles.length > 0
+      ? routeFiles.map((file) => fs.readFileSync(file, "utf8"))
+      : [fs.readFileSync(path.join(setupDir, "server.ts"), "utf8")];
+
+  for (const source of routeSources) {
+    for (const match of source.matchAll(
+      /exactRoute\(\s*["']([A-Z]+)["']\s*,\s*["']([^"']+)["']/g,
+    )) {
+      routes.add(match[1] + " " + match[2]);
+    }
+    for (const match of source.matchAll(
+      /prefixRoute\(\s*["']([A-Z]+)["']\s*,\s*["']([^"']+)["']/g,
+    )) {
+      routes.add(match[1] + " " + match[2] + "*");
+    }
+  }
+
+  if (routes.size > 0) return [...routes].sort();
+
+  const source = fs.readFileSync(
+    path.join(root, "desktop/shared/src/setup/server.ts"),
+    "utf8",
+  );
   const exactPatterns = [
     /request\.method\s*===\s*"([A-Z]+)"\s*&&\s*url\.pathname\s*===\s*"([^"]+)"/g,
     /request\.method\s*===\s*"([A-Z]+)"\s*&&\s*\n\s*url\.pathname\s*===\s*"([^"]+)"/g,

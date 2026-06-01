@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 const requiredScopes = [
@@ -34,7 +34,10 @@ for (const file of files) {
 }
 
 for (const file of importerFiles) {
-  const source = readFileSync(resolve(file), "utf8");
+  const source =
+    file === "desktop/shared/src/setup/server.ts"
+      ? readSetupServerSource(file)
+      : readFileSync(resolve(file), "utf8");
   if (!source.includes("requiredTwitchScopes")) {
     errors.push(`${file} does not consume requiredTwitchScopes`);
   }
@@ -80,4 +83,14 @@ function readSetupUiSource(entryFile) {
     readFileSync(resolve(baseDir, match[1]), "utf8"),
   );
   return [source, ...chunks].join("\n");
+}
+
+function readSetupServerSource(entryFile) {
+  const entryPath = resolve(entryFile);
+  const baseDir = dirname(entryPath);
+  const modules = readdirSync(baseDir)
+    .filter((file) => /^server.*\.ts$/.test(file))
+    .sort()
+    .map((file) => readFileSync(resolve(baseDir, file), "utf8"));
+  return modules.join("\n");
 }
