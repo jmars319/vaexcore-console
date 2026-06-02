@@ -1,6 +1,6 @@
-# vaexcore console
+# Vaexcore Console by Tenra
 
-vaexcore console is a local Twitch operations bot and desktop control surface for stream commands, moderation, giveaways, markers, timers, and setup workflows. It is designed to keep stream operations quiet, inspectable, and operator-controlled.
+Vaexcore Console by Tenra is a local Twitch operations bot and desktop control surface for stream commands, moderation, giveaways, markers, timers, and setup workflows. It is designed to keep stream operations quiet, inspectable, and operator-controlled.
 
 Console is not a generic chatbot platform. It is a creator operations tool with live Twitch behavior, local setup flows, and integration points for the wider vaexcore suite.
 
@@ -61,7 +61,7 @@ npm run release:check
 
 Use local mode before connecting to Twitch. Live mode should only run after token scopes and channel IDs have been verified.
 
-`just credentials` is a safe visibility check for the shared JAMARQ provider env pool used by Codex and local CLIs. It prints variable names only. vaexcore console runtime secrets still belong in this repo's `.env` or the app setup store.
+`just credentials` is a safe visibility check for the shared JAMARQ provider env pool used by Codex and local CLIs. It prints variable names only. Vaexcore Console runtime secrets still belong in this repo's `.env` or the app setup store.
 
 ## Direction
 

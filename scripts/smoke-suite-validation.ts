@@ -8,7 +8,7 @@ import {
 const discovery: SuiteDiscoveryDocument = {
   schemaVersion: 1,
   appId: "vaexcore-console",
-  appName: "vaexcore console",
+  appName: "Vaexcore Console by Tenra",
   bundleIdentifier: "com.vaexil.vaexcore.console",
   version: "0.1.2",
   pid: 1234,

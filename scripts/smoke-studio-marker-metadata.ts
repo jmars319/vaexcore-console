@@ -25,7 +25,7 @@ assertStudioMarkerMetadataContract(manualMarker, "console.chat.marker");
 assert.equal(manualMarker.command, "vcmark");
 assert.deepEqual(manualMarker.source, {
   appId: "vaexcore-console",
-  appName: "vaexcore console",
+  appName: "Vaexcore Console by Tenra",
   workflow: "manual-chat-marker",
 });
 
@@ -46,7 +46,7 @@ const giveawayMarker = studioConsoleMarkerMetadata(
 assertStudioMarkerMetadataContract(giveawayMarker, "console.giveaway.draw");
 assert.deepEqual(giveawayMarker.source, {
   appId: "vaexcore-console",
-  appName: "vaexcore console",
+  appName: "Vaexcore Console by Tenra",
   workflow: "console-event-marker",
 });
 assert.deepEqual(giveawayMarker.giveaway, {

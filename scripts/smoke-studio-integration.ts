@@ -66,7 +66,7 @@ try {
       command: "vcmark",
       source: {
         appId: "vaexcore-console",
-        appName: "vaexcore console",
+        appName: "Vaexcore Console by Tenra",
         workflow: "manual-chat-marker",
       },
       userLogin: "caster",
@@ -85,7 +85,7 @@ try {
   assert.equal(metadata.eventType, "console.chat.marker");
   assert.deepEqual(metadata.source, {
     appId: "vaexcore-console",
-    appName: "vaexcore console",
+    appName: "Vaexcore Console by Tenra",
     workflow: "manual-chat-marker",
   });
   assert.equal(metadata.createdAt, "2026-05-02T12:00:00Z");
@@ -96,7 +96,7 @@ try {
     command: "vcmark",
     source: {
       appId: "vaexcore-console",
-      appName: "vaexcore console",
+      appName: "Vaexcore Console by Tenra",
       workflow: "manual-chat-marker",
     },
     userLogin: "caster",

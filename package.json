@@ -3,7 +3,7 @@
   "version": "0.1.2",
   "author": "Jason Marshall",
   "private": true,
-  "description": "vaexcore console is a quiet Twitch operations bot for commands, moderation, giveaways, and stream control without the usual clutter.",
+  "description": "Vaexcore Console by Tenra is a quiet Twitch operations bot for commands, moderation, giveaways, and stream control without the usual clutter.",
   "type": "module",
   "main": "desktop/shared/electron/main.cjs",
   "scripts": {

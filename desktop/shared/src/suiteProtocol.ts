@@ -16,7 +16,7 @@ export const MARKER_REQUIRED_METADATA_FIELDS = [
 export const SUITE_APPS = [
   {
     id: "vaexcore-studio",
-    name: "vaexcore studio",
+    name: "Vaexcore Studio by Tenra",
     bundleId: "com.vaexcore.studio",
     launchName: "vaexcore studio",
     discoveryFile: "vaexcore-studio.json",
@@ -31,7 +31,7 @@ export const SUITE_APPS = [
   },
   {
     id: "vaexcore-pulse",
-    name: "vaexcore pulse",
+    name: "Vaexcore Pulse by Tenra",
     bundleId: "com.vaexil.vaexcore.pulse",
     launchName: "vaexcore pulse",
     discoveryFile: "vaexcore-pulse.json",
@@ -45,7 +45,7 @@ export const SUITE_APPS = [
   },
   {
     id: "vaexcore-console",
-    name: "vaexcore console",
+    name: "Vaexcore Console by Tenra",
     bundleId: "com.vaexil.vaexcore.console",
     launchName: "vaexcore console",
     discoveryFile: "vaexcore-console.json",
