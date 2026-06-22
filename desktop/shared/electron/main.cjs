@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require("electron");
+const { app, BrowserWindow, dialog, safeStorage } = require("electron");
 const { isMac, productName, setupPort } = require("./constants.cjs");
 const { installApplicationMenu } = require("./menu.cjs");
 const {
@@ -39,6 +39,7 @@ const initializeApp = () => {
     app,
     createSettingsWindow: windowManager.createSettingsWindow,
     createWindow: windowManager.createWindow,
+    safeStorage,
     showStartupError,
   });
 

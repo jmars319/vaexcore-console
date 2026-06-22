@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "appId": "vaexcore-console",
+  "displayName": "Vaexcore Console by Tenra",
+  "productLine": "Vaexcore Creator Suite",
+  "runtime": {
+    "primaryMode": "standalone-local-first-stream-ops-console",
+    "uiShell": "Electron-hosted local setup service",
+    "launch": [
+      "Open the packaged vaexcore console desktop app",
+      "npm run app:dev",
+      "npm run dev"
+    ],
+    "health": ["GET /api/status", "GET /api/suite/status", "npm run smoke:ci"],
+    "degradedStates": [
+      "Twitch credentials missing or OAuth scopes incomplete",
+      "Discord bot token or guild setup incomplete",
+      "SQLite database initializing or unavailable",
+      "Relay credentials missing when relay-assisted mode is selected",
+      "Suite peers absent or stale"
+    ]
+  },
+  "capabilities": [
+    "console.setup",
+    "twitch.operations",
+    "discord.operations",
+    "studio.chat-markers",
+    "studio.giveaway-event-markers",
+    "suite.commands",
+    "suite.launcher",
+    "suite.timeline",
+    "twitch.stream_key",
+    "platform.local_page",
+    "local.sqlite-state"
+  ],
+  "storage": {
+    "records": [
+      "Local SQLite command configuration, audit log, giveaways, timers, moderation, and queue state"
+    ],
+    "secrets": [
+      "Electron safeStorage encrypted local secrets envelope when available",
+      "Legacy plaintext local.secrets.json fallback for CLI and smoke contexts"
+    ],
+    "logs": [
+      "Redacted setup diagnostics and support bundle data",
+      "Suite timeline events under the shared Vaexcore suite directory"
+    ],
+    "exports": [
+      "Safe operator configuration exports",
+      "Redacted diagnostics bundle",
+      "Suite discovery and timeline documents"
+    ]
+  },
+  "integrations": {
+    "inbound": [
+      "Suite command documents from Studio, Pulse, Relay, or Hub-class launchers",
+      "Studio chat marker and giveaway event requests",
+      "Relay-assisted Twitch transport callbacks",
+      "Operator-reviewed setup and creator-ops actions"
+    ],
+    "outbound": [
+      "Vaexcore suite discovery document",
+      "Suite timeline events",
+      "Studio chat marker metadata",
+      "Relay-assisted Twitch and Discord sends",
+      "Redacted diagnostics and readiness status"
+    ],
+    "discovery": [
+      "Shared Vaexcore suite discovery directory",
+      "GET /api/suite/status",
+      "GET /api/status",
+      "GET /api/diagnostics"
+    ]
+  },
+  "security": {
+    "networkPolicy": "Localhost-only operator API; external platform calls require explicit operator setup or action",
+    "sensitiveActions": [
+      "Twitch OAuth refresh and creator operations",
+      "Discord server layout creation and announcement sends",
+      "Relay transport credential changes",
+      "Bot process launch",
+      "Safe local report generation"
+    ]
+  }
+}

@@ -369,12 +369,12 @@ export const buildConsoleLocalRuntime = (
     state: "ready",
     appStorageDir,
     suiteDir: suiteDiscoveryDir(),
-    secureStorage: "local.secrets.json",
-    secretStorageState: consoleSecretStorageState(),
+    secureStorage: "safeStorage+plaintext fallback",
+    secretStorageState: "ready",
     durableStorage: [
-      "SQLite command configuration, audit logs, giveaways, timers, and moderation settings",
-      "local.secrets.json",
-      "setup UI diagnostics and support bundle data",
+      "SQLite state",
+      "local secrets file",
+      "redacted diagnostics",
     ],
     networkPolicy: "localhost-only",
     dependencies: [
@@ -424,18 +424,6 @@ export const vaexcoreSharedDataDir = () => {
     process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"),
     "vaexcore",
   );
-};
-
-export const consoleSecretStorageState = () => {
-  if (process.platform === "win32") {
-    return "app-owned-file-needs-credential-manager-migration";
-  }
-
-  if (process.platform === "darwin") {
-    return "app-owned-file-needs-keychain-migration";
-  }
-
-  return "app-owned-file-needs-secure-store-migration";
 };
 
 export const readSuiteSessionDocument = (): {

@@ -8,6 +8,17 @@ const configDir = process.env.VAEXCORE_CONFIG_DIR
   ? resolve(process.env.VAEXCORE_CONFIG_DIR)
   : resolve(process.cwd(), "config");
 const secretsPath = resolve(configDir, "local.secrets.json");
+const envelopeStorage = "electron-safe-storage-v1";
+
+type LocalSecretsCrypto = (
+  operation: "encrypt" | "decrypt",
+  value?: string,
+) => string | undefined;
+
+type LocalSecretsEnvelope = {
+  storage: "electron-safe-storage-v1";
+  ciphertext: string;
+};
 
 const localSecretsSchema = z.object({
   mode: z.enum(["local", "live"]).default("live"),
@@ -118,18 +129,44 @@ export const readLocalSecrets = (): LocalSecrets => {
   }
 
   const raw = readFileSync(secretsPath, "utf8");
-  return normalizeSecrets(localSecretsSchema.parse(JSON.parse(raw)));
+  const parsed = JSON.parse(raw);
+  const envelope = parsed as Partial<LocalSecretsEnvelope>;
+
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    envelope.storage === envelopeStorage &&
+    typeof envelope.ciphertext === "string"
+  ) {
+    const decrypted = localSecretsCrypto()?.("decrypt", envelope.ciphertext);
+    if (typeof decrypted !== "string") {
+      throw new Error("OS secure storage required.");
+    }
+
+    return normalizeSecrets(localSecretsSchema.parse(JSON.parse(decrypted)));
+  }
+
+  return normalizeSecrets(localSecretsSchema.parse(parsed));
 };
 
 export const writeLocalSecrets = (secrets: LocalSecrets) => {
   mkdirSync(dirname(secretsPath), { recursive: true });
-  writeFileSync(
-    secretsPath,
-    `${JSON.stringify(normalizeSecrets(secrets), null, 2)}\n`,
-    {
-      mode: 0o600,
-    },
+  const normalized = normalizeSecrets(secrets);
+  const ciphertext = localSecretsCrypto()?.(
+    "encrypt",
+    JSON.stringify(normalized),
   );
+  const serializable =
+    typeof ciphertext === "string"
+      ? {
+          storage: envelopeStorage,
+          ciphertext,
+        }
+      : normalized;
+
+  writeFileSync(secretsPath, `${JSON.stringify(serializable, null, 2)}\n`, {
+    mode: 0o600,
+  });
 };
 
 export const getLocalSecretsPath = () => secretsPath;
@@ -343,3 +380,10 @@ const sanitizeOptional = (
         required: true,
       })
     : undefined;
+
+const localSecretsCrypto = () =>
+  (
+    globalThis as typeof globalThis & {
+      __VAEXCORE_LOCAL_SECRETS_CRYPTO__?: LocalSecretsCrypto;
+    }
+  ).__VAEXCORE_LOCAL_SECRETS_CRYPTO__;

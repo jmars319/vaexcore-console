@@ -138,7 +138,7 @@ The bot work is functionally complete when all of these are true:
 
 ## Safety Rules
 
-- Never commit `config/local.secrets.json`.
+- Never commit `config/local.secrets.json`, whether it is plaintext CLI fallback data or an encrypted desktop envelope.
 - Never paste Worker secrets into docs or issue comments.
 - Do not mark Chat Bot identity complete until Twitch visually confirms the Chat Bot label.
 - Keep `Local` available for users who prefer local-only operation; it is not the Twitch Chat Bot identity path.

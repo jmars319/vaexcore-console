@@ -91,3 +91,5 @@ export interface SuiteLocalRuntime {
   }>;
 }
 ```
+
+`secureStorage` should name both the active secret backend and any compatibility fallback so suite peers can distinguish OS-backed storage from legacy plaintext development paths.

@@ -117,7 +117,7 @@ If you configured Twitch in the packaged macOS app instead of `.env`, start the 
 npm run dev:app-config
 ```
 
-Access-token-only `.env` files still work. For easier long-term CLI use, include `TWITCH_CLIENT_SECRET` and `TWITCH_REFRESH_TOKEN` once, then let vaexcore console keep rotated OAuth tokens in `config/local.secrets.json`.
+Access-token-only `.env` files still work. For easier long-term CLI use, include `TWITCH_CLIENT_SECRET` and `TWITCH_REFRESH_TOKEN` once, then let vaexcore console keep rotated OAuth tokens in `config/local.secrets.json`. The packaged desktop app encrypts that local file through Electron `safeStorage` when the OS secure store is available; CLI and smoke runs keep the legacy plaintext fallback.
 
 Startup logs should include these checklist entries:
 
@@ -396,7 +396,7 @@ Every live Twitch creator-ops action requires an explicit browser confirmation b
 
 ## Configuring Discord
 
-The `Discord` section in Console can prepare the `Streamer Community Baseline` server layout and send stream status announcements. It is intentionally local-first: the bot token is stored only in `config/local.secrets.json`, the setup API never returns the token, and setup can be previewed before anything is created.
+The `Discord` section in Console can prepare the `Streamer Community Baseline` server layout and send stream status announcements. It is intentionally local-first: the bot token is stored only in the app-local secrets file, the packaged desktop app encrypts that file through OS secure storage when available, the setup API never returns the token, and setup can be previewed before anything is created.
 
 Recommended Discord bot permissions:
 
@@ -610,7 +610,7 @@ App-local data is stored under:
 ~/Library/Application Support/vaexcore console
 ```
 
-That folder contains `local.secrets.json` and `data/vaexcore.sqlite`. To reset the app config, quit vaexcore console and remove that folder. Development CLI mode still uses the project-local config path unless `VAEXCORE_CONFIG_DIR` is set.
+That folder contains `local.secrets.json` and `data/vaexcore.sqlite`. In packaged desktop runs, `local.secrets.json` is an Electron `safeStorage` envelope when the OS secure store is available; development CLI mode can still read and write the legacy plaintext form unless `VAEXCORE_CONFIG_DIR` is set. To reset the app config, quit vaexcore console and remove that folder.
 
 Installs updated from older pre-rename builds may continue using the existing legacy Application Support folder. Diagnostics shows the exact active config path; keep that folder during app replacement.
 

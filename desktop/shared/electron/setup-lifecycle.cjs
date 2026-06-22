@@ -16,6 +16,7 @@ const createSetupLifecycle = ({
   app,
   createSettingsWindow,
   createWindow,
+  safeStorage,
   showStartupError,
 }) => {
   let setupServer;
@@ -26,6 +27,16 @@ const createSetupLifecycle = ({
     app.setPath("userData", userData);
     process.env.VAEXCORE_CONFIG_DIR = userData;
     process.env.DATABASE_URL = `file:${join(userData, "data/vaexcore.sqlite")}`;
+    globalThis.__VAEXCORE_LOCAL_SECRETS_CRYPTO__ = (operation, value = "") => {
+      if (!safeStorage?.isEncryptionAvailable()) return undefined;
+      if (operation === "encrypt") {
+        return safeStorage.encryptString(value).toString("base64");
+      }
+      if (operation === "decrypt" && value) {
+        return safeStorage.decryptString(Buffer.from(value, "base64"));
+      }
+      return undefined;
+    };
 
     const moduleUrl = pathToFileURL(
       join(app.getAppPath(), "dist-bundle/setup-server.js"),
