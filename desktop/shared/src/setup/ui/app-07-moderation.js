@@ -1,3 +1,4 @@
+// Moderation UI boundary
 function renderModeration() {
   const settings = state.moderation?.settings || {};
   const hits = state.moderationHits || [];
@@ -22,6 +23,7 @@ function renderModeration() {
     ),
     renderFeatureGateCard("moderation_filters"),
     renderModerationSuggestionCard(),
+    // Filter policy boundary
     card("Filter Settings", [
       statusGrid([
         [
@@ -342,6 +344,7 @@ function renderModeration() {
         }),
       ]),
     ]),
+    // Phrase rule boundary
     card("Blocked Phrases", [
       h("div", { className: "grid" }, [
         formRow(
@@ -394,6 +397,7 @@ function renderModeration() {
         ]),
       ),
     ]),
+    // Domain rule boundary
     card("Blocked Link Domains", [
       h("div", { className: "grid" }, [
         formRow(
@@ -492,6 +496,7 @@ function renderModeration() {
         ]),
       ),
     ]),
+    // Permit state boundary
     card("Temporary Link Permits", [
       h("div", { className: "grid three" }, [
         formRow(
@@ -533,6 +538,7 @@ function renderModeration() {
         ]),
       ),
     ]),
+    // Local test boundary
     card("Local Test", [
       h("div", { className: "grid three" }, [
         formRow(
@@ -566,6 +572,7 @@ function renderModeration() {
       ]),
       renderModerationTestResult(),
     ]),
+    // Audit trail boundary
     card("Recent Hits", [
       dataTable(
         ["Timestamp", "Filter", "User", "Action", "Detail", "Message"],

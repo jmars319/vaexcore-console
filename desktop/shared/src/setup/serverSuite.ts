@@ -89,6 +89,7 @@ export type SuiteAppStatus = {
   detail: string;
 };
 
+/* Suite timeline contract */
 export const appendSuiteTimelineEvent = (
   event: Omit<SuiteTimelineEvent, "schemaVersion" | "eventId" | "createdAt">,
 ) => {
@@ -167,6 +168,7 @@ export type SuiteLaunchResult = {
   detail: string;
 };
 
+/* App launch boundary */
 export const launchVaexcoreSuite = async () => {
   const results = await Promise.all(
     vaexcoreSuiteApps.map((appName) =>
@@ -288,6 +290,7 @@ export const launchWindowsApp = (appName: string): Promise<SuiteLaunchResult> =>
     });
   });
 
+/* Discovery runtime boundary */
 export const startSuiteDiscoveryHeartbeat = (port: number) => {
   const startedAt = new Date().toISOString();
   const write = () => {
@@ -352,6 +355,7 @@ export const writeSuiteDiscoveryDocument = (
   );
 };
 
+/* Local runtime contract */
 export const buildConsoleLocalRuntime = (
   apiUrl?: string,
 ): SuiteLocalRuntime => {
@@ -627,6 +631,7 @@ export const windowsAppExecutableNames = (appName: string) => {
   }
 };
 
+/* Command polling boundary */
 export const startSuiteCommandPoller = () => {
   const read = () => {
     try {

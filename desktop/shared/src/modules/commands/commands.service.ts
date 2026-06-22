@@ -40,6 +40,7 @@ export type {
   CustomCommandSaveInput,
 } from "./commands.types";
 
+/* Command persistence boundary */
 export class CustomCommandsService {
   constructor(
     private readonly db: DbClient,
@@ -82,6 +83,7 @@ export class CustomCommandsService {
     ).map(invocationFromRow);
   }
 
+  /* Command mutation path */
   saveCommand(
     input: CustomCommandSaveInput,
     actor: ChatMessage,
@@ -291,6 +293,7 @@ export class CustomCommandsService {
     return { id, name: row.name };
   }
 
+  /* Command transfer boundary */
   exportCommands() {
     return {
       version: 1,
@@ -358,6 +361,7 @@ export class CustomCommandsService {
     });
   }
 
+  /* Chat dispatch boundary */
   handle(context: CustomCommandContext) {
     const lookup = this.findEnabledCommandForName(context.name);
 
@@ -537,6 +541,7 @@ export class CustomCommandsService {
     );
   }
 
+  /* Name safety boundary */
   private assertNameAllowed(
     name: string,
     currentCommandId: number | undefined,
@@ -692,6 +697,7 @@ export class CustomCommandsService {
     return aliased ? { command: aliased, aliasUsed: name } : undefined;
   }
 
+  /* Row mapping boundary */
   private definitionFromRow(row: CustomCommandRow): CustomCommandDefinition {
     return {
       id: row.id,

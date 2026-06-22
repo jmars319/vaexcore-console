@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 
 const require = createRequire(import.meta.url);
 const Database = require("better-sqlite3");
+/* Local smoke isolation */
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-giveaway-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
 process.env.VAEXCORE_CONFIG_DIR = tempDir;
@@ -26,6 +27,7 @@ try {
   rmSync(tempDir, { recursive: true, force: true });
 }
 
+/* Giveaway readiness boundary */
 async function runSmoke() {
   const initial = await json("/api/giveaway");
   assert(initial.ok === true, "giveaway state route returns ok");
@@ -567,6 +569,7 @@ async function runSmoke() {
   );
 }
 
+/* Smoke helper boundary */
 async function simulate(body) {
   const result = await post("/api/command/simulate", body);
   assert(result.ok === true, "command simulate returns ok envelope");
@@ -593,6 +596,7 @@ async function json(path, options = {}) {
   return response.json();
 }
 
+/* Outbound fixture boundary */
 function insertOutboundFixture(record) {
   const db = new Database(smokeDbPath);
   const now = new Date().toISOString();
@@ -640,6 +644,7 @@ function insertOutboundFixture(record) {
   db.close();
 }
 
+/* Timer fixture boundary */
 function forceEntryTimerExpired(giveawayId) {
   const db = new Database(smokeDbPath);
   const now = new Date(Date.now() - 60_000).toISOString();

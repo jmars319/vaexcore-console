@@ -1,5 +1,6 @@
 import type { DbClient } from "./client";
 
+/* Database schema contract */
 export const initializeSchema = (db: DbClient) => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS giveaways (
@@ -594,6 +595,7 @@ export const initializeSchema = (db: DbClient) => {
   );
 };
 
+/* Additive migration boundary */
 const ensureColumn = (
   db: DbClient,
   table: string,

@@ -1,3 +1,4 @@
+// Bot config boundary
 function renderBotConfigBundleCard() {
   return card("Bot Config Backup", [
     callout(
@@ -28,6 +29,7 @@ function renderBotConfigBundleCard() {
   ]);
 }
 
+// Twitch ops boundary
 function renderTwitchOps() {
   const ops = state.twitchOps || {};
   const readiness = ops.readiness || { checks: [], missingScopes: [] };
@@ -248,11 +250,13 @@ function renderTwitchOps() {
   ];
 }
 
+// Discord staff boundary
 function discordStaffRoleOptions() {
   return (state.discordRoles || []).filter(
     (role) => role.staffEligible && role.name !== "@everyone",
   );
 }
+// Discord setup boundary
 function renderDiscord() {
   const discord = state.discord || {};
   const config = discord.config || state.config?.discord || {};

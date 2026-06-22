@@ -47,6 +47,7 @@ type ChatSender = {
   send(message: string): Promise<MessageSendResult>;
 };
 
+/* Bot runtime boundary */
 export class ConsoleBot {
   private readonly commandRouter: CommandRouter;
   private readonly eventSubClient?: TwitchEventSubClient;
@@ -64,6 +65,7 @@ export class ConsoleBot {
   private twitchAccessToken: string;
   private twitchTokenScopes: string[] = [];
 
+  /* Runtime wiring boundary */
   constructor(private readonly options: BotOptions) {
     this.twitchAccessToken = options.env.twitchUserAccessToken;
     this.runtimeStatus = createRuntimeStatus(options.env.mode);
@@ -239,6 +241,7 @@ export class ConsoleBot {
     });
   }
 
+  /* Lifecycle boundary */
   async start() {
     this.options.logger.info(
       "vaexcore console LIVE MODE -- waiting for chat confirmation (!ping)",
@@ -328,6 +331,7 @@ export class ConsoleBot {
     });
   }
 
+  /* Token validation boundary */
   private async validateLiveTwitchWithRefresh() {
     try {
       const validation = await this.validateLiveTwitchWithCurrentToken();
@@ -360,6 +364,7 @@ export class ConsoleBot {
     });
   }
 
+  /* Outbound chat boundary */
   private async sendChatMessage(sender: ChatSender, message: string) {
     const result = await sender.send(message);
     const structured = typeof result === "string" ? { status: result } : result;
@@ -419,6 +424,7 @@ export class ConsoleBot {
     }
   }
 
+  /* Inbound chat boundary */
   private async handleChatMessage(message: ChatMessage) {
     if (!this.runtimeStatus.firstChatReceived) {
       this.runtimeStatus.firstChatReceived = true;
@@ -464,6 +470,7 @@ export class ConsoleBot {
     }
   }
 
+  /* Moderation enforcement boundary */
   private async handleModeration(message: ChatMessage) {
     try {
       const result = this.moderationService.evaluate(message);
@@ -585,6 +592,7 @@ export class ConsoleBot {
     };
   }
 
+  /* Giveaway eligibility boundary */
   private createFollowAgeResolver(): GiveawayFollowAgeResolver {
     return async (event, giveaway) => {
       try {

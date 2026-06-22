@@ -52,6 +52,7 @@ export type {
   DiscordSetupPlan,
 } from "./setupTypes";
 
+/* Discord planning boundary */
 export const planDiscordServerSetup = (options: {
   existingChannels: DiscordGuildChannel[];
   existingRoles: DiscordGuildRole[];
@@ -242,6 +243,7 @@ export const previewDiscordSetupTemplate = (
     template,
   });
 
+/* Discord mutation boundary */
 export const applyDiscordServerSetup = async (options: {
   client: DiscordApiClient;
   guildId: string;
@@ -423,6 +425,7 @@ export const applyDiscordServerSetup = async (options: {
     markMutationApplied();
   }
 
+  /* Permission overwrite boundary */
   if (applyPermissions) {
     if (botUserId) {
       const privateChannelTemplateIds = new Set(
@@ -603,6 +606,7 @@ export const applyDiscordServerSetup = async (options: {
     }
   }
 
+  /* Starter message boundary */
   if (postStarterMessages) {
     for (const starterMessage of template.starterMessages ?? []) {
       if (existingMessageIds[starterMessage.id]) {
@@ -634,6 +638,7 @@ export const applyDiscordServerSetup = async (options: {
   return buildResult(true);
 };
 
+/* Discord error boundary */
 const discordPermissionOverwriteError = (
   template: DiscordSetupTemplate,
   overwrite: DiscordSetupPermissionOverwriteTemplate,

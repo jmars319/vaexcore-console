@@ -1,4 +1,5 @@
 function syncFormValues() {
+  // Snapshot source boundary
   const config = state.config || {};
   const relayConfig = config.relay || {};
   const discordConfig = state.discord?.config || config.discord || {};
@@ -11,6 +12,7 @@ function syncFormValues() {
   const selectedCommand = selectedCustomCommand();
   const currentTimer = selectedTimer();
   const moderationSettings = state.moderation?.settings || {};
+  // Twitch setup boundary
   setValue("setupMode", settingsValue("setupMode", currentSetupMode(config)));
   setValue("mode", settingsValue("mode", config.mode || "live"));
   setValue(
@@ -90,6 +92,7 @@ function syncFormValues() {
     twitchOpsValue("twitchAnnouncementMessage", ""),
   );
   setValue("twitchTargetLogin", twitchOpsValue("twitchTargetLogin", ""));
+  // Discord integration boundary
   setValue("discordBotToken", discordValue("discordBotToken", ""));
   setValue(
     "discordGuildId",
@@ -187,6 +190,7 @@ function syncFormValues() {
     "discordMentionRole",
     Boolean(discordValue("discordMentionRole", true)),
   );
+  // Command editor boundary
   setValue(
     "commandName",
     commandValue("commandName", selectedCommand?.name || ""),
@@ -236,6 +240,7 @@ function syncFormValues() {
     "commandPreviewArgs",
     field("commandPreviewArgs")?.value || "target",
   );
+  // Timer state boundary
   setValue("timerName", timerValue("timerName", currentTimer?.name || ""));
   setValue(
     "timerInterval",
@@ -253,6 +258,7 @@ function syncFormValues() {
     "timerMessage",
     timerValue("timerMessage", currentTimer?.message || ""),
   );
+  // Moderation setup boundary
   setChecked(
     "blockedTermsEnabled",
     Boolean(
@@ -516,6 +522,7 @@ function syncFormValues() {
     "moderationTestText",
     field("moderationTestText")?.value || "VISIT EXAMPLE.COM NOW",
   );
+  // Giveaway setup boundary
   setValue(
     "giveawayTitle",
     giveawayValue("giveawayTitle", summary.title || "Community Giveaway"),
@@ -644,6 +651,7 @@ function syncFormValues() {
   );
   setValue("purchaseStatus", giveawayValue("purchaseStatus", "not_purchased"));
   setValue("drawCount", giveawayValue("drawCount", suggestedDrawCount()));
+  // Template output boundary
   for (const template of state.templates || []) {
     setValue(
       `template-${template.action}`,

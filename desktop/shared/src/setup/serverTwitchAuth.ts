@@ -80,6 +80,7 @@ import {
 } from "./serverState";
 import type { SetupCheck } from "./serverLaunchPreparation";
 
+/* Token readiness boundary */
 export const getCachedTokenReadiness = (config = getSafeConfig()) => {
   const missing = missingSafeConfigFields(config);
   const requiredScopesPresent = requiredTwitchScopes.every((scope) =>
@@ -144,6 +145,7 @@ export const getCachedTokenReadiness = (config = getSafeConfig()) => {
   };
 };
 
+/* Broadcast readiness boundary */
 export const getTwitchBroadcastReadiness = () => {
   const config = getSafeConfig();
   const tokenReadiness = getCachedTokenReadiness(config);
@@ -197,6 +199,7 @@ export const getTwitchBroadcastReadiness = () => {
   };
 };
 
+/* Setup config boundary */
 export const saveConfig = (body: unknown) => {
   const input = body as Record<string, string>;
   const existing = readLocalSecrets();
@@ -371,6 +374,7 @@ export const redirectToTwitch = (response: ServerResponse) => {
   redirect(response, authorizeUrl.toString());
 };
 
+/* OAuth callback boundary */
 export const handleTwitchCallback = async (
   url: URL,
   response: ServerResponse,
@@ -513,6 +517,7 @@ export const parseTwitchOAuthErrorMessage = (body: string) => {
   }
 };
 
+/* OAuth exchange boundary */
 export const exchangeCode = async (input: {
   code: string;
   clientId: string;

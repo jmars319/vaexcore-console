@@ -1,3 +1,4 @@
+// Relay setup boundary
 function renderRelaySetupGuide(options = {}) {
   const config = state.config || {};
   const relay = config.relay || {};
@@ -245,6 +246,7 @@ function renderRelaySetupGuide(options = {}) {
   ]);
 }
 
+// Setup step boundary
 function setupStep({
   id,
   number,
@@ -280,6 +282,7 @@ function setupStep({
   );
 }
 
+// Validation summary boundary
 function renderValidationSummary() {
   const config = state.config || {};
   const validationChecks = visibleValidationChecks();
@@ -325,6 +328,7 @@ function renderValidationSummary() {
     ],
   ]);
 }
+// Diagnostics panel boundary
 function renderDiagnostics() {
   const report = state.diagnostics;
   const readiness = report?.readiness || {};

@@ -113,6 +113,7 @@ export type DiagnosticCheck = {
   detail: string;
 };
 
+/* Diagnostics report boundary */
 export const getDiagnosticsReport = () => {
   const generatedAt = new Date().toISOString();
   const packageInfo = getPackageInfo();
@@ -236,6 +237,7 @@ export const summarizeTimers = (
     .length,
 });
 
+/* Readiness check boundary */
 export const getDiagnosticChecks = (input: {
   config: ReturnType<typeof getSafeConfig>;
   database: ReturnType<typeof getDatabaseDiagnostics>;
@@ -347,6 +349,7 @@ export const getDiagnosticChecks = (input: {
   },
 ];
 
+/* First-run recovery boundary */
 export const getFirstRunStatus = (input: {
   config: ReturnType<typeof getSafeConfig>;
   database: ReturnType<typeof getDatabaseDiagnostics>;
@@ -469,6 +472,7 @@ export const firstRunRecoverySteps = (input: {
   return ["Start Bot, then type !ping in Twitch chat to confirm live chat."];
 };
 
+/* Runtime probe boundary */
 export const getDatabaseDiagnostics = () => {
   try {
     const row = db.prepare("SELECT 1 AS ok").get() as
@@ -563,6 +567,7 @@ export const safeAuditMetadata = (raw: string) => {
 export const safeSupportText = (value: unknown) =>
   redactSecretText(String(value ?? ""));
 
+/* Queue health boundary */
 export const summarizeQueueHealth = (
   queue: ReturnType<MessageQueue["snapshot"]>,
   outbound: ReturnType<typeof outboundHistory.summary>,
@@ -626,6 +631,7 @@ export const summarizeQueueHealth = (
   };
 };
 
+/* Outbound recovery boundary */
 export const summarizeOutboundRecovery = () => {
   const latestCritical = latestFailedCriticalGiveawayMessage();
   const latestFailed = latestCritical ?? outboundHistory.latestFailed();

@@ -1,3 +1,4 @@
+/* Discord template contract */
 export const discordChannelTypeCodes = {
   text: 0,
   voice: 2,
@@ -75,6 +76,7 @@ export type DiscordSetupTemplate = {
   };
 };
 
+/* Role hierarchy boundary */
 const fullCreatorRoles: DiscordSetupRoleTemplate[] = [
   {
     id: "creator",
@@ -209,6 +211,7 @@ const permissions = (
   ...items: DiscordPermissionName[]
 ): DiscordPermissionName[] => items;
 
+/* Permission matrix boundary */
 const fullCreatorPermissionOverwrites: DiscordSetupPermissionOverwriteTemplate[] =
   [
     ...staffChannelIds.flatMap((channelId) => [
@@ -280,6 +283,7 @@ const fullCreatorPermissionOverwrites: DiscordSetupPermissionOverwriteTemplate[]
     })),
   ];
 
+/* Starter message boundary */
 const fullCreatorStarterMessages: DiscordSetupStarterMessageTemplate[] = [
   {
     id: "welcome",
@@ -550,6 +554,7 @@ import { leanLiveAlertsDiscordTemplate } from "./templates/leanLiveAlerts";
 import { contentClipsHubDiscordTemplate } from "./templates/contentClipsHub";
 import { eventsGameNightsDiscordTemplate } from "./templates/eventsGameNights";
 
+/* Template registry boundary */
 export const discordSetupTemplates = [
   fullCreatorCommunityDiscordTemplate,
   streamerCommunityDiscordTemplate,

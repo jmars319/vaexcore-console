@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setupUiJavaScriptSource } from "./support/setup-ui-source.mjs";
 
+/* Local smoke isolation */
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-discord-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
 const guildId = "123456789012345678";
@@ -34,6 +35,7 @@ try {
   rmSync(tempDir, { recursive: true, force: true });
 }
 
+/* Discord setup boundary */
 async function runSmoke() {
   const appJs = await setupUiJavaScriptSource(text);
   assert(appJs.includes('["discord", "Discord"]'), "Discord tab is registered");
@@ -394,6 +396,7 @@ async function runSmoke() {
   );
 }
 
+/* Fake Discord boundary */
 async function startFakeDiscord() {
   const state = {
     nextId: 200000000000000000n,
@@ -646,6 +649,7 @@ async function startFakeDiscord() {
   };
 }
 
+/* Smoke helper boundary */
 function nextId(state) {
   state.nextId += 1n;
   return state.nextId.toString();

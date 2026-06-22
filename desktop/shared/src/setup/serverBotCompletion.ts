@@ -52,6 +52,7 @@ import { botValidationKeys, botValidationLabels } from "./serverState";
 import type { SetupMode } from "./serverConfig";
 import type { BotValidationKey } from "./serverState";
 
+/* Completion route boundary */
 export const getBotCompletionRoute = async () => {
   const secrets = readLocalSecrets();
   const [relayStatus, relayReport, discordRelayStatus] = await Promise.all([
@@ -114,6 +115,7 @@ export const getBotCompletionRoute = async () => {
   };
 };
 
+/* Setup capability boundary */
 export const getSetupCapabilitySummary = (setupMode: SetupMode) => {
   const local = [
     "Local Twitch chat send while Console is running.",
@@ -154,6 +156,7 @@ export const getDiscordSetupSummary = (secrets = readLocalSecrets()) => {
   };
 };
 
+/* Relay readiness boundary */
 export const getRelayReadinessReport = async (
   secrets = readLocalSecrets(),
 ): Promise<
@@ -184,6 +187,7 @@ export const getRelayReadinessReport = async (
   }
 };
 
+/* Validation check boundary */
 export const buildBotCompletionChecks = ({
   secrets,
   relayStatus,
@@ -384,6 +388,7 @@ export const botCompletionCheck = (
   nextAction: complete ? "" : nextAction,
 });
 
+/* Operator section boundary */
 export const buildBotCompletionSections = (
   checks: ReturnType<typeof botCompletionCheck>[],
 ) => {
@@ -575,6 +580,7 @@ export const botCompletionOperatorStatus = ({
   };
 };
 
+/* Validation state boundary */
 export const recordBotValidation = (body: unknown) => {
   const input = objectInput(body);
   const key = botValidationKey(input.key);

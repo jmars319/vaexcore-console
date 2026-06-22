@@ -23,6 +23,7 @@ import { giveawayAnnouncementPhases } from "./serverGiveawayTemplates";
 import { giveawaysService, outboundHistory } from "./serverState";
 import type { GiveawayAnnouncementPhase } from "./serverGiveawayTemplates";
 
+/* Giveaway state boundary */
 export const getGiveawayState = () => {
   const state = giveawaysService.getOperatorState();
   const latest = giveawaysService.getLatestGiveawayState();
@@ -77,6 +78,7 @@ export const getGiveawayOverlayState = () => {
   };
 };
 
+/* Operator summary boundary */
 export const summarizeGiveawayState = (
   state: ReturnType<GiveawaysService["getOperatorState"]>,
 ) => {
@@ -303,6 +305,7 @@ export const safeJsonObject = (value: string) => {
   }
 };
 
+/* Delivery assurance boundary */
 export const summarizeGiveawayAssurance = (
   state: ReturnType<GiveawaysService["getLatestGiveawayState"]>,
 ) => {
@@ -404,6 +407,7 @@ export const summarizeGiveawayAssurance = (
   };
 };
 
+/* Phase delivery boundary */
 export const summarizeGiveawayPhase = (
   phase: GiveawayAnnouncementPhase,
   state: ReturnType<GiveawaysService["getLatestGiveawayState"]>,
@@ -525,6 +529,7 @@ export const giveawayPhaseRecoveryText = (
   return "No recovery action needed yet.";
 };
 
+/* Recap summary boundary */
 export const summarizeGiveawayRecap = (
   state: ReturnType<GiveawaysService["getLatestGiveawayState"]>,
   assurance = summarizeGiveawayAssurance(state),
@@ -587,6 +592,7 @@ export const summarizeGiveawayRecap = (
   };
 };
 
+/* Outbound lookup boundary */
 export const giveawayOutboundMessagesFor = (giveawayId: number | undefined) =>
   outboundHistory
     .list()

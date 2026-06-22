@@ -1,3 +1,4 @@
+// Operating mode boundary
 function renderOperatingModeCard(config = state.config || {}) {
   const mode = selectedSetupMode(config);
   const checks = config.setupChecks || {};
@@ -65,6 +66,7 @@ function renderOperatingModeCard(config = state.config || {}) {
   ]);
 }
 
+// Settings shell boundary
 function renderSettings() {
   const config = state.config || {};
   const relay = config.relay || {};
@@ -140,6 +142,7 @@ function renderSettingsModeBody(
   ];
 }
 
+// Runtime command boundary
 function renderRuntimeCommandsCard() {
   return card("Runtime Commands", [
     h("p", {
@@ -155,6 +158,7 @@ function renderRuntimeCommandsCard() {
   ]);
 }
 
+// Twitch configuration boundary
 function renderTwitchConfigurationPanel(
   config,
   validationChecks,
@@ -264,6 +268,7 @@ function renderTwitchConfigurationPanel(
   return collapsible ? advancedPanel(title, children) : card(title, children);
 }
 
+// Transport selection boundary
 function renderTwitchTransportPanel(relay, hostedMode, options = {}) {
   const showTransportSelect = options.showTransportSelect === true;
   const children = [
@@ -380,6 +385,7 @@ function renderTwitchTransportPanel(relay, hostedMode, options = {}) {
     : card("Twitch Chat Transport", children);
 }
 
+// Setup completion boundary
 function renderLocalSetupCompletion(config, required) {
   return card("Setup Completion", [
     statusGrid([

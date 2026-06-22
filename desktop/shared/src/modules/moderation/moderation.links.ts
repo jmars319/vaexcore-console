@@ -27,6 +27,7 @@ import {
   type ModerationServiceContext,
 } from "./moderation.types";
 
+/* Allowed link boundary */
 export const listModerationAllowedLinks = (
   context: ModerationServiceContext,
 ): ModerationAllowedLink[] =>
@@ -161,6 +162,7 @@ export const deleteModerationAllowedLink = (
   );
 };
 
+/* Blocked link boundary */
 export const listModerationBlockedLinks = (
   context: ModerationServiceContext,
 ): ModerationBlockedLink[] =>
@@ -298,6 +300,7 @@ export const deleteModerationBlockedLink = (
   );
 };
 
+/* Link permit boundary */
 export const listModerationLinkPermits = (
   context: ModerationServiceContext,
   limit = 25,
@@ -383,6 +386,7 @@ export const enabledModerationBlockedLinks = (
   context: ModerationServiceContext,
 ) => listModerationBlockedLinks(context).filter((link) => link.enabled);
 
+/* Link inspection boundary */
 export const inspectModerationLinks = (
   context: ModerationServiceContext,
   message: ChatMessage,
@@ -474,6 +478,7 @@ export const activeModerationLinkPermit = (
     .get(login, timestamp()) as ModerationLinkPermitRow | undefined;
 };
 
+/* Permit consumption boundary */
 const consumeModerationLinkPermit = (
   context: ModerationServiceContext,
   permit: ModerationLinkPermitRow,

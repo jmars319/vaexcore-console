@@ -8,6 +8,7 @@ import { setupUiJavaScriptSource } from "./support/setup-ui-source.mjs";
 const require = createRequire(import.meta.url);
 const Database = require("better-sqlite3");
 
+/* Local smoke isolation */
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-giveaway-live-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
 const serverUrl = pathToFileURL(resolve("dist-bundle/setup-server.js")).href;
@@ -30,6 +31,7 @@ try {
   rmSync(tempDir, { recursive: true, force: true });
 }
 
+/* Giveaway live boundary */
 async function runSmoke() {
   await verifyUiAndSafetyCopy();
   verifyPrizeSchema();
@@ -38,6 +40,7 @@ async function runSmoke() {
   await verifyStreamNightFlow();
 }
 
+/* UI safety boundary */
 async function verifyUiAndSafetyCopy() {
   const appJs = await setupUiJavaScriptSource(text);
 
@@ -298,6 +301,7 @@ async function verifyCommandCoverageAndFewEntrants() {
   assert(state.summary.status === "none", "chat-command scenario ends cleanly");
 }
 
+/* Stream night boundary */
 async function verifyStreamNightFlow() {
   const protectedName = await post("/api/commands", {
     name: "gstart",
@@ -564,6 +568,7 @@ async function verifyStreamNightFlow() {
   );
 }
 
+/* Smoke helper boundary */
 async function expectEntry(actor) {
   const result = await simulate({ actor, role: "viewer", command: "!enter" });
   assert(result.routerResult === "handled", `${actor} !enter is handled`);
@@ -624,6 +629,7 @@ function activeWinners(state) {
   return (state.winners || []).filter((winner) => !winner.rerolled_at);
 }
 
+/* Outbound fixture boundary */
 function insertOutboundFixture(record) {
   const db = new Database(smokeDbPath);
   const now = new Date().toISOString();

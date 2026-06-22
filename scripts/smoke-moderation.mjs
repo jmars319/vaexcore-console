@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setupUiJavaScriptSource } from "./support/setup-ui-source.mjs";
 
+/* Local smoke isolation */
 const tempDir = mkdtempSync(join(tmpdir(), "vaexcore-moderation-smoke-"));
 const smokeDbPath = join(tempDir, "data/vaexcore.sqlite");
 
@@ -25,6 +26,7 @@ try {
   rmSync(tempDir, { recursive: true, force: true });
 }
 
+/* Moderation setup boundary */
 async function runSmoke() {
   const appJs = await setupUiJavaScriptSource(text);
   assert(appJs.includes("Moderation"), "Moderation tab renders");
@@ -603,6 +605,7 @@ async function runSmoke() {
   await runDirectEnforcementSmoke();
 }
 
+/* Direct enforcement boundary */
 async function runDirectEnforcementSmoke() {
   const directDir = mkdtempSync(join(tmpdir(), "vaexcore-moderation-direct-"));
   const directDbPath = join(directDir, "data/vaexcore.sqlite");
@@ -756,6 +759,7 @@ async function runDirectEnforcementSmoke() {
   }
 }
 
+/* Smoke helper boundary */
 function chatMessage(overrides = {}) {
   const userLogin = overrides.userLogin || "viewer";
   return {
