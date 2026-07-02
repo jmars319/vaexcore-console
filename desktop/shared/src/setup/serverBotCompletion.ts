@@ -43,6 +43,11 @@ import {
 import { getDiscordRelayStatusRoute } from "./serverDiscordRelay";
 import { objectInput } from "./serverDiscordSetup";
 import {
+  buildBotIdentitySummary,
+  buildGoLiveChecklist,
+  buildProviderOnboarding,
+} from "./serverBotCompletionSurface";
+import {
   createRelayChatClient,
   getDiscordReadiness,
   getRelayStatusRoute,
@@ -55,6 +60,7 @@ import type { BotValidationKey } from "./serverState";
 /* Completion route boundary */
 export const getBotCompletionRoute = async () => {
   const secrets = readLocalSecrets();
+  const setupMode = getSetupMode(secrets);
   const [relayStatus, relayReport, discordRelayStatus] = await Promise.all([
     getRelayStatusRoute(),
     getRelayReadinessReport(secrets),
@@ -71,7 +77,7 @@ export const getBotCompletionRoute = async () => {
     discordRelayStatus,
     localDiscord,
     records,
-    setupMode: getSetupMode(secrets),
+    setupMode,
   });
   const sections = buildBotCompletionSections(checks);
   const nextActions = checks
@@ -97,20 +103,29 @@ export const getBotCompletionRoute = async () => {
     total: checks.length,
     checks,
     sections,
+    providerOnboarding: buildProviderOnboarding({ checks, setupMode }),
+    botIdentity: buildBotIdentitySummary({
+      secrets,
+      relayStatus,
+      relayReport,
+      discordRelayStatus,
+      checks,
+    }),
+    goLiveChecklist: buildGoLiveChecklist({ sections, setupMode }),
     nextActions,
     validation,
     relay,
     relayStatus,
     relayReadinessReport: relayReport,
     setupChecks: getSafeSetupChecks(secrets),
-    modeCapabilities: getSetupCapabilitySummary(getSetupMode(secrets)),
+    modeCapabilities: getSetupCapabilitySummary(setupMode),
     discordSetup: getDiscordSetupSummary(secrets),
     discord: {
       localReadiness: localDiscord,
       localConfig: getSafeDiscordConfig(secrets),
       relay: discordRelayStatus,
     },
-    setupMode: getSetupMode(secrets),
+    setupMode,
     transportMode: secrets.relay.twitchTransportMode,
   };
 };

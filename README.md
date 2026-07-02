@@ -38,7 +38,7 @@ package.json    Node runtime, scripts, smoke checks, and release commands
 
 - Twitch EventSub chat connection and send-message flows are implemented.
 - Local command testing is available without Twitch.
-- Giveaway, moderation, timers, Twitch creator ops, Discord setup/announcements, diagnostics, setup, and release guard scripts are present.
+- Giveaway, moderation, timers, Twitch creator ops, Discord setup/announcements, provider onboarding, go-live readiness, diagnostics, setup, and release guard scripts are present.
 - The macOS desktop app flow is supported with unsigned tester builds.
 - Optional vaexcore studio integration is documented and remains local.
 - The detailed operator setup guide has been moved out of the root README.
@@ -64,6 +64,8 @@ Use local mode before connecting to Twitch. Live mode should only run after toke
 `just credentials` is a safe visibility check for the shared JAMARQ provider env pool used by Codex and local CLIs. It prints variable names only. Vaexcore Console runtime secrets still belong in this repo's `.env` or the app setup store.
 
 Hosted Relay validation uses `npm run live:relay-validation`. The default command is read-only; pass `--register-eventsub`, `--send-chat`, `--register-discord-commands`, and `--record` only for an intentional live provider validation run.
+
+The setup dashboard is the daily provider surface: use `Provider Setup Wizard`, `Bot Identity Dashboard`, `Provider Activity Timeline`, and `Go Live Checklist` to complete Twitch/Discord/Relay setup before live use. The detailed manual checks remain in the bot live validation runbook.
 
 ## Direction
 

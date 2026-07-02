@@ -338,6 +338,14 @@ function renderDashboard() {
     renderDashboardStartCard(runtime, readiness),
     renderReadyForStreamCard(runtime, readiness),
     renderDashboardModeCard(),
+    h("div", { className: "dashboard-grid" }, [
+      renderProviderOnboardingCard(),
+      renderBotIdentityDashboard(),
+    ]),
+    h("div", { className: "dashboard-grid" }, [
+      renderConsoleGoLiveChecklist(),
+      renderProviderActivityTimeline(),
+    ]),
     renderBotCompletionCard("dashboard"),
     h("div", { className: "dashboard-grid" }, [
       renderDashboardReadinessCard(runtime, readiness),

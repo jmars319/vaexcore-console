@@ -184,7 +184,7 @@ http://localhost:3434
 
 The console is organized into durable sections:
 
-- `Dashboard`: high-level Twitch, queue, chat, active giveaway readiness, live runbook, and preflight rehearsal.
+- `Dashboard`: high-level Twitch, queue, chat, active giveaway readiness, provider setup wizard, bot identity dashboard, provider activity timeline, go-live checklist, live runbook, and preflight rehearsal.
 - `Live Mode`: compact stream-night state, live runbook, status-to-chat, panic resend, outbound failure logs, and recap copy.
 - `Commands`: create, edit, test, import, export, and audit local custom chat commands.
 - `Timers`: create, enable, disable, and monitor scheduled chat messages behind live readiness and queue guardrails.
@@ -208,6 +208,17 @@ Dashboard and Live Mode include `Stream Night Presets` for common operating mode
 - `Bot Replacement`: custom commands, timers, and scoped moderation live
 
 Presets only change feature gates, write audit entries, and require explicit confirmation before enabling timers or moderation in live chat.
+
+### Provider Setup And Go-Live
+
+Use the dashboard before stream setup work:
+
+- `Provider Setup Wizard` walks the selected setup mode through hosted Relay pairing, Twitch bot OAuth, broadcaster OAuth, EventSub, Discord install, slash-command registration, and live validation records.
+- `Bot Identity Dashboard` shows the current broadcaster, bot account, token freshness, saved scopes, EventSub state, Relay transport health, and Discord install status without exposing token values.
+- `Provider Activity Timeline` loads Relay chat events, Discord interactions, suggestions, announcement actions, outbound chat status, and manual validation records on demand.
+- `Go Live Checklist` is the local operator gate before relying on Console for a live stream. It does not replace provider-side checks such as confirming Twitch labels the bot account as a Chat Bot.
+
+Keep automated validation and provider writes separate: Console may register EventSub, test Relay chat, and register Discord commands when you explicitly choose those actions, but it remains the operator surface for approval and review.
 
 ## Custom Chat Commands
 

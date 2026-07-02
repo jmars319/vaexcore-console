@@ -24,6 +24,15 @@ Expected pre-credential blockers:
 
 `bot:readiness` is read-only. It checks saved local Console pairing, Relay health, Twitch Relay readiness, Discord Relay readiness, local Discord setup, and the next actions without printing secret values.
 
+The Console dashboard now mirrors the same evidence in four operator cards:
+
+- `Provider Setup Wizard`: first-run Twitch, Discord, and Relay setup steps with direct actions for hosted pairing, OAuth, EventSub, and slash-command registration.
+- `Bot Identity Dashboard`: broadcaster, bot account, token freshness, scope posture, EventSub, Discord install, and Relay transport health.
+- `Go Live Checklist`: the current setup blockers that must be cleared before live use.
+- `Provider Activity Timeline`: on-demand Relay and Discord activity, chat sends, suggestions, queued announcements, validation records, and errors.
+
+Use the dashboard cards during setup, then keep this runbook as the source of truth for the live manual checks that require provider-side confirmation.
+
 For a redacted live provider validation pass, run:
 
 ```bash

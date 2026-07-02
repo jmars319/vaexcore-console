@@ -44,6 +44,27 @@ async function runSmoke() {
     "operations check UI is present",
   );
   assert(
+    appJs.includes("Provider Setup Wizard"),
+    "provider setup wizard is present",
+  );
+  assert(
+    appJs.includes("Bot Identity Dashboard"),
+    "bot identity dashboard is present",
+  );
+  assert(appJs.includes("Go Live Checklist"), "go-live checklist is present");
+  assert(
+    appJs.includes("Provider Activity Timeline"),
+    "provider activity timeline is present",
+  );
+  assert(
+    appJs.includes("Reconnect or reauthorize"),
+    "provider reauth guidance is present",
+  );
+  assert(
+    appJs.includes("Load provider activity"),
+    "provider activity loader is present",
+  );
+  assert(
     appJs.includes("Check provider setup"),
     "provider setup check UI is present",
   );
@@ -69,6 +90,22 @@ async function runSmoke() {
   assert(
     clean.setupMode === "relay-assisted",
     "clean completion defaults to Hosted mode",
+  );
+  assert(
+    clean.providerOnboarding.steps.length >= 4,
+    "completion returns provider onboarding steps",
+  );
+  assert(
+    clean.providerOnboarding.nextStep,
+    "completion returns next provider onboarding step",
+  );
+  assert(
+    clean.botIdentity.relayTransport.state,
+    "completion returns bot identity relay transport state",
+  );
+  assert(
+    clean.goLiveChecklist.items.length >= 3,
+    "completion returns go-live checklist items",
   );
   assert(
     clean.sections.some(
@@ -118,6 +155,28 @@ async function runSmoke() {
   assert(
     completion.checks.some((check) => check.key === "discord-worker-config"),
     "Discord Worker checks are included",
+  );
+  assert(
+    completion.providerOnboarding.steps.some(
+      (step) => step.id === "twitch-oauth" && step.complete,
+    ),
+    "provider onboarding tracks completed Twitch OAuth step",
+  );
+  assert(
+    completion.botIdentity.broadcaster.login === "vaexcore",
+    "bot identity includes broadcaster login",
+  );
+  assert(
+    completion.botIdentity.bot.login === "vaexcorebot",
+    "bot identity includes bot login",
+  );
+  assert(
+    completion.botIdentity.discordInstall.state === "commands pending",
+    "bot identity separates Discord command registration from install",
+  );
+  assert(
+    completion.goLiveChecklist.blockers.length > 0,
+    "go-live checklist reports remaining blockers",
   );
   assert(
     completion.checks.some(

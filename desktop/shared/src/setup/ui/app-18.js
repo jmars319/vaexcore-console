@@ -241,6 +241,44 @@ async function refreshBotCompletion() {
   );
 }
 
+async function loadProviderActivity() {
+  await runAction(
+    "providerActivity",
+    async () => {
+      const [
+        relayStatus,
+        discordEvents,
+        discordActions,
+        discordSuggestions,
+        outbound,
+        botCompletion,
+      ] = await Promise.all([
+        api.relayStatus(),
+        api.discordRelayEvents(),
+        api.discordRelayActions(state.discordRelayActionFilter || "active"),
+        api.discordRelaySuggestions(),
+        api.outboundMessages(),
+        api.botCompletion(),
+      ]);
+      state.relayStatus = relayStatus;
+      state.discordRelayEvents = discordEvents.events || [];
+      state.discordRelayActions = discordActions.actions || [];
+      state.discordRelaySuggestions = discordSuggestions.suggestions || [];
+      state.outboundMessages = outbound.messages || [];
+      state.outboundSummary = outbound.summary || state.outboundSummary;
+      state.botCompletion = botCompletion;
+      return {
+        ok: true,
+        relayStatus,
+        discordEvents,
+        discordActions,
+        discordSuggestions,
+      };
+    },
+    { skipRefresh: true, success: "Provider activity loaded." },
+  );
+}
+
 async function recordBotValidation(key, confirmed = true) {
   await runAction(
     `botValidation:${key}`,
