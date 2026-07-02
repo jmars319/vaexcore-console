@@ -1,6 +1,6 @@
 # vaexcore console operator manual
 
-This document preserves the detailed setup and operations guide that previously lived in the root README. The root README now provides the high-level project presentation layer.
+This document preserves the detailed setup and operations guide that previously lived in the root README. The root README now provides the high-level project presentation layer. For a shorter day-of-use training path, start with [Operator Training](OPERATOR_TRAINING.md).
 
 vaexcore console is a quiet Twitch operations bot for commands, moderation, giveaways, and stream control without the usual clutter.
 

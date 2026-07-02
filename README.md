@@ -77,6 +77,7 @@ The setup dashboard is the daily provider surface: use `Provider Setup Wizard`, 
 ## Related Documentation
 
 - [Operator Manual](docs/OPERATOR_MANUAL.md)
+- [Operator Training](docs/OPERATOR_TRAINING.md)
 - [Bot Live Validation Runbook](docs/BOT_LIVE_VALIDATION.md)
 - [Development Guidelines](docs/development-guidelines.md)
 - [Suite Protocol](docs/SUITE_PROTOCOL.md)
