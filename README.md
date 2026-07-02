@@ -63,6 +63,8 @@ Use local mode before connecting to Twitch. Live mode should only run after toke
 
 `just credentials` is a safe visibility check for the shared JAMARQ provider env pool used by Codex and local CLIs. It prints variable names only. Vaexcore Console runtime secrets still belong in this repo's `.env` or the app setup store.
 
+Hosted Relay validation uses `npm run live:relay-validation`. The default command is read-only; pass `--register-eventsub`, `--send-chat`, `--register-discord-commands`, and `--record` only for an intentional live provider validation run.
+
 ## Direction
 
 - Keep Twitch automation constrained and operator-visible.

@@ -378,7 +378,7 @@ Local mode can send chat, but Twitch may show the bot account as a normal user. 
 
 Use `Start hosted setup` in Console to create the Relay pairing. Relay readiness confirms config and authorization state, but Console keeps a separate `Chat Bot identity live test` field until a human validates Twitch’s user list in the real channel. Click `Mark Chat Bot identity live-tested` only after Twitch shows `vaexcorebot` as a Chat Bot.
 
-Run `npm run bot:readiness` for a redacted preflight covering Relay health, saved pairing, Twitch OAuth grant readiness, Discord Relay readiness, local Discord setup, and remaining next actions. The exact credential and portal sequence lives in [Bot Live Validation Runbook](BOT_LIVE_VALIDATION.md).
+Run `npm run bot:readiness` for a redacted preflight covering Relay health, saved pairing, Twitch OAuth grant readiness, Discord Relay readiness, local Discord setup, and remaining next actions. Run `npm run live:relay-validation -- --register-eventsub --send-chat --register-discord-commands --record --set-relay-transport` only when you are ready to touch live Relay/Twitch/Discord provider state. The exact credential and portal sequence lives in [Bot Live Validation Runbook](BOT_LIVE_VALIDATION.md).
 
 ## Twitch Creator Ops
 

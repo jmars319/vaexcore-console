@@ -24,6 +24,14 @@ Expected pre-credential blockers:
 
 `bot:readiness` is read-only. It checks saved local Console pairing, Relay health, Twitch Relay readiness, Discord Relay readiness, local Discord setup, and the next actions without printing secret values.
 
+For a redacted live provider validation pass, run:
+
+```bash
+npm run live:relay-validation -- --register-eventsub --send-chat --register-discord-commands --record --set-relay-transport
+```
+
+This command uses the saved Console Relay pairing, registers or refreshes Twitch EventSub, sends one live Twitch chat validation message through Relay, registers Discord slash commands, reads Relay Twitch/Discord queues, and writes redacted artifacts to `.local/live-relay-validation/`. `--record` updates only local validation timestamps that are backed by live evidence. It intentionally does not record the Twitch Chat Bot user-list confirmation; that remains a human visual check in Twitch.
+
 ## Phase 6: Twitch Chat Bot Identity
 
 1. Open Console `Settings`.
@@ -50,6 +58,7 @@ Expected pre-credential blockers:
 
 ```bash
 npm run bot:readiness
+npm run live:relay-validation -- --register-eventsub --send-chat --record --set-relay-transport
 ```
 
 14. Confirm the Twitch section has no remaining TODO items except unrelated Discord/local setup items.
@@ -102,6 +111,7 @@ https://relay.vaexil.tv/webhooks/discord/interactions
 
 ```bash
 npm run smoke:discord-relay
+npm run live:relay-validation -- --register-discord-commands --record
 npm run bot:readiness
 ```
 
