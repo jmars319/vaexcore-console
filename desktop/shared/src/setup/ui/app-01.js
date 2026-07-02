@@ -277,14 +277,20 @@ function actionButton(label, options = {}) {
   const classes = [options.className || "", options.variant || ""]
     .filter(Boolean)
     .join(" ");
+  const roleBlocked =
+    options.requiredRole &&
+    typeof operatorRoleAllows === "function" &&
+    !operatorRoleAllows(options.requiredRole);
   return h("button", {
     className: classes,
     id: options.id,
     type: "button",
-    title: options.title,
+    title: roleBlocked
+      ? operatorRoleBlockedReason(options.requiredRole)
+      : options.title,
     "aria-label": options.ariaLabel,
     "aria-pressed": options.ariaPressed,
-    disabled: options.disabled,
+    disabled: options.disabled || roleBlocked,
     onClick: options.onClick,
     text: state.busy.has(options.busyKey || options.id) ? "Working..." : label,
   });
@@ -338,6 +344,7 @@ function renderDashboard() {
     renderDashboardStartCard(runtime, readiness),
     renderReadyForStreamCard(runtime, readiness),
     renderDashboardModeCard(),
+    renderOperatorRoleCard(),
     h("div", { className: "dashboard-grid" }, [
       renderProviderOnboardingCard(),
       renderBotIdentityDashboard(),

@@ -78,6 +78,7 @@ const state = {
   twitchOps: null,
   twitchOpsDraft: {},
   relayStatus: null,
+  relayEvents: [],
   relayEventSubResult: null,
   relayTestSendResult: null,
   botCompletion: null,
@@ -135,6 +136,7 @@ const state = {
   discordDraft: {},
   reminderDraft: {},
   oauthNotice: readOAuthNotice(),
+  operatorRole: readOperatorRole(),
 };
 
 const defaultRedirectUri = "http://localhost:3434/auth/twitch/callback";
@@ -245,6 +247,17 @@ function readOAuthNotice() {
   return undefined;
 }
 
+function readOperatorRole() {
+  try {
+    const stored = window.localStorage?.getItem("vaexcore.operatorRole");
+    return ["owner", "admin", "moderator", "viewer"].includes(stored)
+      ? stored
+      : "owner";
+  } catch {
+    return "owner";
+  }
+}
+
 function oauthErrorMessage(error) {
   const messages = {
     access_denied:
@@ -291,6 +304,8 @@ const api = {
   runTwitchCreatorOp: (action, body) =>
     api.post(`/api/twitch/creator-ops/${action}`, body),
   relayStatus: () => api.get("/api/relay/status"),
+  relayEvents: (limit = 25) =>
+    api.get(`/api/relay/events?limit=${encodeURIComponent(String(limit))}`),
   connectHostedRelay: (body = {}) =>
     api.post("/api/relay/hosted/connect", body),
   registerRelayEventSub: () => api.post("/api/relay/eventsub/register"),

@@ -38,7 +38,7 @@ package.json    Node runtime, scripts, smoke checks, and release commands
 
 - Twitch EventSub chat connection and send-message flows are implemented.
 - Local command testing is available without Twitch.
-- Giveaway, moderation, timers, Twitch creator ops, Discord setup/announcements, provider onboarding, go-live readiness, diagnostics, setup, and release guard scripts are present.
+- Giveaway, moderation, timers, Twitch creator ops, Discord setup/announcements, provider onboarding, role-gated queues, event replay, command sandboxing, go-live readiness, diagnostics, setup, and release guard scripts are present.
 - The macOS desktop app flow is supported with unsigned tester builds.
 - Optional vaexcore studio integration is documented and remains local.
 - The detailed operator setup guide has been moved out of the root README.

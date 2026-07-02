@@ -25,6 +25,7 @@ const setupUiScripts = [
   "/ui/app-24-diagnostics-actions.js",
   "/ui/app-25-form-sync.js",
   "/ui/app-26-provider-ops.js",
+  "/ui/app-27-operator-safety.js",
   "/ui/app-22.js",
   "/ui/app-23.js",
 ];

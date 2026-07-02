@@ -184,14 +184,14 @@ http://localhost:3434
 
 The console is organized into durable sections:
 
-- `Dashboard`: high-level Twitch, queue, chat, active giveaway readiness, provider setup wizard, bot identity dashboard, provider activity timeline, go-live checklist, live runbook, and preflight rehearsal.
+- `Dashboard`: high-level Twitch, queue, chat, active giveaway readiness, local operator role, provider setup wizard, bot identity dashboard, provider activity timeline, go-live checklist, live runbook, and preflight rehearsal.
 - `Live Mode`: compact stream-night state, live runbook, status-to-chat, panic resend, outbound failure logs, and recap copy.
 - `Commands`: create, edit, test, import, export, and audit local custom chat commands.
 - `Timers`: create, enable, disable, and monitor scheduled chat messages behind live readiness and queue guardrails.
-- `Moderation`: configure lightweight scoped filters, blocked phrases, local simulations, and recent moderation hits.
+- `Moderation`: configure lightweight scoped filters, blocked phrases, local simulations, role-gated safety rules, and recent moderation hits.
 - `Giveaways`: start, close, draw, reroll, claim, deliver, end giveaways, manage reminder timing, edit giveaway chat templates, and review the latest recap.
 - `Chat Tools`: send chat messages, send test messages, edit local operator message presets, and control optional chat echo.
-- `Testing`: simulate entrants and commands before using a live stream.
+- `Testing`: run the command sandbox for chat commands, Discord slash commands, giveaways, timers, announcement drafts, entrants, and commands before using a live stream.
 - `Settings`: configure mode, Twitch OAuth, bot identity, and broadcaster identity.
 - `Diagnostics`: copy a safe local report or support bundle with app version, runtime, config path, database path, SQLite driver, setup assets, first-run recovery steps, readiness checks, and current runtime state.
 - `Audit Log`: review post-stream summaries and the latest 100 local audit entries.
@@ -213,12 +213,26 @@ Presets only change feature gates, write audit entries, and require explicit con
 
 Use the dashboard before stream setup work:
 
+- `Local Operator Role` is a browser-local role label for owner, admin, moderator, and viewer mode. It is not authentication, but it keeps risky local actions visibly gated during setup and stream operation.
 - `Provider Setup Wizard` walks the selected setup mode through hosted Relay pairing, Twitch bot OAuth, broadcaster OAuth, EventSub, Discord install, slash-command registration, and live validation records.
 - `Bot Identity Dashboard` shows the current broadcaster, bot account, token freshness, saved scopes, EventSub state, Relay transport health, and Discord install status without exposing token values.
 - `Provider Activity Timeline` loads Relay chat events, Discord interactions, suggestions, announcement actions, outbound chat status, and manual validation records on demand.
 - `Go Live Checklist` is the local operator gate before relying on Console for a live stream. It does not replace provider-side checks such as confirming Twitch labels the bot account as a Chat Bot.
 
 Keep automated validation and provider writes separate: Console may register EventSub, test Relay chat, and register Discord commands when you explicitly choose those actions, but it remains the operator surface for approval and review.
+
+### Roles, Replay, And Sandbox
+
+The role selector is local UI state stored in browser storage:
+
+- `owner`: all local Console actions.
+- `admin`: provider setup, Discord approval/sent states, moderation, and tests.
+- `moderator`: review/reject actions, moderation simulations, chat sends, and tests.
+- `viewer`: read-only inspection of dashboards, replay, diagnostics, and runbooks.
+
+The Discord Relay panel includes `Live Event Replay` for recent Twitch Relay chat events and Discord interactions. Replay payloads are redacted and truncated for local inspection and support copying.
+
+The `Testing` tab includes a command sandbox. Chat commands and giveaway lifecycle tests use local APIs; Discord slash commands, timer checks, and announcement drafts are dry-run previews only.
 
 ## Custom Chat Commands
 

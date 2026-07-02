@@ -380,6 +380,7 @@ function renderChatTools() {
       h("div", { className: "actions" }, [
         actionButton("Send message to chat", {
           id: "sendChat",
+          requiredRole: "moderator",
           onClick: () =>
             runAction("sendChat", () =>
               api.chatSend(field("chatMessage").value),
@@ -388,11 +389,13 @@ function renderChatTools() {
         actionButton("Send !ping / test ping", {
           id: "ping",
           variant: "secondary",
+          requiredRole: "moderator",
           onClick: () => runAction("ping", () => api.chatSend("!ping")),
         }),
         actionButton("Send setup test message", {
           id: "test",
           variant: "secondary",
+          requiredRole: "moderator",
           onClick: sendSetupTest,
         }),
       ]),

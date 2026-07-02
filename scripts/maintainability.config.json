@@ -21,13 +21,13 @@
   "contractSnapshots": {
     "setupRoutes": "scripts/contracts/setup-api-routes.json"
   },
-  "initialBundleBudgetKb": 660,
+  "initialBundleBudgetKb": 662,
   "nearBudgetWarningKb": 4,
   "entryBudgets": [
     {
       "label": "setup server",
       "path": "dist-bundle/setup-server.js",
-      "budgetKb": 660
+      "budgetKb": 662
     },
     {
       "label": "live bot",
@@ -43,7 +43,7 @@
       "label": "setup UI total JS",
       "directory": "dist-bundle/setup-ui",
       "extension": ".js",
-      "budgetKb": 394
+      "budgetKb": 407
     }
   ],
   "ignoredSegments": [],

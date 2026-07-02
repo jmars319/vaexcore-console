@@ -62,6 +62,15 @@ function readDiscordSetupPayload() {
 }
 
 async function startDiscordRelayInstall() {
+  if (!operatorRoleAllows("admin")) {
+    state.message = {
+      text: operatorRoleBlockedReason("admin"),
+      tone: "warn",
+    };
+    render();
+    return;
+  }
+
   await runAction(
     "discordRelayInstallStart",
     async () => {
@@ -131,6 +140,15 @@ async function applyDiscordSetup() {
 }
 
 async function sendDiscordStreamAnnouncement() {
+  if (!operatorRoleAllows("admin")) {
+    state.message = {
+      text: operatorRoleBlockedReason("admin"),
+      tone: "warn",
+    };
+    render();
+    return;
+  }
+
   await runAction(
     "discordSendAnnouncement",
     async () => api.sendDiscordAnnouncement(readDiscordAnnouncementPayload()),
@@ -155,6 +173,15 @@ async function checkDiscordRelayStatus() {
 }
 
 async function registerDiscordRelayCommands() {
+  if (!operatorRoleAllows("admin")) {
+    state.message = {
+      text: operatorRoleBlockedReason("admin"),
+      tone: "warn",
+    };
+    render();
+    return;
+  }
+
   if (
     !confirm(
       "Register VaexCore Discord slash commands through Relay? This updates the commands for the configured Discord application.",
@@ -210,6 +237,23 @@ async function loadDiscordRelayActions(statusInput, fetchRemote = false) {
 }
 
 async function markDiscordRelayAction(id, status) {
+  const requiredRole = status === "rejected" ? "moderator" : "admin";
+  if (!operatorRoleAllows(requiredRole)) {
+    state.message = {
+      text: operatorRoleBlockedReason(requiredRole),
+      tone: "warn",
+    };
+    render();
+    return;
+  }
+
+  if (
+    ["approved", "rejected", "sent"].includes(status) &&
+    !confirm(`Mark this Discord Relay action ${status}?`)
+  ) {
+    return;
+  }
+
   await runAction(
     `discordRelayAction:${id}:${status}`,
     async () => {

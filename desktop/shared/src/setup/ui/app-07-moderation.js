@@ -22,6 +22,7 @@ function renderModeration() {
       ]),
     ),
     renderFeatureGateCard("moderation_filters"),
+    renderModerationSafetyCard(),
     renderModerationSuggestionCard(),
     // Filter policy boundary
     card("Filter Settings", [

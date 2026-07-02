@@ -25,6 +25,7 @@
   "GET /api/operator-messages",
   "GET /api/outbound-messages",
   "GET /api/platform/status",
+  "GET /api/relay/events",
   "GET /api/relay/status",
   "GET /api/status",
   "GET /api/stream-presets",

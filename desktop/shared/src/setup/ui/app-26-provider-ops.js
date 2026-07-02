@@ -41,11 +41,13 @@ function renderProviderOnboardingCard() {
         id: "providerWizardHostedSetup",
         variant: "secondary",
         busyKey: "relayHostedConnect",
+        requiredRole: "admin",
         onClick: () => connectHostedRelay(false),
       }),
       actionButton("Open bot OAuth", {
         id: "providerWizardBotOAuth",
         variant: "secondary",
+        requiredRole: "admin",
         disabled: !state.config?.relay?.setupUrls?.twitchBotOAuthUrl,
         onClick: () =>
           openExternalSetupUrl(
@@ -55,6 +57,7 @@ function renderProviderOnboardingCard() {
       actionButton("Open broadcaster OAuth", {
         id: "providerWizardBroadcasterOAuth",
         variant: "secondary",
+        requiredRole: "admin",
         disabled: !state.config?.relay?.setupUrls?.twitchBroadcasterOAuthUrl,
         onClick: () =>
           openExternalSetupUrl(
@@ -65,12 +68,14 @@ function renderProviderOnboardingCard() {
         id: "providerWizardEventSub",
         variant: "secondary",
         busyKey: "relayRegisterEventSub",
+        requiredRole: "admin",
         onClick: registerRelayEventSub,
       }),
       actionButton("Register Discord commands", {
         id: "providerWizardDiscordCommands",
         variant: "secondary",
         busyKey: "discordRelayRegisterCommands",
+        requiredRole: "admin",
         onClick: registerDiscordRelayCommands,
       }),
     ]),
@@ -216,6 +221,7 @@ function renderProviderActivityTimeline() {
         state.relayStatus?.connected ? "connected" : "not checked",
         state.relayStatus?.connected,
       ],
+      ["Twitch events", state.relayEvents.length, state.relayEvents.length > 0],
       [
         "Discord events",
         state.discordRelayEvents.length,
@@ -264,6 +270,7 @@ function renderProviderActivityTimeline() {
         id: "providerActivityRelayTest",
         variant: "secondary",
         busyKey: "relayTestSend",
+        requiredRole: "admin",
         onClick: sendRelayTestMessage,
       }),
     ]),
@@ -271,6 +278,12 @@ function renderProviderActivityTimeline() {
 }
 
 function providerTimelineEvents() {
+  const relayEvents = (state.relayEvents || []).map((event) => ({
+    kind: "Twitch",
+    tone: "info",
+    label: `${event.userDisplayName || event.userLogin || "viewer"}: ${formatMessagePreview(event.text || "")}`,
+    detail: formatProviderTimestamp(event.receivedAt),
+  }));
   const discordEvents = (state.discordRelayEvents || []).map((event) => ({
     kind: "Discord",
     tone: event.allowed === false ? "warn" : "info",
@@ -307,6 +320,7 @@ function providerTimelineEvents() {
     }));
 
   return [
+    ...relayEvents,
     ...discordEvents,
     ...suggestions,
     ...actions,

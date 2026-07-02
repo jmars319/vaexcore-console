@@ -57,6 +57,19 @@ async function runSmoke() {
     "provider activity timeline is present",
   );
   assert(
+    appJs.includes("Local Operator Role"),
+    "local operator role controls are present",
+  );
+  assert(
+    appJs.includes("Moderation And Event Safety"),
+    "moderation safety card is present",
+  );
+  assert(appJs.includes("Live Event Replay"), "event replay card is present");
+  assert(
+    appJs.includes("Command Testing Sandbox"),
+    "command testing sandbox is present",
+  );
+  assert(
     appJs.includes("Reconnect or reauthorize"),
     "provider reauth guidance is present",
   );
@@ -260,6 +273,13 @@ async function runSmoke() {
     "fake Relay returns announcement actions",
   );
 
+  const relayEvents = await json("/api/relay/events");
+  assert(
+    relayEvents.events.some((event) => event.userLogin === "viewer"),
+    "Relay event replay returns sanitized Twitch events",
+  );
+  assertSafePayload(relayEvents);
+
   const bundle = await json("/api/bot/support-bundle");
   assert(bundle.ok === true, "bot support bundle route returns ok");
   assert(bundle.setup.mode === "relay-assisted", "bot support includes mode");
@@ -366,6 +386,31 @@ async function startFakeRelay() {
             options: { title: "Live now" },
             allowed: true,
             receivedAt: "2026-05-13T12:00:00.000Z",
+          },
+        ],
+      });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/console/events") {
+      send(response, 200, {
+        ok: true,
+        events: [
+          {
+            relayEventId: "relay-chat-event-1",
+            id: "chat-message-1",
+            text: "hello from chat",
+            userId: "viewer-user-id",
+            userLogin: "viewer",
+            userDisplayName: "Viewer",
+            broadcasterUserId: "broadcaster-user-id",
+            badges: ["subscriber"],
+            isBroadcaster: false,
+            isMod: false,
+            isVip: false,
+            isSubscriber: true,
+            source: "relay-eventsub",
+            receivedAt: "2026-05-13T12:02:00.000Z",
           },
         ],
       });

@@ -47,6 +47,7 @@ function renderDiscordHostedConnectCard() {
     h("div", { className: "actions" }, [
       actionButton(connected ? "Reconnect Discord" : "Connect Discord", {
         id: "discordRelayInstallStart",
+        requiredRole: "admin",
         onClick: startDiscordRelayInstall,
       }),
       actionButton("Refresh hosted status", {
@@ -57,6 +58,7 @@ function renderDiscordHostedConnectCard() {
       actionButton("Register slash commands", {
         id: "discordRelayRegisterCommandsHosted",
         variant: "secondary",
+        requiredRole: "admin",
         onClick: registerDiscordRelayCommands,
       }),
     ]),
@@ -138,6 +140,7 @@ function renderDiscordRelayPanel(discord) {
       actionButton("Register slash commands", {
         id: "discordRelayRegisterCommands",
         variant: "secondary",
+        requiredRole: "admin",
         onClick: registerDiscordRelayCommands,
       }),
       actionButton("Load suggestions", {
@@ -151,6 +154,7 @@ function renderDiscordRelayPanel(discord) {
         onClick: () => loadDiscordRelayActions(undefined, true),
       }),
     ]),
+    renderEventReplayCard(),
     h("div", { className: "actions segmented-actions" }, [
       ...["active", "queued", "approved", "rejected", "sent"].map((status) =>
         actionButton(status, {
@@ -179,6 +183,7 @@ function renderDiscordRelayPanel(discord) {
                   actionButton(status, {
                     id: `discord-action-${action.relayEventId}-${status}`,
                     variant: "secondary",
+                    requiredRole: status === "rejected" ? "moderator" : "admin",
                     disabled: action.status === status,
                     onClick: () =>
                       markDiscordRelayAction(action.relayEventId, status),
@@ -425,6 +430,7 @@ function renderTesting() {
       "Testing",
       "Testing tools are for local verification before using a live stream.",
     ),
+    renderCommandTestingSandbox(),
     card("Simulate Entrant", [
       h("div", { className: "grid" }, [
         formRow(

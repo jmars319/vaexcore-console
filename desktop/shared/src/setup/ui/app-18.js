@@ -250,6 +250,7 @@ async function loadProviderActivity() {
         discordEvents,
         discordActions,
         discordSuggestions,
+        relayEvents,
         outbound,
         botCompletion,
       ] = await Promise.all([
@@ -257,10 +258,12 @@ async function loadProviderActivity() {
         api.discordRelayEvents(),
         api.discordRelayActions(state.discordRelayActionFilter || "active"),
         api.discordRelaySuggestions(),
+        api.relayEvents(25),
         api.outboundMessages(),
         api.botCompletion(),
       ]);
       state.relayStatus = relayStatus;
+      state.relayEvents = relayEvents.events || [];
       state.discordRelayEvents = discordEvents.events || [];
       state.discordRelayActions = discordActions.actions || [];
       state.discordRelaySuggestions = discordSuggestions.suggestions || [];

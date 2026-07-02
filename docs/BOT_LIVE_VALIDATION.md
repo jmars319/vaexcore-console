@@ -30,6 +30,8 @@ The Console dashboard now mirrors the same evidence in four operator cards:
 - `Bot Identity Dashboard`: broadcaster, bot account, token freshness, scope posture, EventSub, Discord install, and Relay transport health.
 - `Go Live Checklist`: the current setup blockers that must be cleared before live use.
 - `Provider Activity Timeline`: on-demand Relay and Discord activity, chat sends, suggestions, queued announcements, validation records, and errors.
+- `Local Operator Role`: browser-local owner/admin/moderator/viewer mode that gates risky setup, approval, and chat actions.
+- `Live Event Replay`: redacted recent Twitch Relay chat events and Discord interactions for provider debugging.
 
 Use the dashboard cards during setup, then keep this runbook as the source of truth for the live manual checks that require provider-side confirmation.
 

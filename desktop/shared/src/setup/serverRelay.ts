@@ -294,6 +294,67 @@ export const getRelayStatusRoute = async () => {
   }
 };
 
+export const getRelayEventsRoute = async (searchParams: URLSearchParams) => {
+  const secrets = readLocalSecrets();
+  const relay = getSafeRelayConfig(secrets);
+  const connectionError = relayConnectionError(secrets);
+  if (connectionError) {
+    return {
+      ok: true,
+      connected: false,
+      relay,
+      events: [],
+      error: connectionError,
+    };
+  }
+
+  const limit = Math.min(
+    50,
+    Math.max(
+      1,
+      parseSafeInteger(searchParams.get("limit"), {
+        fallback: 25,
+        field: "limit",
+        min: 1,
+        max: 50,
+      }),
+    ),
+  );
+
+  try {
+    const result = await createRelayChatClient(secrets).events(limit);
+    return {
+      ok: true,
+      connected: true,
+      relay,
+      events: (result.events || []).map((event) => ({
+        relayEventId: event.relayEventId,
+        id: event.id,
+        userLogin: event.userLogin,
+        userDisplayName: event.userDisplayName,
+        text: sanitizeChatMessage(event.text),
+        badges: event.badges,
+        roles: {
+          broadcaster: Boolean(event.isBroadcaster),
+          mod: Boolean(event.isMod),
+          vip: Boolean(event.isVip),
+          subscriber: Boolean(event.isSubscriber),
+        },
+        source: event.source,
+        receivedAt: event.receivedAt,
+      })),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      connected: false,
+      relay,
+      events: [],
+      error: safeErrorMessage(error, "Relay event replay failed."),
+    };
+  }
+};
+
 export const registerRelayEventSubRoute = async () => {
   const secrets = readLocalSecrets();
   const connectionError = relayConnectionError(secrets);

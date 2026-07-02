@@ -15,6 +15,7 @@ import {
 import { readJson, sendJson } from "./serverHttp";
 import {
   connectHostedRelayRoute,
+  getRelayEventsRoute,
   getRelayStatusRoute,
   registerRelayEventSubRoute,
   sendRelayTestMessageRoute,
@@ -23,6 +24,10 @@ import {
 export const relayRoutes: SetupRoute[] = [
   exactRoute("GET", "/api/relay/status", async ({ request, response, url }) => {
     sendJson(response, 200, await getRelayStatusRoute());
+    return;
+  }),
+  exactRoute("GET", "/api/relay/events", async ({ request, response, url }) => {
+    sendJson(response, 200, await getRelayEventsRoute(url.searchParams));
     return;
   }),
   exactRoute(
